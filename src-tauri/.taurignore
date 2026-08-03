@@ -1,0 +1,5 @@
+# Ignore staged resources from triggering dev watch loops
+resources/
+resources/**
+binaries/
+binaries/**

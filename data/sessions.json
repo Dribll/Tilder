@@ -1,0 +1,14 @@
+{
+  "cad64ae2-9bc6-4ff1-81f5-1694bbce347e": {
+    "id": "cad64ae2-9bc6-4ff1-81f5-1694bbce347e",
+    "createdAt": 1779106163755,
+    "updatedAt": 1785328461155,
+    "accounts": {},
+    "syncProvider": null,
+    "syncPreferences": {
+      "syncSettings": true,
+      "syncLayout": true,
+      "syncShortcuts": true
+    }
+  }
+}

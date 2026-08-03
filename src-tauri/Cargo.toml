@@ -1,0 +1,43 @@
+[package]
+name = "tilder"
+version = "0.1.0"
+description = "Tilder desktop shell"
+authors = ["Tilder"]
+edition = "2021"
+
+[lib]
+name = "tilder_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5.6", features = [] }
+
+[dependencies]
+base64 = "0.22.1"
+rfd = "0.15.4"
+serde = { version = "1.0", features = ["derive"] }
+tauri = { version = "2.10.3", features = [] }
+tauri-plugin-opener = "2.5.3"
+sysinfo = "0.33.0"
+serde_json = "1.0"
+url = "2.5.4"
+tauri-plugin-process = "2"
+window-vibrancy = "0.6"
+ignore = "0.4.31"
+regex = "1.13.1"
+
+[target.'cfg(windows)'.dependencies.windows]
+version = "0.58.0"
+features = [
+    "Win32_UI_Shell",
+    "Win32_System_Com",
+    "Win32_Foundation",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_Shell_PropertiesSystem",
+    "Win32_System_Variant",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_UI_Shell_Common"
+]
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = "2"

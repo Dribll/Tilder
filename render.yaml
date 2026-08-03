@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: tildercode
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    autoDeploy: true
+    envVars:
+      - key: PUBLIC_BASE_URL
+        value: https://tilder-web-app.onrender.com
+      - key: MICROSOFT_TENANT_ID
+        value: common
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      - key: MICROSOFT_CLIENT_ID
+        sync: false
+      - key: MICROSOFT_CLIENT_SECRET
+        sync: false

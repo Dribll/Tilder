@@ -1,0 +1,58 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Tilder",
+  "version": "0.1.0",
+  "identifier": "com.tilder.desktop",
+  "build": {
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "npm run build:desktop",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "windows": {
+      "nsis": {
+        "installMode": "perMachine",
+        "installerHooks": "windows/installer.nsh",
+        "compression": "none"
+      }
+    },
+    "externalBin": ["binaries/tilder-node"],
+    "resources": {
+      "resources/app/.env": "app/.env",
+      "resources/app/server.js": "app/server.js",
+      "resources/app/localRunner.js": "app/localRunner.js",
+      "resources/app/package.json": "app/package.json",
+      "resources/app/package-lock.json": "app/package-lock.json",
+      "resources/app/tilder_monitor_service.ps1": "app/tilder_monitor_service.ps1",
+      "resources/app/dist/": "app/dist/",
+      "resources/app/server/": "app/server/",
+      "resources/app/shared/": "app/shared/",
+      "resources/app/src/": "app/src/",
+      "resources/app/node_modules/": "app/node_modules/",
+      "windows/monitor_bin/TilderMonitorService.exe": "monitor_bin/TilderMonitorService.exe"
+    },
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico",
+      "icons/icon.icns"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEEwNzFDRjY3NjlEMEVGREUKUldUZTc5QnBaODl4b0xqN3E4SFF1VmVQdU5ZVHIwcXBYLzVYbjYvcmRESFhEZzd6U0E5aHIrbEwK",
+      "endpoints": [
+        "https://github.com/Dribll/Tilder/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}

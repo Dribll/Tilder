@@ -1,0 +1,277 @@
+/* Advanced System Monitor Dashboard (Boxy Layout) */
+.system-monitor-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: rgba(255, 255, 255, 0.7);
+  gap: 16px;
+}
+
+.system-monitor-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+  background: rgba(18, 12, 33, 0.4);
+  border-radius: 12px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.system-monitor-grid, .system-monitor-subgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.monitor-card {
+  background: rgba(30, 20, 50, 0.45);
+  border: 1px solid rgba(141, 90, 255, 0.18);
+  border-radius: 12px;
+  padding: 20px;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s ease, border-color 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.monitor-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(141, 90, 255, 0.35);
+}
+
+.monitor-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 10px;
+}
+
+.monitor-card-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #f1ecff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.monitor-card-header h3 i {
+  color: #a89eff;
+}
+
+.live-badge {
+  background: rgba(255, 46, 99, 0.15);
+  border: 1px solid rgba(255, 46, 99, 0.4);
+  color: #ff2e63;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+}
+
+.monitor-metric-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 16px;
+}
+
+.large-metric {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+  font-feature-settings: "tnum";
+}
+
+.metric-details {
+  font-size: 0.82rem;
+  color: rgba(230, 225, 255, 0.7);
+  line-height: 1.4;
+}
+
+.cpu-model {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+
+.cores-badge {
+  background: rgba(141, 90, 255, 0.15);
+  color: #cbbfff;
+  padding: 1px 6px;
+  border-radius: 4px;
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.75rem;
+}
+
+.progress-bar-container {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.cpu-fill {
+  background: linear-gradient(90deg, #8a7cff, #d156ff);
+}
+
+.ram-fill {
+  background: linear-gradient(90deg, #3cd6c4, #24b8ea);
+}
+
+.gpu-fill {
+  background: linear-gradient(90deg, #58d7c7, #24ea89);
+}
+
+.chart-wrapper {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+  padding: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  position: relative;
+  flex: 1;
+  min-height: 80px;
+}
+
+.tm-graph-grid {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-image: 
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 20px 20px;
+  z-index: 1;
+}
+
+.monitor-svg-chart {
+  width: 100%;
+  height: 100%;
+  display: block;
+  position: relative;
+  z-index: 2;
+}
+
+.monitor-info-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.monitor-info-table td {
+  padding: 10px 0;
+  font-size: 0.86rem;
+  color: rgba(230, 225, 255, 0.85);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.monitor-info-table td:first-child {
+  color: rgba(230, 225, 255, 0.45);
+  width: 130px;
+}
+
+.monitor-info-table tr:last-child td {
+  border-bottom: none;
+}
+
+.count-badge {
+  background: rgba(141, 90, 255, 0.25);
+  color: #e5dfff;
+  font-size: 0.72rem;
+  padding: 1px 6px;
+  border-radius: 99px;
+  font-weight: bold;
+}
+
+.monitor-tunnels-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.no-tunnels-msg {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.82rem;
+  text-align: center;
+  padding: 20px 0;
+}
+
+.monitor-tunnel-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.tunnel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.tunnel-port {
+  font-weight: bold;
+  font-size: 0.86rem;
+  color: #fff;
+}
+
+.tunnel-status {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  font-weight: bold;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.tunnel-status.status-active {
+  background: rgba(54, 215, 183, 0.15);
+  color: #36d7b7;
+}
+
+.tunnel-status.status-connecting {
+  background: rgba(255, 178, 89, 0.15);
+  color: #ffb259;
+}
+
+.tunnel-status.status-error {
+  background: rgba(255, 95, 95, 0.15);
+  color: #ff5f5f;
+}
+
+.tunnel-desc {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 4px;
+}
+
+.tunnel-link {
+  font-size: 0.76rem;
+  color: #8da1ff;
+  text-decoration: none;
+  word-break: break-all;
+  display: inline-block;
+}
+
+.tunnel-link:hover {
+  text-decoration: underline;
+}
