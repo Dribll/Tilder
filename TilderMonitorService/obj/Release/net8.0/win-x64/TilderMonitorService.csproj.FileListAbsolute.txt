@@ -244,3 +244,4 @@ D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Release\net8.0\win-x64\msq
 D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Release\net8.0\win-x64\System.Configuration.ConfigurationManager.dll
 D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Release\net8.0\win-x64\System.Diagnostics.PerformanceCounter.dll
 D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Release\net8.0\win-x64\System.Security.Cryptography.ProtectedData.dll
+D:\Tilder - Copy\desktop-app\TilderMonitorService\obj\Release\net8.0\win-x64\TilderMonitorService.sourcelink.json

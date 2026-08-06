@@ -172,6 +172,8 @@ pub struct DesktopTreeNode {
     #[serde(rename = "isDir")]
     pub is_dir: bool,
     pub size: u64,
+    /// Last-modified time as Unix milliseconds (0 if unavailable)
+    pub modified: u64,
     pub children: Option<Vec<DesktopTreeNode>>,
 }
 
@@ -335,14 +337,23 @@ fn read_tree_recursive(dir: &Path, recursive: bool) -> Result<Vec<DesktopTreeNod
             None
         };
 
+        let modified = meta
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+
         nodes.push(DesktopTreeNode {
             name,
             path: path_str,
             node_type: if is_dir { "folder".to_string() } else { "file".to_string() },
             is_dir,
             size: meta.len(),
+            modified,
             children,
         });
+
     }
 
     Ok(nodes)
@@ -500,7 +511,13 @@ fn desktop_read_dir(path: String) -> Result<Vec<DesktopTreeNode>, String> {
     for entry in items {
         let is_dir = entry.file_type().map_or(false, |t| t.is_dir());
         let meta = entry.metadata().ok();
-        let size = meta.map(|m| m.len()).unwrap_or(0);
+        let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+        let modified = meta
+            .as_ref()
+            .and_then(|m| m.modified().ok())
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
         let name = entry.file_name().to_string_lossy().to_string();
         let entry_path = entry.path().to_string_lossy().to_string();
         children.push(DesktopTreeNode {
@@ -509,6 +526,7 @@ fn desktop_read_dir(path: String) -> Result<Vec<DesktopTreeNode>, String> {
             node_type: if is_dir { "folder".to_string() } else { "file".to_string() },
             is_dir,
             size,
+            modified,
             children: if is_dir { Some(vec![]) } else { None },
         });
     }

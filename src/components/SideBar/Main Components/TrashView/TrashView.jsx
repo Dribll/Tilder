@@ -38,6 +38,16 @@ export default function TrashView({ workspace, ariaExpanded, refreshWorkspace })
     const originalName = node.name.split('.tildertrash_')[0];
     if (!originalName) return;
 
+    // Safety check: ensure a file with the original name doesn't already exist in the same location
+    const parentPath = workspace.findParentPath?.(node.path) || 'root';
+    const parentNode = parentPath === 'root' ? workspace.getRootNode() : workspace.findNode(parentPath);
+    const siblings = parentPath === 'root' ? (workspace.tree || []) : (parentNode?.children || []);
+    
+    if (siblings.some(c => c.name === originalName)) {
+      alert(`Cannot restore: a file or folder named "${originalName}" already exists in this location.`);
+      return;
+    }
+
     try {
       await workspace.renameNode(node.path, originalName);
     } catch (err) {

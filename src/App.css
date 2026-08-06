@@ -2517,28 +2517,30 @@ input[type="range"].tilderSettingsControl:active::-webkit-slider-thumb {
 .fp-tree-section {
     flex: 1;
     min-height: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding-bottom: 40px;
-    padding-right: 4px;
+    overflow: hidden; /* react-window manages its own scroll */
+    padding-bottom: 0;
+    padding-right: 0;
 }
 
-.fp-tree-section::-webkit-scrollbar { width: 6px; }
-.fp-tree-section::-webkit-scrollbar-track { background: transparent; }
-.fp-tree-section::-webkit-scrollbar-thumb {
+/* Scrollbar styling for the react-window list */
+.fp-tree-scroll ::-webkit-scrollbar { width: 6px; }
+.fp-tree-scroll ::-webkit-scrollbar-track { background: transparent; }
+.fp-tree-scroll ::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.15);
     border-radius: 10px;
 }
-.fp-tree-section:hover::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.25); }
+.fp-tree-scroll:hover ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.25); }
+
 
 /* ── Node Row ── */
 .fp-node {
     display: flex;
     align-items: center;
     gap: 4px;
-    min-height: 22px;
+    height: 32px; /* must match itemSize in FixedSizeList */
     padding-right: 6px;
-    margin: 1px 2px;
+    margin: 0;   /* no margin — react-window does not account for margins */
+    box-sizing: border-box;
     border-radius: 4px;
     cursor: pointer;
     color: rgba(255, 255, 255, 0.7);
@@ -2548,6 +2550,14 @@ input[type="range"].tilderSettingsControl:active::-webkit-slider-thumb {
     transition: all 0.1s ease;
     outline: none;
     border: 1px solid transparent;
+}
+
+.fp-node-main {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
 }
 
 .fp-node:hover { 
@@ -2697,6 +2707,112 @@ input[type="range"].tilderSettingsControl:active::-webkit-slider-thumb {
 
 .fp-children:hover > .fp-indent-guide { background: rgba(255, 255, 255, 0.15); }
 
+/* ── Multi-select checkbox ── */
+.fp-node-checkbox {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    opacity: 0;
+    cursor: pointer;
+    transition: opacity 0.12s;
+    margin-right: 2px;
+}
+.fp-node:hover .fp-node-checkbox,
+.fp-node--multi-selected .fp-node-checkbox { opacity: 1; }
+
+.fp-checkbox-inner {
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid rgba(255, 255, 255, 0.35);
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.12s;
+    background: transparent;
+}
+.fp-checkbox-inner--checked {
+    background: #a78bfa;
+    border-color: #a78bfa;
+    color: #fff;
+}
+
+/* ── Multi-selected row tint ── */
+.fp-node--multi-selected {
+    background: rgba(167, 139, 250, 0.15) !important;
+    border-left: 2px solid rgba(167, 139, 250, 0.6);
+}
+
+/* ── Dragging row dimmed ── */
+.fp-node--dragging {
+    opacity: 0.45;
+    cursor: grabbing !important;
+}
+
+/* ── Drop-target highlight ── */
+.fp-node--drop-target {
+    background: rgba(111, 0, 201, 0.22) !important;
+    box-shadow: inset 0 0 0 1.5px rgba(167, 139, 250, 0.6);
+    border-radius: 4px;
+}
+
+/* ── Drag ghost pill ── */
+.fp-drag-ghost {
+    position: fixed;
+    top: -9999px;
+    left: -9999px;
+    background: rgba(30, 20, 50, 0.92);
+    border: 1px solid rgba(167, 139, 250, 0.5);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    backdrop-filter: blur(8px);
+    white-space: nowrap;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+    z-index: 99999;
+}
+
+/* ── File metadata (size + date) ── */
+.fp-node-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    flex-shrink: 0;
+    padding-right: 6px;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.35);
+    white-space: nowrap;
+    pointer-events: none;
+}
+.fp-node:hover .fp-node-meta { color: rgba(255, 255, 255, 0.5); }
+.fp-node-size { font-variant-numeric: tabular-nums; }
+.fp-node-date { font-variant-numeric: tabular-nums; }
+
+/* ── Active toolbar button ── */
+.fp-toolbar-btn--active {
+    background: rgba(167, 139, 250, 0.2) !important;
+    color: #a78bfa !important;
+    border-color: rgba(167, 139, 250, 0.3) !important;
+}
+
+/* ── showMeta mode: taller rows need more breathing room ── */
+.fp-node-meta-block {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+
+
 /* ── Inline input row for new file/folder ── */
 .fp-inline-input-row {
     display: flex;
@@ -2704,7 +2820,10 @@ input[type="range"].tilderSettingsControl:active::-webkit-slider-thumb {
     gap: 8px;
     min-height: 28px;
     padding-right: 12px;
+    box-sizing: border-box; /* Fix for 100% width with padding */
+    width: 100%;
     background: rgba(255, 255, 255, 0.05);
+
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 6px;
     margin: 2px 8px;
@@ -9886,13 +10005,13 @@ body[data-theme="tilder-tahoe"] {
     }
 
     /* 3. Global Button Micro-interactions (Scale down on active) */
-    button, .tab, .sidebarIconBar button, .explorer-toolbar-btn, .tilderSettingsSidebarItem, .tilderSettingsCardTitleRow {
+    :is(button), .tab, .sidebarIconBar button, .explorer-toolbar-btn, .tilderSettingsSidebarItem, .tilderSettingsCardTitleRow {
         transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.2s ease, box-shadow 0.2s ease !important;
     }
     
-    button:active:not(:disabled), 
+    :is(button):active:not(:disabled), 
     .tab:active, 
-    .sidebarIconBar button:active,
+    .sidebarIconBar :is(button):active,
     .explorer-toolbar-btn:active,
     .tilderSettingsSidebarItem:active {
         transform: scale(0.94) !important;
@@ -9927,23 +10046,23 @@ body[data-theme="tilder-tahoe"] {
     }
 
     /* 8. Input fields focus rings */
-    input[type="text"], input[type="password"], textarea, .search-bar input {
+    :is(input)[type="text"], :is(input)[type="password"], :is(textarea), .search-bar input {
         transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.2s ease !important;
     }
-    input[type="text"]:focus, input[type="password"]:focus, textarea:focus {
+    :is(input)[type="text"]:focus, :is(input)[type="password"]:focus, :is(textarea):focus {
         box-shadow: 0 0 0 3px rgba(140, 148, 255, 0.25), inset 0 1px 2px rgba(0,0,0,0.2) !important;
         border-color: rgba(140, 148, 255, 0.6) !important;
         transform: scale(1.01) !important;
     }
 
     /* 9. Checkbox & Radio fluid fill */
-    input[type="checkbox"] {
+    :is(input)[type="checkbox"] {
         transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
     }
-    input[type="checkbox"]:active {
+    :is(input)[type="checkbox"]:active {
         transform: scale(0.85) !important;
     }
-    input[type="checkbox"]:checked {
+    :is(input)[type="checkbox"]:checked {
         animation: macOsPulse 0.3s ease forwards !important;
     }
 

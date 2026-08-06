@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { List } from 'react-window';
+
 import OutlineView from '../OutlineView/OutlineView.jsx';
 import { resolveFileIcon, resolveFolderIcon } from '../../../../core/iconTheme.js';
 import { revealInExplorer } from '../../../../core/desktopFileApi.js';
@@ -104,16 +106,24 @@ function InlineInput({ type, depth, onSubmit, onCancel }) {
   );
 }
 
-/* ─────────────────────── Single Tree Node ─────────────────────── */
-function TreeNode({
-  node,
-  depth,
-  selectedPath,
-  activeTabPath,
-  pendingAction,
-  dragState,
-  callbacks,
-}) {
+/* ─────────────────────── Single Tree Node (react-window v2 row renderer) ─────────────────────── */
+function TreeNode({ index, style, ariaAttributes, flatNodes, selectedPath, activeTabPath, pendingAction, dragState, callbacks, multiSelected, showMeta }) {
+  const item = flatNodes[index];
+
+  if (item.isInlineInput) {
+    return (
+      <div style={style}>
+        <InlineInput
+          type={item.type}
+          depth={item.depth}
+          onSubmit={item.onSubmit}
+          onCancel={item.onCancel}
+        />
+      </div>
+    );
+  }
+
+  const { node, depth } = item;
   const isFolder = node.type === 'folder';
   const isSelected = selectedPath === node.path;
   const isActive = activeTabPath === node.path;
@@ -188,10 +198,11 @@ function TreeNode({
       callbacks.deleteNode(node);
     } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
-      const all = Array.from(document.querySelectorAll('.fp-node[tabindex="0"]'));
-      const idx = all.indexOf(e.currentTarget);
-      const next = all[e.key === 'ArrowDown' ? idx + 1 : idx - 1];
-      if (next) { next.focus(); next.click(); }
+      const nextIdx = e.key === 'ArrowDown' ? index + 1 : index - 1;
+      const nextItem = flatNodes[nextIdx];
+      if (nextItem && !nextItem.isInlineInput) {
+        callbacks.selectNode(nextItem.node.path, { multi: false, range: false });
+      }
     }
   }
 
@@ -200,15 +211,18 @@ function TreeNode({
     isSelected ? 'fp-node--selected' : '',
     isActive ? 'fp-node--active' : '',
     isDropTarget ? 'fp-node--drop-target' : '',
+    multiSelected?.has(node.path) ? 'fp-node--multi-selected' : '',
+    dragState.dragging === node.path ? 'fp-node--dragging' : '',
   ].filter(Boolean).join(' ');
 
   const indentPx = depth * 16 + 8;
+  const isMultiSel = multiSelected?.has(node.path);
 
   return (
       <div
         className={rowClass}
         tabIndex={0}
-        style={{ paddingLeft: `${indentPx}px` }}
+        style={{ ...style, paddingLeft: `${indentPx}px` }}
         onClick={handleClick}
         onKeyDown={handleKeyDown}
         draggable={!isRenaming}
@@ -216,6 +230,17 @@ function TreeNode({
           e.stopPropagation();
           e.dataTransfer.effectAllowed = 'move';
           e.dataTransfer.setData('text/plain', node.path);
+          // Create a drag ghost image
+          const ghost = document.createElement('div');
+          ghost.className = 'fp-drag-ghost';
+          const dragCount = (isMultiSel && multiSelected.size > 1) ? multiSelected.size : 1;
+          ghost.textContent = dragCount > 1 ? `${dragCount} items` : node.name;
+          document.body.appendChild(ghost);
+          e.dataTransfer.setDragImage(ghost, -10, -10);
+          setTimeout(() => {
+            if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
+          }, 0);
+          
           callbacks.setDragging(node.path);
         }}
         onDragEnd={() => callbacks.setDragging(null)}
@@ -247,91 +272,115 @@ function TreeNode({
         onContextMenu={e => {
           e.preventDefault();
           e.stopPropagation();
-          callbacks.selectNode(node.path);
+          if (!isMultiSel) callbacks.selectNode(node.path);
           callbacks.openContextMenu(e, node);
         }}
       >
-        {/* Chevron — only for folders */}
-        <span className="fp-node-chevron" aria-hidden="true">
-          {isFolder ? <ChevronRight open={!!node.open} /> : null}
-        </span>
+        <div className="fp-node-main">
+          {/* Multi-select checkbox */}
+          {multiSelected && (
+            <div className={`fp-node-checkbox${isMultiSel ? ' fp-node-checkbox--checked' : ''}`}
+                 onClick={e => { e.stopPropagation(); callbacks.toggleMultiSelect(node.path); }}>
+              {isMultiSel && <i className="fa-solid fa-check" />}
+            </div>
+          )}
 
-        {/* File/Folder icon */}
-        {isFolder ? (
-          <span className="fp-node-icon" style={{ color: folderVisual.color }}>
-            {node.loading
-              ? <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: 13 }} />
-              : (node.open && folderVisual.OpenIcon)
-                ? <folderVisual.OpenIcon className="fp-icon-svg" />
-                : <folderVisual.Icon className="fp-icon-svg" />}
+          {/* Chevron — only for folders */}
+          <span className="fp-node-chevron" aria-hidden="true">
+            {isFolder ? <ChevronRight open={!!node.open} /> : null}
           </span>
-        ) : (
-          <span className="fp-node-icon" style={{ color: fileVisual.color }}>
-            <fileVisual.Icon className="fp-icon-svg" />
-          </span>
-        )}
 
-        {/* Name or rename input */}
-        {isRenaming ? (
-          <input
-            ref={renameRef}
-            className="fp-rename-input"
-            value={renameVal}
-            onChange={e => setRenameVal(e.target.value)}
-            onClick={e => e.stopPropagation()}
-            onBlur={commitRename}
-            onKeyDown={e => {
-              if (e.key === 'Enter') { e.preventDefault(); commitRename(); }
-              if (e.key === 'Escape') { e.preventDefault(); cancelRename(); }
-            }}
-          />
-        ) : (
-          <span className="fp-node-name">{node.name}</span>
-        )}
+          {/* File/Folder icon */}
+          {isFolder ? (
+            <span className="fp-node-icon" style={{ color: folderVisual.color }}>
+              {node.loading
+                ? <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: 13 }} />
+                : (node.open && folderVisual.OpenIcon)
+                  ? <folderVisual.OpenIcon className="fp-icon-svg" />
+                  : <folderVisual.Icon className="fp-icon-svg" />}
+            </span>
+          ) : (
+            <span className="fp-node-icon" style={{ color: fileVisual.color }}>
+              <fileVisual.Icon className="fp-icon-svg" />
+            </span>
+          )}
 
-        {/* Hover action buttons */}
-        {!isRenaming && (
-          <div className="fp-node-actions" onClick={e => e.stopPropagation()}>
-            {isFolder && (
-              <>
-                <button
-                  type="button"
-                  className="fp-action-btn"
-                  title="New File"
-                  onClick={() => callbacks.startCreate(node.path, 'file')}
-                >
-                  <i className="fa-regular fa-file" />
-                </button>
-                <button
-                  type="button"
-                  className="fp-action-btn"
-                  title="New Folder"
-                  onClick={() => callbacks.startCreate(node.path, 'folder')}
-                >
-                  <i className="fa-solid fa-folder-plus" />
-                </button>
-              </>
-            )}
-            <button
-              type="button"
-              className="fp-action-btn"
-              title="Rename"
-              onClick={() => callbacks.startRename(node)}
-            >
-              <i className="fa-solid fa-pen" />
-            </button>
-            <button
-              type="button"
-              className="fp-action-btn fp-action-btn--danger"
-              title="Delete"
-              onClick={() => callbacks.deleteNode(node)}
-            >
-              <i className="fa-solid fa-trash" />
-            </button>
+          {/* Name or rename input */}
+          {isRenaming ? (
+            <input
+              ref={renameRef}
+              className="fp-rename-input"
+              value={renameVal}
+              onChange={e => setRenameVal(e.target.value)}
+              onClick={e => e.stopPropagation()}
+              onBlur={commitRename}
+              onKeyDown={e => {
+                if (e.key === 'Enter') { e.preventDefault(); commitRename(); }
+                if (e.key === 'Escape') { e.preventDefault(); cancelRename(); }
+              }}
+            />
+          ) : (
+            <span className="fp-node-name">{node.name}</span>
+          )}
+
+          {/* Hover action buttons */}
+          {!isRenaming && (
+            <div className="fp-node-actions" onClick={e => e.stopPropagation()}>
+              {isFolder && (
+                <>
+                  <button
+                    type="button"
+                    className="fp-action-btn"
+                    title="New File"
+                    onClick={() => callbacks.startCreate(node.path, 'file')}
+                  >
+                    <i className="fa-regular fa-file" />
+                  </button>
+                  <button
+                    type="button"
+                    className="fp-action-btn"
+                    title="New Folder"
+                    onClick={() => callbacks.startCreate(node.path, 'folder')}
+                  >
+                    <i className="fa-solid fa-folder-plus" />
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                className="fp-action-btn"
+                title="Rename"
+                onClick={() => callbacks.startRename(node)}
+              >
+                <i className="fa-solid fa-pen" />
+              </button>
+              <button
+                type="button"
+                className="fp-action-btn fp-action-btn--danger"
+                title="Delete"
+                onClick={() => callbacks.deleteNode(node)}
+              >
+                <i className="fa-solid fa-trash" />
+              </button>
+            </div>
+          )}
+        </div>
+        
+        {/* File Metadata Row */}
+        {showMeta && !isFolder && (
+          <div className="fp-node-meta">
+            <span className="fp-meta-size">{node.size != null ? formatSize(node.size) : '---'}</span>
+            <span className="fp-meta-date">{node.modified ? new Date(node.modified).toLocaleDateString() : '---'}</span>
           </div>
         )}
       </div>
   );
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
 /* ─────────────────────── Open Editors Item ─────────────────────── */
@@ -354,7 +403,6 @@ function OpenEditorItem({ tab, isActive, onActivate, onClose }) {
     </div>
   );
 }
-
 
 /* ─────────────────────── Empty State ─────────────────────── */
 function EmptyState({ onOpenFolder, onAddFolder, onNewFile, onNewFolder }) {
@@ -383,58 +431,6 @@ function EmptyState({ onOpenFolder, onAddFolder, onNewFile, onNewFolder }) {
       </div>
     </div>
   );
-}
-
-/* ─────────────────────── Recursive Tree Renderer ─────────────────────── */
-function TreeBranch({ nodes, depth, parentPath, selectedPath, activeTabPath, pendingAction, dragState, callbacks }) {
-  const items = [];
-
-  // If there's a pending inline create for THIS parent, render it at the top
-  if (pendingAction?.mode === 'create' && pendingAction.parentPath === parentPath) {
-    items.push(
-      <InlineInput
-        key="__inline_create__"
-        type={pendingAction.type}
-        depth={depth}
-        onSubmit={callbacks.submitCreate}
-        onCancel={callbacks.cancelPending}
-      />
-    );
-  }
-
-  for (const node of nodes) {
-    items.push(
-      <TreeNode
-        key={node.path}
-        node={node}
-        depth={depth}
-        selectedPath={selectedPath}
-        activeTabPath={activeTabPath}
-        pendingAction={pendingAction}
-        dragState={dragState}
-        callbacks={callbacks}
-      />
-    );
-
-    // If this is an open folder, recursively render children
-    if (node.type === 'folder' && node.open) {
-      items.push(
-        <TreeBranch
-          key={`${node.path}__children`}
-          nodes={node.children || []}
-          depth={depth + 1}
-          parentPath={node.path}
-          selectedPath={selectedPath}
-          activeTabPath={activeTabPath}
-          pendingAction={pendingAction}
-          dragState={dragState}
-          callbacks={callbacks}
-        />
-      );
-    }
-  }
-
-  return <>{items}</>;
 }
 
 
@@ -469,18 +465,19 @@ export default function FilePioneer({
   const [trashExpanded, setTrashExpanded] = useState(false);
   const [clipboard, setClipboard] = useState(null);
   const [undoStack, setUndoStack] = useState([]);
+  
+  const [multiSelected, setMultiSelected] = useState(new Set());
+  const [showMeta, setShowMeta] = useState(false);
 
   const scrollRef = useRef(null);
   const savedScroll = useRef(0);
+  const listRef = useRef(null);
 
-  // Restore scroll when pendingAction changes
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = savedScroll.current;
-  }, [pendingAction]);
+
 
   /* ── Derived tree data ── */
   const treeRoots = workspace.tree || [];
-  const isSingleRoot = treeRoots.length === 1;
+  const isSingleRoot = treeRoots.length === 1 && treeRoots[0]?.type === 'folder';
   // In single-root mode, show root folder's children directly (VS Code style)
   const displayNodes = isSingleRoot ? (treeRoots[0]?.children || []) : treeRoots;
   const sectionLabel = isSingleRoot ? (treeRoots[0]?.name || 'FILES').toUpperCase() : 'FILES';
@@ -490,38 +487,83 @@ export default function FilePioneer({
   // Whether we have any real tree content to show
   const hasTreeContent = treeRoots.length > 0;
 
-  /* ── Search filtering ── */
+  /* ── Search filtering (Fuzzy Search) ── */
   const filteredNodes = useMemo(() => {
     const term = search.trim().toLowerCase();
 
-    // When not searching, return the live nodes directly — do NOT override node.open
     if (!term) {
       function stripTrash(nodes) {
-        return (nodes || []).filter(n => n?.name && !n.name.includes('.tildertrash_'));
+        return (nodes || [])
+          .filter(n => n?.name && !n.name.includes('.tildertrash_'))
+          .map(n => n.type === 'folder' && n.children ? { ...n, children: stripTrash(n.children) } : n);
       }
       return stripTrash(displayNodes);
     }
 
-    // When searching, filter recursively and expand matching folders
-    function filterNode(node) {
-      if (!node?.name) return null;
-      if (node.name.includes('.tildertrash_')) return null;
+    function scoreMatch(name, q) {
+      if (!name) return 0;
+      const n = name.toLowerCase();
+      if (n === q) return 200;
+      if (n.includes(q)) return 100;
+      let score = 0, qi = 0;
+      for (let i = 0; i < n.length && qi < q.length; i++) {
+        if (n[i] === q[qi]) { score += 10; qi++; }
+      }
+      return qi === q.length ? score : 0;
+    }
 
-      const match = node.name.toLowerCase().includes(term);
+    function filterNode(node) {
+      if (!node?.name || node.name.includes('.tildertrash_')) return null;
+      const s = scoreMatch(node.name, term);
       if (node.type === 'folder' && node.children) {
         const kids = node.children.map(filterNode).filter(Boolean);
-        if (match || kids.length) {
-          // Force-open folders that have search matches
-          return { ...node, children: kids, open: true };
+        kids.sort((a, b) => (b.score || 0) - (a.score || 0));
+        if (s > 0 || kids.length > 0) {
+          return { ...node, children: kids, open: true, score: s };
         }
         return null;
       }
-      return match ? node : null;
+      return s > 0 ? { ...node, score: s } : null;
     }
 
-    return displayNodes.map(filterNode).filter(Boolean);
+    const res = displayNodes.map(filterNode).filter(Boolean);
+    res.sort((a, b) => (b.score || 0) - (a.score || 0));
+    return res;
   }, [displayNodes, search]);
 
+  /* ── Flat Tree Generation for Virtualization ── */
+  const flatNodes = useMemo(() => {
+    const list = [];
+    
+    if (pendingAction?.mode === 'create' && pendingAction.parentPath === 'root') {
+      list.push({ isInlineInput: true, type: pendingAction.type, depth: 0, onSubmit: submitCreate, onCancel: cancelPending });
+    }
+
+    function flatten(nodes, depth) {
+      for (const node of nodes) {
+        if (pendingAction?.mode === 'create' && pendingAction.parentPath === node.path) {
+          list.push({ isInlineInput: true, type: pendingAction.type, depth, onSubmit: submitCreate, onCancel: cancelPending });
+        }
+        list.push({ node, depth, isInlineInput: false });
+        if (node.type === 'folder' && node.open && node.children) {
+          flatten(node.children, depth + 1);
+        }
+      }
+    }
+    flatten(filteredNodes, 0);
+    return list;
+  }, [filteredNodes, pendingAction]);
+
+  // Scroll the selected item into view using react-window's scrollToRow
+  useEffect(() => {
+    if (!listRef.current || !selectedPath || !Array.isArray(flatNodes)) return;
+    const idx = flatNodes.findIndex(item => !item.isInlineInput && item.node?.path === selectedPath);
+    if (idx >= 0) {
+      listRef.current.scrollToRow({ index: idx, align: 'smart' });
+    }
+  // flatNodes is intentionally excluded — we only want to scroll when selection changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPath]);
 
   /* ── Helpers ── */
   function resolveParentForCreate() {
@@ -544,8 +586,6 @@ export default function FilePioneer({
 
   /* ── Pending action management ── */
   function startCreate(uiParentPath, type) {
-    if (scrollRef.current) savedScroll.current = scrollRef.current.scrollTop;
-    
     // Ensure the folder is open before creating inside it
     const n = uiParentPath === 'root' ? treeRoots[0] : workspace.findNode(uiParentPath);
     if (n?.type === 'folder') n.open = true;
@@ -555,7 +595,6 @@ export default function FilePioneer({
   }
 
   function startRename(node) {
-    if (scrollRef.current) savedScroll.current = scrollRef.current.scrollTop;
     workspace.setSelectedNode(node.path);
     setPendingAction({ mode: 'rename', path: node.path });
   }
@@ -643,6 +682,20 @@ export default function FilePioneer({
           else closeTab?.(t.id);
         }
       });
+    }
+
+    // Untitled workspaces don't support safe renaming for external handles without prompting.
+    // Bypass soft-delete and permanently delete immediately.
+    if (!workspace.rootHandle && !workspace.rootSystemPath) {
+      try {
+        await workspace.deleteNode(node.path);
+        refresh();
+        pushNotification?.(`Deleted "${node.name}".`, 'info');
+      } catch (err) {
+        console.error('Could not delete:', err);
+        pushNotification?.('Could not delete item.', 'error');
+      }
+      return;
     }
 
     const trashName = `${node.name}.tildertrash_${Date.now()}`;
@@ -891,6 +944,20 @@ export default function FilePioneer({
     refresh();
   }
 
+  /* ── Multi-select ── */
+  function toggleMultiSelect(path) {
+    setMultiSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  }
+
+  function clearMultiSelect() {
+    setMultiSelected(new Set());
+  }
+
   /* ── Callbacks object ── */
   const callbacks = useMemo(() => ({
     selectNode,
@@ -907,6 +974,7 @@ export default function FilePioneer({
     openContextMenu,
     setDragging,
     setDropTarget,
+    toggleMultiSelect,
   }), [workspace, refresh, pendingAction]);
 
   /* ── Context menu derived state ── */
@@ -955,6 +1023,14 @@ export default function FilePioneer({
               <i className="fa-solid fa-rotate-left" />
             </button>
           )}
+          {multiSelected.size > 0 && (
+            <button type="button" className="fp-toolbar-btn fp-multi-clear-btn" title={`Clear Selection (${multiSelected.size})`} onClick={clearMultiSelect}>
+              <i className="fa-solid fa-square-minus" style={{ color: '#ff5252' }} />
+            </button>
+          )}
+          <button type="button" className={`fp-toolbar-btn ${showMeta ? 'active' : ''}`} title="Toggle Metadata" onClick={() => setShowMeta(v => !v)}>
+            <i className="fa-solid fa-circle-info" />
+          </button>
         </div>
       </div>
 
@@ -1050,7 +1126,7 @@ export default function FilePioneer({
         />
       ) : (
         <div
-          className="fp-tree-section"
+          className="fp-tree-section fp-trees-container"
           style={{
             display: 'flex',
             flexDirection: 'column',
@@ -1063,17 +1139,14 @@ export default function FilePioneer({
           {/* Section label */}
           <div className="fp-section-label">{sectionLabel}</div>
 
-          {/* Scrollable file tree (no virtualization — eliminates AutoSizer height bugs) */}
+          {/* Virtualized file tree */}
           <div
-            ref={scrollRef}
-            className="fp-tree-scroll"
             style={{
               flex: 1,
               minHeight: 0,
-              overflowY: 'auto',
-              overflowX: 'hidden'
+              display: 'flex',
+              flexDirection: 'column'
             }}
-            onScroll={e => { savedScroll.current = e.currentTarget.scrollTop; }}
             onDragOver={e => { if (dragState.dragging) { e.preventDefault(); setDropTarget('root'); } }}
             onDrop={async e => {
               e.preventDefault();
@@ -1093,22 +1166,29 @@ export default function FilePioneer({
               openContextMenu(e, { path: 'root', type: 'folder', name: sectionLabel, isRoot: true });
             }}
           >
+                        <List
+                  listRef={listRef}
+                  className="fp-tree-list"
+                  rowCount={flatNodes.length}
+                  rowHeight={32}
+                  rowComponent={TreeNode}
+                  rowProps={{
+                    flatNodes,
+                    selectedPath,
+                    activeTabPath: activeTabId,
+                    pendingAction,
+                    dragState,
+                    callbacks,
+                    multiSelected,
+                    showMeta
+                  }}
+                  style={{ overflowX: 'hidden', flex: 1 }}
+                />
+          </div>
 
-            {/* Recursive tree rendering (TreeBranch handles inline create at all levels including root) */}
-            <TreeBranch
-              nodes={filteredNodes}
-              depth={0}
-              parentPath="root"
-              selectedPath={selectedPath}
-              activeTabPath={activeTabId}
-              pendingAction={pendingAction}
-              dragState={dragState}
-              callbacks={callbacks}
-            />
-
-            {/* Show a hint when tree is empty but we have a root */}
-            {filteredNodes.length === 0 && !pendingAction && (
-              <div style={{
+          {/* Show a hint when tree is empty but we have a root */}
+          {filteredNodes.length === 0 && !pendingAction && (
+            <div style={{
                 padding: '12px 16px',
                 color: 'rgba(255,255,255,0.4)',
                 fontSize: '11px',
@@ -1118,7 +1198,7 @@ export default function FilePioneer({
                 {search ? 'No matching files found.' : 'This folder is empty.'}
               </div>
             )}
-          </div>
+
 
           {/* ── Outline Section (collapsible, separated) ── */}
           <div
