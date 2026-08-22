@@ -11,7 +11,12 @@ pub struct SearchResult {
 }
 
 #[command]
-pub async fn tilder_search_workspace(workspace_path: String, query: String, is_case_sensitive: bool, is_regex: bool) -> Result<Vec<SearchResult>, String> {
+pub async fn tilder_search_workspace(
+    workspace_path: String,
+    query: String,
+    is_case_sensitive: bool,
+    is_regex: bool,
+) -> Result<Vec<SearchResult>, String> {
     let mut results = Vec::new();
 
     let pattern = if is_regex {

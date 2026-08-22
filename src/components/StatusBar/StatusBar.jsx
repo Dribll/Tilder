@@ -386,7 +386,7 @@ export default function StatusBar({
             <span className="statusbar-item subtle">{rootLabel}</span>
             {isTrusted === false && (
               <span className="statusbar-badge" style={{ backgroundColor: '#e52920', color: 'white' }} title="Some features like Terminal and Code Runner are disabled in Restricted Mode for security.">
-                <i className="fa-solid fa-shield-halved" style={{ marginRight: '6px' }}></i>
+                <span><i className="fa-solid fa-shield-halved" style={{ marginRight: '6px' }}></i></span>
                 Restricted Mode
               </span>
             )}
@@ -421,7 +421,7 @@ export default function StatusBar({
             {settings?.performance?.statusMonitor && (
               <div className="statusbar-performance" style={{ display: 'flex', gap: '8px', marginLeft: '12px', alignItems: 'center' }}>
                 <div className="statusbar-item" title="CPU Usage & Temp" style={{ display: 'flex', alignItems: 'center', gap: '6px', opacity: 0.85, fontSize: '11px', background: 'rgba(255,255,255,0.06)', padding: '3px 8px', borderRadius: '4px' }}>
-                  <i className="fa-solid fa-microchip" style={{ color: perf.cpu > 80 || perf.cpuTemp > 85 ? '#f87171' : '#60a5fa', fontSize: '12px' }}></i>
+                  <span><i className="fa-solid fa-microchip" style={{ color: perf.cpu > 80 || perf.cpuTemp > 85 ? '#f87171' : '#60a5fa', fontSize: '12px' }}></i></span>
                   <span style={{ minWidth: '45px' }}>CPU {perf.cpu}%</span>
                   {perf.cpuTemp > 0 && <span style={{ color: perf.cpuTemp > 85 ? '#f87171' : '#9ca3af' }}>{perf.cpuTemp}°C</span>}
                   <div style={{ width: '20px', height: '4px', background: 'rgba(255,255,255,0.2)', borderRadius: '2px', overflow: 'hidden' }}>
@@ -430,7 +430,7 @@ export default function StatusBar({
                 </div>
                 {perf.gpu > 0 && (
                   <div className="statusbar-item" title="GPU Usage & Temp" style={{ display: 'flex', alignItems: 'center', gap: '6px', opacity: 0.85, fontSize: '11px', background: 'rgba(255,255,255,0.06)', padding: '3px 8px', borderRadius: '4px' }}>
-                    <i className="fa-solid fa-gamepad" style={{ color: perf.gpu > 80 || perf.gpuTemp > 85 ? '#f87171' : '#a78bfa', fontSize: '12px' }}></i>
+                    <span><i className="fa-solid fa-gamepad" style={{ color: perf.gpu > 80 || perf.gpuTemp > 85 ? '#f87171' : '#a78bfa', fontSize: '12px' }}></i></span>
                     <span style={{ minWidth: '45px' }}>GPU {perf.gpu}%</span>
                     {perf.gpuTemp > 0 && <span style={{ color: perf.gpuTemp > 85 ? '#f87171' : '#9ca3af' }}>{perf.gpuTemp}°C</span>}
                     <div style={{ width: '20px', height: '4px', background: 'rgba(255,255,255,0.2)', borderRadius: '2px', overflow: 'hidden' }}>
@@ -439,7 +439,7 @@ export default function StatusBar({
                   </div>
                 )}
                 <div className="statusbar-item" title="RAM Usage" style={{ display: 'flex', alignItems: 'center', gap: '6px', opacity: 0.85, fontSize: '11px', background: 'rgba(255,255,255,0.06)', padding: '3px 8px', borderRadius: '4px' }}>
-                  <i className="fa-solid fa-memory" style={{ color: '#34d399', fontSize: '12px' }}></i>
+                  <span><i className="fa-solid fa-memory" style={{ color: '#34d399', fontSize: '12px' }}></i></span>
                   <span>RAM {perf.ram} MB</span>
                 </div>
               </div>
@@ -486,7 +486,7 @@ export default function StatusBar({
                     onClick={() => setOpenMenu((current) => (current === 'compiler' ? null : 'compiler'))}
                     title="Select Interpreter / Compiler"
                   >
-                    <i className="fa-solid fa-microchip" style={{ fontSize: '10px', marginRight: '4px' }}></i>
+                    <span><i className="fa-solid fa-microchip" style={{ fontSize: '10px', marginRight: '4px' }}></i></span>
                     {compilerLabel}
                   </button>
                 ) : null}

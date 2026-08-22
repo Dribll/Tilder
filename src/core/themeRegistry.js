@@ -27,26 +27,26 @@ const BUILT_IN_THEMES = [
     label: 'Tilder Formal (Default)',
     category: 'Dark',
     colors: {
-      '--main-bg-color': '#0d1117',
-      '--content-box-bg-color': '#0d1117',
-      '--subdropdown-box-bg-color': '#161b22',
-      '--trigger-btn-dropdown-hover': '#21262d',
-      '--trigger-btn-subdropdown-hover': '#21262d',
+      '--main-bg-color': '#1e293b',
+      '--content-box-bg-color': '#1e293b',
+      '--subdropdown-box-bg-color': '#334155',
+      '--trigger-btn-dropdown-hover': '#475569',
+      '--trigger-btn-subdropdown-hover': '#475569',
       '--sidebar-icons-hover': 'rgba(124, 111, 204, 0.25)',
-      '--li-hover': '#21262d',
-      '--a-hover': '#c9d1d9',
-      '--tab-bg-color': '#0d1117',
-      '--body-main-bg-color': '#010409',
-      '--welcome-page': '#0d1117',
+      '--li-hover': '#475569',
+      '--a-hover': '#cbd5e1',
+      '--tab-bg-color': '#1e293b',
+      '--body-main-bg-color': '#0f172a',
+      '--welcome-page': '#1e293b',
       '--fa-primary-color': '#a79dff',
-      '--dialogue-color': '#161b22',
-      '--dialogue-border-color': '1px solid #30363d',
+      '--dialogue-color': '#334155',
+      '--dialogue-border-color': '1px solid #475569',
       '--file-options-hover': '#7c6fcc',
-      '--modal-box-color': '#161b22',
+      '--modal-box-color': '#334155',
       '--accent-color': '#7c6fcc',
       '--tilder-active-glow': '0 0 12px rgba(124, 111, 204, 0.25)',
-      '--tilder-border-highlight': '1px solid #30363d',
-      '--tilder-shadow': '0 8px 24px rgba(1, 4, 9, 0.8)',
+      '--tilder-border-highlight': '1px solid #475569',
+      '--tilder-shadow': '0 8px 24px rgba(15, 23, 42, 0.8)',
       '--primary-gradient-1': '#5a4fa0',
       '--primary-gradient-2': '#7c6fcc'
     }
@@ -231,24 +231,24 @@ const BUILT_IN_THEMES = [
     category: 'Dark',
     colors: {
       '--main-bg-color': 'transparent',
-      '--content-box-bg-color': 'rgba(28, 28, 30, 0.15)',
-      '--subdropdown-box-bg-color': 'rgba(44, 44, 46, 0.4)',
-      '--trigger-btn-dropdown-hover': 'rgba(255, 255, 255, 0.12)',
-      '--trigger-btn-subdropdown-hover': 'rgba(255, 255, 255, 0.15)',
-      '--sidebar-icons-hover': 'rgba(255, 255, 255, 0.2)',
-      '--li-hover': 'rgba(255, 255, 255, 0.1)',
+      '--content-box-bg-color': 'rgba(28, 28, 30, 0.05)',
+      '--subdropdown-box-bg-color': 'rgba(44, 44, 46, 0.2)',
+      '--trigger-btn-dropdown-hover': 'rgba(255, 255, 255, 0.08)',
+      '--trigger-btn-subdropdown-hover': 'rgba(255, 255, 255, 0.1)',
+      '--sidebar-icons-hover': 'rgba(255, 255, 255, 0.15)',
+      '--li-hover': 'rgba(255, 255, 255, 0.08)',
       '--a-hover': '#ffffff',
       '--tab-bg-color': 'transparent',
       '--body-main-bg-color': 'transparent',
-      '--welcome-page': 'rgba(28, 28, 30, 0.15)',
+      '--welcome-page': 'rgba(28, 28, 30, 0.05)',
       '--fa-primary-color': '#0a84ff',
-      '--dialogue-color': 'rgba(44, 44, 46, 0.45)',
-      '--dialogue-border-color': '1px solid rgba(255, 255, 255, 0.15)',
+      '--dialogue-color': 'rgba(44, 44, 46, 0.25)',
+      '--dialogue-border-color': '1px solid rgba(255, 255, 255, 0.1)',
       '--file-options-hover': '#5e5ce6',
-      '--modal-box-color': 'rgba(44, 44, 46, 0.4)',
+      '--modal-box-color': 'rgba(44, 44, 46, 0.2)',
       '--accent-color': '#0a84ff',
       '--tilder-active-glow': '0 0 10px rgba(10, 132, 255, 0.3)',
-      '--tilder-border-highlight': '1px solid rgba(255, 255, 255, 0.15)',
+      '--tilder-border-highlight': '1px solid rgba(255, 255, 255, 0.1)',
       '--tilder-shadow': '0 12px 32px rgba(0, 0, 0, 0.4)',
       '--primary-gradient-1': '#0a84ff',
       '--primary-gradient-2': '#5e5ce6'
@@ -304,20 +304,33 @@ export function applyTheme(themeId, aesthetics = {}) {
     }
   }
   
-  // Apply glassmorphism panel background based on computed rgb
-  if (aesthetics.glassmorphism || themeId === 'tilder-tahoe') {
+  // Apply glassmorphism panel background
+  // Tahoe is full-glass; all other dark themes get subtle semi-transparent glass (8px blur)
+  if (themeId === 'tilder-tahoe') {
+    root.style.setProperty('--tilder-panel-bg', 'rgba(18, 18, 22, 0.55)');
+    root.style.setProperty('--tilder-panel-blur', 'blur(8px) saturate(140%)');
+    root.style.setProperty('--tilder-border-highlight', '1px solid rgba(255,255,255,0.10)');
+  } else if (aesthetics.glassmorphism) {
     let bgRgb = root.style.getPropertyValue('--main-bg-color-rgb');
     if (!bgRgb || bgRgb === 'undefined') {
-        bgRgb = themeId === 'tilder-tahoe' ? '28, 28, 30' : '14, 14, 18';
+      bgRgb = '14, 14, 18';
     }
-    const opacity = themeId === 'tilder-tahoe' ? 0.15 : (aesthetics.sidebarOpacity !== undefined ? aesthetics.sidebarOpacity : 0.7);
+    const opacity = aesthetics.sidebarOpacity !== undefined ? aesthetics.sidebarOpacity : 0.72;
     root.style.setProperty('--tilder-panel-bg', `rgba(${bgRgb}, ${opacity})`);
-    root.style.setProperty('--tilder-panel-blur', themeId === 'tilder-tahoe' ? 'blur(40px) saturate(200%)' : `blur(${aesthetics.blurStrength || 10}px)`);
+    root.style.setProperty('--tilder-panel-blur', `blur(${aesthetics.blurStrength || 8}px)`);
   } else {
-    const bg = root.style.getPropertyValue('--main-bg-color') || '#1e1e1e';
-    root.style.setProperty('--tilder-panel-bg', bg);
-    root.style.setProperty('--tilder-panel-blur', 'none');
+    // Default for all themes: gentle glass effect — semi-transparent with light blur
+    let bgRgb = root.style.getPropertyValue('--main-bg-color-rgb');
+    if (!bgRgb || bgRgb === 'undefined') {
+      bgRgb = '14, 14, 18';
+    }
+    // Light themes get opacity 0.65, dark themes get 0.45 to show the true glass over body gradient
+    const isLightTheme = themeId === 'tilder-light';
+    const opacity = isLightTheme ? 0.65 : 0.45;
+    root.style.setProperty('--tilder-panel-bg', `rgba(${bgRgb}, ${opacity})`);
+    root.style.setProperty('--tilder-panel-blur', 'blur(6px) saturate(120%)');
   }
+
 
   // Toggle native OS window vibrancy using Tauri IPC
   if (typeof window !== 'undefined' && (window.__TILDER_RUNTIME_MODE__ === 'desktop-local' || window.__TILDER_RUNTIME_MODE__ === 'desktop')) {

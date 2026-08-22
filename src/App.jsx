@@ -15,6 +15,7 @@ import TestRunner from './components/SideBar/Main Components/TestRunner/TestRunn
 import CodeBlocks from './components/SideBar/Main Components/Code Blocks/CodeBlocks.jsx';
 import Git from './components/SideBar/Main Components/Git/Git.jsx';
 import TrashView from './components/SideBar/Main Components/TrashView/TrashView.jsx';
+import HardwareManager from './components/SideBar/Main Components/HardwareManager/HardwareManager.jsx';
 import DefaultPage from './components/DefaultPage/DefaultPage.jsx';
 import WelcomePage from './components/WelcomePage/WelcomePage.jsx';
 import Info from './components/Info/Info.jsx';
@@ -34,6 +35,44 @@ import SystemMonitor from './components/SystemMonitor/SystemMonitor.jsx';
 import MonacoEditor from './components/Editor/MonacoEditor.jsx';
 import OfficeEditor from './components/Editor/OfficeEditor.jsx';
 const isOfficeFile = (name) => /\.(docx|xlsx|csv|pptx)$/i.test(name || '');
+
+const isBinaryMediaFile = (name) => /\.(png|jpg|jpeg|gif|bmp|webp|svg|ico|pdf|mp4|mp3|wav|webm|mov|avi)$/i.test(name || '');
+
+import { convertFileSrc } from '@tauri-apps/api/core';
+
+function MediaViewer({ tab }) {
+  const [src, setSrc] = useState(tab?.blobUrl || null);
+
+  useEffect(() => {
+    if (tab?.nativePath) {
+      try {
+        setSrc(convertFileSrc(tab.nativePath));
+      } catch (e) {
+        setSrc(`http://asset.localhost/${encodeURIComponent(tab.nativePath.replace(/\\/g, '/'))}`);
+      }
+    } else if (tab?.blobUrl) {
+      setSrc(tab.blobUrl);
+    }
+  }, [tab?.nativePath, tab?.blobUrl]);
+
+  const ext = (tab?.name || '').split('.').pop().toLowerCase();
+  const isImage = /^(png|jpg|jpeg|gif|bmp|webp|svg|ico)$/.test(ext);
+  const isPdf = ext === 'pdf';
+  const isVideo = /^(mp4|webm|mov|avi)$/.test(ext);
+  const isAudio = /^(mp3|wav|webm)$/.test(ext);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', background: 'var(--tilder-body-bg, #0f172a)', color: 'rgba(255,255,255,0.7)', gap: 16, padding: 24 }}>
+      {isImage && src && <img src={src} alt={tab.name} style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: 8, boxShadow: '0 4px 32px rgba(0,0,0,0.5)' }} />}
+      {isPdf && src && <iframe src={src} title={tab.name} style={{ width: '100%', height: '80vh', border: 'none', borderRadius: 8 }} />}
+      {isVideo && src && <video src={src} controls style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: 8 }} />}
+      {isAudio && src && <audio src={src} controls style={{ width: '100%' }} />}
+      {!src && <div style={{ textAlign: 'center' }}><span><i className="fa-solid fa-file" style={{ fontSize: 48, opacity: 0.3 }} /></span><p style={{ marginTop: 12, opacity: 0.5 }}>Binary file - {tab?.name}</p></div>}
+      {src && <p style={{ fontSize: 11, opacity: 0.4, marginTop: 8 }}>{tab?.nativePath || tab?.path}</p>}
+    </div>
+  );
+}
+
 import LivePreview from './components/LivePreview/LivePreview.jsx';
 import Backpack from './components/Backpack/Backpack.jsx';
 import { soundManager } from './core/SoundManager.js';
@@ -42,6 +81,7 @@ import defaultSettings, { mergeWithDefaultSettings } from './components/Settings
 import { debugApi } from './core/debugApi.js';
 import { fetchSystemFonts } from './core/fontApi.js';
 import workspace from './core/workspace.js';
+import { fetchScmFileDiff } from './core/scmApi.js';
 import { applyTheme } from './core/themeRegistry.js';
 import { getApiOrigin } from './core/apiBase.js';
 import { beginOAuth, disconnectProvider, fetchAuthSession, openDesktopOAuthUrl, pollDesktopOAuth, pullSyncedState, pushSyncedState, updateSyncPreferences, fetchLocalBackpack, saveLocalBackpack } from './core/accountApi.js';
@@ -347,6 +387,7 @@ function App() {
   });
   const [debugBreakpoints, setDebugBreakpoints] = useState({});
   const [breakpointConditions, setBreakpointConditions] = useState({});
+  const [gitFileChanges, setGitFileChanges] = useState({}); // { [filePath]: string (unified diff) }
   const [watchExpressions, setWatchExpressions] = useState([]);
   const [debugDiagnostics, setDebugDiagnostics] = useState([]);
   const [customRuntimes, setCustomRuntimes] = useState({});
@@ -577,6 +618,37 @@ function App() {
       }
     }
   }, []);
+
+  // Fetch git diffs for the active tab to power gutter decorations
+  useEffect(() => {
+    const fetchDiff = async () => {
+      const activeTabs = [workspace.getActiveTab(), splitEditorOpen ? workspace.getActiveTab(focusedSplitPaneIndex) : null].filter(Boolean);
+      for (const tab of activeTabs) {
+        if (!tab || tab.path === 'root' || tab.path === '__welcome__' || tab.path === '__trash__') continue;
+        
+        try {
+          const rootPath = workspace.roots?.[0]?.systemPath;
+          if (!rootPath) continue;
+
+          const diffResponse = await fetchScmFileDiff({
+            systemPath: rootPath,
+            path: tab.path
+          });
+          
+          setGitFileChanges(prev => ({
+            ...prev,
+            [tab.path]: diffResponse.workingTreeDiff || ''
+          }));
+        } catch (err) {
+          // Ignore errors, might not be a git repo
+        }
+      }
+    };
+
+    const timerId = setTimeout(fetchDiff, 500);
+    return () => clearTimeout(timerId);
+  }, [version, workspace, splitEditorOpen, focusedSplitPaneIndex]);
+
 
   useEffect(() => {
     // Initialize Jump List on startup from stored recent items
@@ -1093,6 +1165,11 @@ function App() {
     setVersion((current) => current + 1);
   }
 
+  useEffect(() => {
+    window.addEventListener('tilder:workspace-updated', refresh);
+    return () => window.removeEventListener('tilder:workspace-updated', refresh);
+  }, []);
+
   function openSearchPanel(request = null) {
     if (!builtInFeatures.search) {
       notifyExtensionDisabled('Search Navigator');
@@ -1275,7 +1352,7 @@ function App() {
   }
 
   function isPanelAvailable(panel) {
-    return AVAILABLE_SIDEBAR_PANELS.includes(panel) || panel === 'codeblocks' || panel === 'extensions' || panel === 'backpack';
+    return AVAILABLE_SIDEBAR_PANELS.includes(panel) || panel === 'codeblocks' || panel === 'extensions' || panel === 'backpack' || panel === 'hardware';
   }
 
   useEffect(() => {
@@ -6950,6 +7027,7 @@ function App() {
                           settings={settings}
                           breakpoints={debugBreakpoints[activeTab.path] || []}
                           onToggleBreakpoint={(line) => toggleBreakpoint(activeTab.path, line)}
+                          gitDiff={gitFileChanges[activeTab.path] || ''}
                           MonacoEditorDisplay="flex"
                           monacoEditorStyle={monacoEditorStyle}
                         />
@@ -6958,7 +7036,9 @@ function App() {
                       {splitEditorOpen && primaryPaneEditorTab ? (
                           isOfficeFile(primaryPaneEditorTab.name) ? (
   <OfficeEditor tab={primaryPaneEditorTab} onChange={handleEditorChange} />
-) : (
+) : isBinaryMediaFile(primaryPaneEditorTab.name) ? (
+    <MediaViewer tab={primaryPaneEditorTab} />
+  ) : (
   <MonacoEditor
                             key={`${primaryPaneEditorTab.id}:${primaryPaneEditorTab.language}:${primaryPaneEditorTab.name}`}
                             tab={primaryPaneEditorTab}
@@ -6979,6 +7059,7 @@ function App() {
                           settings={settings}
                           breakpoints={debugBreakpoints[primaryPaneEditorTab.path] || []}
                           onToggleBreakpoint={(line) => toggleBreakpoint(primaryPaneEditorTab.path, line)}
+                          gitDiff={gitFileChanges[primaryPaneEditorTab.path] || ''}
                           MonacoEditorDisplay="flex"
                           monacoEditorStyle={splitMonacoEditorStyle}
                         />
@@ -7089,6 +7170,9 @@ function App() {
                                   intelliSense={getEditorIntelliSense(paneTab)}
                                   lspBridge={getEditorLspBridge(paneTab)}
                                   settings={settings}
+                                  breakpoints={debugBreakpoints[paneTab.path] || []}
+                                  onToggleBreakpoint={(line) => toggleBreakpoint(paneTab.path, line)}
+                                  gitDiff={gitFileChanges[paneTab.path] || ''}
                                   MonacoEditorDisplay="flex"
                                   monacoEditorStyle={splitMonacoEditorStyle}
                         />
@@ -7258,6 +7342,10 @@ function App() {
               handleOpenInTerminal={handleOpenInTerminal}
               onExplainWithAI={(path) => setAiLensTarget(path)}
             />
+            <HardwareManager
+              ariaExpandedisplayhardware={panelDisplay('hardware')}
+              pushNotification={pushNotification}
+            />
             <Backpack
               ariaExpandedDisplayBackpack={panelDisplay('backpack')}
               onInsertSnippet={handleInsertSnippetIntoEditor}
@@ -7288,6 +7376,7 @@ function App() {
                 setActivePanel((current) => (current === 'search' ? null : 'search'));
                 setSearchFocusNonce((current) => current + 1);
               }}
+              toggleAriaExpandedhardware={() => toggleSidebarPanel('hardware')}
               toggleAriaExpandedtrash={() => toggleSidebarPanel('trashview')}
               toggleAriaExpandedextensions={openExtensions}
               toggleAriaExpandedebug={() => toggleSidebarPanel('debug')}

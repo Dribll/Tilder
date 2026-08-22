@@ -41,3 +41,5 @@ out
 
 # Tilder Specific (if any)
 .tildertrash_*
+
+data/sessions.json

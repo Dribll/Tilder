@@ -152,7 +152,7 @@ export default function CommandPalette({ isOpen, commands, workspace, onClose, o
               <div className="command-palette-item-main">
                 <div className="command-palette-item-label-row">
                   <div className="command-palette-item-label">
-                    {command.type === 'file' ? <i className="fa-regular fa-file" style={{marginRight: '8px', opacity: 0.7}}></i> : null}
+                    {command.type === 'file' ? <span><i className="fa-regular fa-file" style={{marginRight: '8px', opacity: 0.7}}></i></span> : null}
                     {command.label}
                   </div>
                   {recentCommandIds.includes(command.id) && !query.trim() ? (

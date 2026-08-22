@@ -30,7 +30,7 @@ export default function WorkspaceTrustModal({ folderName, onTrust, onDeny }) {
     <div className={`workspace-trust-overlay ${show ? 'visible' : ''}`}>
       <div className={`workspace-trust-modal ${show ? 'visible' : ''}`}>
         <div className="trust-icon">
-          <i className="fa-solid fa-shield-halved"></i>
+          <span><i className="fa-solid fa-shield-halved"></i></span>
         </div>
         <h2>Do you trust the authors of the files in this folder?</h2>
         <p className="trust-folder-name">{folderName || 'this workspace'}</p>

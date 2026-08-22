@@ -73,7 +73,15 @@
 
 
 body {
-    background-color: var(--body-main-bg-color);
+    /* Extremely subtle ambient gradient - barely visible hint of depth */
+    background: var(--body-main-bg-color);
+    background-image:
+        radial-gradient(circle at 0% 0%, rgba(138, 90, 240, 0.20) 0%, transparent 40%),
+        radial-gradient(circle at 100% 100%, rgba(40, 120, 255, 0.20) 0%, transparent 40%),
+        radial-gradient(circle at 100% 0%, rgba(255, 60, 150, 0.15) 0%, transparent 40%),
+        radial-gradient(circle at 0% 100%, rgba(0, 200, 150, 0.15) 0%, transparent 40%);
+    background-size: cover;
+    background-attachment: fixed;
     overflow: hidden;
     height: 100vh;
     width: 100vw;
@@ -487,7 +495,9 @@ button.statusbar-item:hover {
     overflow: auto;
     border-radius: 10px;
     border: 1px solid rgba(122, 118, 207, 0.22);
-    background: linear-gradient(180deg, rgba(20, 21, 37, 0.98), rgba(12, 13, 23, 0.98));
+    background: var(--tilder-panel-bg, rgba(20, 21, 37, 0.98));
+    backdrop-filter: var(--tilder-panel-blur, blur(8px));
+    -webkit-backdrop-filter: var(--tilder-panel-blur, blur(8px));
     box-shadow: 0 18px 40px rgba(0, 0, 0, 0.34);
     z-index: 30;
 }
@@ -1721,9 +1731,10 @@ select.settingsInput {
     overflow: auto;
     border: 1px solid rgba(141, 156, 255, 0.22);
     border-radius: 12px;
-    background: rgba(15, 17, 29, 0.98);
+    background: var(--tilder-panel-bg, rgba(15, 17, 29, 0.98));
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-    backdrop-filter: blur(18px);
+    backdrop-filter: var(--tilder-panel-blur, blur(18px));
+    -webkit-backdrop-filter: var(--tilder-panel-blur, blur(18px));
 }
 
 .tilderSettingsSearchResult {
@@ -2517,7 +2528,7 @@ input[type="range"].tilderSettingsControl:active::-webkit-slider-thumb {
 .fp-tree-section {
     flex: 1;
     min-height: 0;
-    overflow: hidden; /* react-window manages its own scroll */
+    overflow: hidden;
     padding-bottom: 0;
     padding-right: 0;
 }
@@ -2571,11 +2582,9 @@ input[type="range"].tilderSettingsControl:active::-webkit-slider-thumb {
     border-color: rgba(111, 0, 201, 0.4);
 }
 .fp-node--active { 
-    background: rgba(111, 0, 201, 0.5) !important; 
-    color: #ffffff;
+    background: rgba(255, 255, 255, 0.05) !important; 
+    color: #e0b0ff;
     font-weight: 500;
-    border-color: rgba(111, 0, 201, 0.6);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 .fp-node--drop-target { 
     background: rgba(111, 0, 201, 0.3) !important; 
@@ -3166,9 +3175,9 @@ input[type="range"].tilderSettingsControl:active::-webkit-slider-thumb {
     width: 100%;
     height: 100%;
     min-height: 0;
-    background:
-        radial-gradient(circle at top right, rgba(96, 98, 192, 0.08), transparent 18%),
-        linear-gradient(180deg, rgba(16, 17, 30, 0.98), rgba(10, 11, 20, 0.98));
+    background: var(--tilder-panel-bg, rgba(15, 23, 42, 0.97));
+    backdrop-filter: var(--tilder-panel-blur, blur(6px));
+    -webkit-backdrop-filter: var(--tilder-panel-blur, blur(6px));
 }
 
 .search-header {
@@ -3466,9 +3475,9 @@ input[type="range"].tilderSettingsControl:active::-webkit-slider-thumb {
     width: 100%;
     height: 100%;
     min-height: 0;
-    background:
-        radial-gradient(circle at top right, rgba(96, 98, 192, 0.08), transparent 18%),
-        linear-gradient(180deg, rgba(16, 17, 30, 0.98), rgba(10, 11, 20, 0.98));
+    background: var(--tilder-panel-bg, rgba(16, 17, 30, 0.98));
+    backdrop-filter: var(--tilder-panel-blur, blur(6px));
+    -webkit-backdrop-filter: var(--tilder-panel-blur, blur(6px));
     overflow-y: scroll;
 }
 
@@ -4165,8 +4174,9 @@ input[type="range"].tilderSettingsControl:active::-webkit-slider-thumb {
 .account-glass-card {
     width: 100%;
     max-width: 480px;
-    background: rgba(18, 19, 29, 0.65);
-    backdrop-filter: blur(16px) saturate(180%);
+    background: var(--tilder-panel-bg, rgba(18, 19, 29, 0.65));
+    backdrop-filter: var(--tilder-panel-blur, blur(16px) saturate(180%));
+    -webkit-backdrop-filter: var(--tilder-panel-blur, blur(16px) saturate(180%));
     border: 1px solid rgba(167, 157, 255, 0.16);
     border-radius: 20px;
     padding: 30px;
@@ -6247,7 +6257,9 @@ nav {
 .github-profile-card,
 .scm-card {
     border: 1px solid rgba(111, 110, 191, 0.16);
-    background: linear-gradient(180deg, rgba(24, 26, 43, 0.94), rgba(12, 14, 23, 0.98));
+    background: var(--tilder-panel-bg, rgba(24, 26, 43, 0.94));
+    backdrop-filter: var(--tilder-panel-blur, blur(6px));
+    -webkit-backdrop-filter: var(--tilder-panel-blur, blur(6px));
     border-radius: 14px;
     padding: 14px;
 }
@@ -6403,8 +6415,9 @@ nav {
     height: 100%;
     min-height: 0;
     border-radius: 16px;
-    background:
-        linear-gradient(180deg, rgba(22, 24, 42, 0.98), rgba(12, 14, 25, 0.985));
+    background: var(--tilder-panel-bg, rgba(30, 41, 59, 0.97));
+    backdrop-filter: var(--tilder-panel-blur, blur(6px));
+    -webkit-backdrop-filter: var(--tilder-panel-blur, blur(6px));
     border: 1px solid rgba(124, 131, 211, 0.2);
     padding: 16px;
     overflow: hidden;
@@ -6678,12 +6691,14 @@ nav {
 }
 
 .extensions-hero-vscode {
-    background: linear-gradient(180deg, rgba(18, 20, 34, 0.96), rgba(12, 14, 24, 0.96));
+    background: var(--tilder-panel-bg, rgba(18, 20, 34, 0.96));
+    backdrop-filter: var(--tilder-panel-blur, blur(6px));
+    -webkit-backdrop-filter: var(--tilder-panel-blur, blur(6px));
     flex: 0 0 auto;
 }
 
 .extensions-toolbar-vscode {
-    background: rgba(11, 13, 23, 0.92);
+    background: var(--tilder-panel-bg, rgba(11, 13, 23, 0.92));
     flex: 0 0 auto;
 }
 
@@ -7926,7 +7941,9 @@ nav {
     padding: 18px;
     border-radius: 18px;
     border: 1px solid rgba(111, 110, 191, 0.14);
-    background: linear-gradient(180deg, rgba(16, 18, 32, 0.96), rgba(10, 12, 24, 0.98));
+    background: var(--tilder-panel-bg, rgba(16, 18, 32, 0.96));
+    backdrop-filter: var(--tilder-panel-blur, blur(8px));
+    -webkit-backdrop-filter: var(--tilder-panel-blur, blur(8px));
     box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
     overflow: hidden;
 }
@@ -8948,7 +8965,9 @@ nav {
     flex-direction: column;
     width: 100%;
     height: 100%;
-    background: linear-gradient(180deg, rgba(16, 17, 30, 0.98), rgba(10, 11, 22, 0.99));
+    background: var(--tilder-panel-bg, rgba(16, 17, 30, 0.98));
+    backdrop-filter: var(--tilder-panel-blur, blur(6px));
+    -webkit-backdrop-filter: var(--tilder-panel-blur, blur(6px));
     overflow: hidden;
 }
 
@@ -9303,6 +9322,29 @@ nav {
 
 .debug-breakpoint-glyph { background-color: #e51400; border-radius: 50%; width: 12px !important; height: 12px !important; margin-left: 5px; margin-top: 3px; cursor: pointer; }
 
+/* ── Git gutter change indicators (matches VS Code style) ── */
+.tilder-git-added {
+  width: 3px !important;
+  background-color: #3fb950 !important;
+  margin-left: 3px;
+}
+.tilder-git-modified {
+  width: 3px !important;
+  background-color: #d29922 !important;
+  margin-left: 3px;
+}
+.tilder-git-deleted {
+  width: 0 !important;
+  height: 0 !important;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid #f85149;
+  margin-top: -1px;
+  margin-left: 1px;
+  position: absolute;
+  bottom: -1px;
+}
+
 /* macOS-style Shake Error Animation */
 .shake-error {
   animation: shakeError 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both !important;
@@ -9564,7 +9606,7 @@ body, .sidebar, .sidebarscontent, .tabswrapper, .tab, .maincodearea, .areastatus
 
 /* ── Layer 0: Window chrome / body ── */
 body[data-theme="tilder-tahoe"] {
-    background: transparent !important;
+    background-color: transparent !important;
     color: rgba(255, 255, 255, 0.92) !important;
 }
 
@@ -9572,18 +9614,18 @@ body[data-theme="tilder-tahoe"] {
 body[data-theme="tilder-tahoe"] .sidebar,
 body[data-theme="tilder-tahoe"] .sidebarscontent,
 body[data-theme="tilder-tahoe"] nav {
-    background: linear-gradient(180deg, rgba(38, 38, 42, 0.72) 0%, rgba(28, 28, 32, 0.78) 100%) !important;
-    backdrop-filter: blur(60px) saturate(200%) brightness(0.95) !important;
-    -webkit-backdrop-filter: blur(60px) saturate(200%) brightness(0.95) !important;
+    background: linear-gradient(180deg, rgba(18, 18, 22, 0.22) 0%, rgba(12, 12, 16, 0.25) 100%) !important;
+    backdrop-filter: blur(8px) saturate(130%) brightness(0.95) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(130%) brightness(0.95) !important;
     border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
     box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.04) !important;
 }
 
 /* ── Layer 2: Status bar ── */
 body[data-theme="tilder-tahoe"] .statusBarWrapper {
-    background: linear-gradient(180deg, rgba(32, 32, 36, 0.8) 0%, rgba(26, 26, 30, 0.85) 100%) !important;
-    backdrop-filter: blur(40px) saturate(180%) !important;
-    -webkit-backdrop-filter: blur(40px) saturate(180%) !important;
+    background: linear-gradient(180deg, rgba(20, 20, 24, 0.28) 0%, rgba(14, 14, 18, 0.30) 100%) !important;
+    backdrop-filter: blur(8px) saturate(130%) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(130%) !important;
     border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
 }
@@ -9591,33 +9633,33 @@ body[data-theme="tilder-tahoe"] .statusBarWrapper {
 /* ── Layer 3: Main content area – solid dark surface ── */
 body[data-theme="tilder-tahoe"] .maincodearea,
 body[data-theme="tilder-tahoe"] .editor-wrapper {
-    background: rgba(22, 22, 26, 0.92) !important;
-    backdrop-filter: blur(20px) saturate(150%) !important;
-    -webkit-backdrop-filter: blur(20px) saturate(150%) !important;
+    background: rgba(16, 16, 20, 0.55) !important;
+    backdrop-filter: blur(6px) !important;
+    -webkit-backdrop-filter: blur(6px) !important;
 }
 
 /* ── Layer 4: Welcome page – subtle glass ── */
 body[data-theme="tilder-tahoe"] .welcomePage,
 body[data-theme="tilder-tahoe"] #defaultPage {
-    background: rgba(26, 26, 30, 0.7) !important;
-    backdrop-filter: blur(50px) saturate(200%) !important;
-    -webkit-backdrop-filter: blur(50px) saturate(200%) !important;
+    background: rgba(18, 18, 22, 0.30) !important;
+    backdrop-filter: blur(8px) saturate(120%) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(120%) !important;
 }
 
 /* ── Layer 5: Explorer shell – matches sidebar depth ── */
 body[data-theme="tilder-tahoe"] .explorer-shell {
-    background: linear-gradient(180deg, rgba(36, 36, 40, 0.65) 0%, rgba(30, 30, 34, 0.7) 100%) !important;
-    backdrop-filter: blur(50px) saturate(200%) !important;
-    -webkit-backdrop-filter: blur(50px) saturate(200%) !important;
+    background: linear-gradient(180deg, rgba(18, 18, 22, 0.20) 0%, rgba(12, 12, 16, 0.25) 100%) !important;
+    backdrop-filter: blur(8px) saturate(120%) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(120%) !important;
     border-left: 1px solid rgba(255, 255, 255, 0.06) !important;
     box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.03) !important;
 }
 
 /* ── Layer 6: Tabs – ultra-subtle glass strip ── */
 body[data-theme="tilder-tahoe"] .tabs {
-    background: rgba(28, 28, 32, 0.65) !important;
-    backdrop-filter: blur(40px) saturate(180%) !important;
-    -webkit-backdrop-filter: blur(40px) saturate(180%) !important;
+    background: rgba(18, 18, 22, 0.25) !important;
+    backdrop-filter: blur(8px) saturate(130%) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(130%) !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
 }
 body[data-theme="tilder-tahoe"] .tab {
@@ -9708,8 +9750,8 @@ body[data-theme="tilder-tahoe"] .tilderSettingsSidebarItem.active {
 
 body[data-theme="tilder-tahoe"] .tilderSettingsCard {
     background: linear-gradient(145deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.02) 100%) !important;
-    backdrop-filter: blur(30px) saturate(180%) !important;
-    -webkit-backdrop-filter: blur(30px) saturate(180%) !important;
+    backdrop-filter: blur(8px) saturate(120%) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(120%) !important;
     border: 1px solid rgba(255, 255, 255, 0.05) !important;
     border-radius: 10px !important;
     box-shadow:
@@ -9721,8 +9763,8 @@ body[data-theme="tilder-tahoe"] .tilderSettingsCard {
 /* ── Quick Links cards – the "link" items on welcome page ── */
 body[data-theme="tilder-tahoe"] .link {
     background: linear-gradient(145deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%) !important;
-    backdrop-filter: blur(30px) saturate(180%) !important;
-    -webkit-backdrop-filter: blur(30px) saturate(180%) !important;
+    backdrop-filter: blur(8px) saturate(120%) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(120%) !important;
     border: none !important;
     border-radius: 12px !important;
     box-shadow:
@@ -9754,8 +9796,8 @@ body[data-theme="tilder-tahoe"] .explorer-node.active {
 /* ── Empty state card (No Folder Opened) ── */
 body[data-theme="tilder-tahoe"] .fp-empty-card {
     background: linear-gradient(165deg, rgba(50, 50, 56, 0.7) 0%, rgba(36, 36, 40, 0.75) 100%) !important;
-    backdrop-filter: blur(50px) saturate(200%) brightness(1.05) !important;
-    -webkit-backdrop-filter: blur(50px) saturate(200%) brightness(1.05) !important;
+    backdrop-filter: blur(8px) saturate(120%) brightness(1.05) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(120%) brightness(1.05) !important;
     border: none !important;
     border-radius: 16px !important;
     box-shadow:
@@ -9787,8 +9829,8 @@ body[data-theme="tilder-tahoe"] .fp-empty-btn--primary:hover {
 body[data-theme="tilder-tahoe"] .extensions-list,
 body[data-theme="tilder-tahoe"] .extensions-detail {
     background: linear-gradient(165deg, rgba(44, 44, 50, 0.7) 0%, rgba(32, 32, 36, 0.75) 100%) !important;
-    backdrop-filter: blur(50px) saturate(200%) !important;
-    -webkit-backdrop-filter: blur(50px) saturate(200%) !important;
+    backdrop-filter: blur(8px) saturate(120%) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(120%) !important;
     border: none !important;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
 }
@@ -9811,8 +9853,8 @@ body[data-theme="tilder-tahoe"] .tabs-action-btn:hover {
 /* ── Debug console ── */
 body[data-theme="tilder-tahoe"] .debug-console-container {
     background: linear-gradient(180deg, rgba(30, 30, 34, 0.75) 0%, rgba(24, 24, 28, 0.8) 100%) !important;
-    backdrop-filter: blur(40px) saturate(180%) !important;
-    -webkit-backdrop-filter: blur(40px) saturate(180%) !important;
+    backdrop-filter: blur(8px) saturate(130%) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(130%) !important;
 }
 
 /* ── Sidebar icon bar – subtle, not full accent ── */

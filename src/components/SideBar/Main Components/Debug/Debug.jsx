@@ -320,7 +320,7 @@ export default function Debug({
             disabled={!isPaused}
             title="Continue (F5)"
           >
-            <i className="fa-solid fa-play"></i>
+            <span><i className="fa-solid fa-play"></i></span>
           </button>
           <button
             type="button"
@@ -329,7 +329,7 @@ export default function Debug({
             disabled={!isRunning}
             title="Pause (F6)"
           >
-            <i className="fa-solid fa-pause"></i>
+            <span><i className="fa-solid fa-pause"></i></span>
           </button>
           <button
             type="button"
@@ -338,7 +338,7 @@ export default function Debug({
             disabled={!isPaused}
             title="Step Over (F10)"
           >
-            <i className="fa-solid fa-arrow-right"></i>
+            <span><i className="fa-solid fa-arrow-right"></i></span>
           </button>
           <button
             type="button"
@@ -347,7 +347,7 @@ export default function Debug({
             disabled={!isPaused}
             title="Step Into (F11)"
           >
-            <i className="fa-solid fa-arrow-down"></i>
+            <span><i className="fa-solid fa-arrow-down"></i></span>
           </button>
           <button
             type="button"
@@ -356,7 +356,7 @@ export default function Debug({
             disabled={!isPaused}
             title="Step Out (Shift+F11)"
           >
-            <i className="fa-solid fa-arrow-up"></i>
+            <span><i className="fa-solid fa-arrow-up"></i></span>
           </button>
           <button
             type="button"
@@ -365,7 +365,7 @@ export default function Debug({
             disabled={!isActive}
             title="Restart (Ctrl+Shift+F5)"
           >
-            <i className="fa-solid fa-rotate-right"></i>
+            <span><i className="fa-solid fa-rotate-right"></i></span>
           </button>
           <button
             type="button"
@@ -374,7 +374,7 @@ export default function Debug({
             disabled={!isActive}
             title="Stop (Shift+F5)"
           >
-            <i className="fa-solid fa-stop"></i>
+            <span><i className="fa-solid fa-stop"></i></span>
           </button>
         </div>
 
@@ -382,11 +382,11 @@ export default function Debug({
         <div className="debug-quick-actions">
           {!isActive && (
             <button type="button" className="debug-start-btn" onClick={onStartDebugging} disabled={!activeTab}>
-              <i className="fa-solid fa-bug" /> Start Debugging
+              <span><i className="fa-solid fa-bug" /></span> Start Debugging
             </button>
           )}
           <button type="button" className="debug-quick-btn" onClick={onRunCurrentFile} disabled={!activeTab}>
-            <i className="fa-solid fa-terminal" /> Run File
+            <span><i className="fa-solid fa-terminal" /></span> Run File
           </button>
         </div>
 

@@ -91,17 +91,17 @@ export default function TestRunner({ ariaExpandedisplaytestrunner, onRunTest, pu
             <div className="debug-list">
               {testFiles.map(file => {
                 const res = results[file.path];
-                let statusIcon = <i className="fa-regular fa-circle"></i>;
+                let statusIcon = <span><i className="fa-regular fa-circle"></i></span>;
                 let statusColor = '#888';
                 
                 if (res?.status === 'running') {
-                  statusIcon = <i className="fa-solid fa-spinner fa-spin"></i>;
+                  statusIcon = <span><i className="fa-solid fa-spinner fa-spin"></i></span>;
                   statusColor = '#fff';
                 } else if (res?.status === 'passed') {
-                  statusIcon = <i className="fa-solid fa-check-circle"></i>;
+                  statusIcon = <span><i className="fa-solid fa-check-circle"></i></span>;
                   statusColor = 'var(--debug-var-string)';
                 } else if (res?.status === 'failed') {
-                  statusIcon = <i className="fa-solid fa-times-circle"></i>;
+                  statusIcon = <span><i className="fa-solid fa-times-circle"></i></span>;
                   statusColor = '#e51400';
                 }
 

@@ -471,6 +471,8 @@ const defaultSettings = {
     compactFolders: true,
     autoReveal: true,
     confirmDelete: true,
+    enableCheckboxes: true,
+    favorites: [],
     confirmDragAndDrop: true,
     exclude: ["**/node_modules", "**/.git", "**/dist", "**/target"]
   },

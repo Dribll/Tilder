@@ -232,7 +232,7 @@ export default function Git({
         <div className="account-glass-card" style={{ padding: '20px' }}>
           <div className="account-card-header" style={{ marginBottom: '16px' }}>
             <div className="account-icon-badge">
-              <i className="fa-brands fa-git-alt"></i>
+              <span><i className="fa-brands fa-git-alt"></i></span>
             </div>
             <h2 className="account-main-title">Source Control</h2>
             <p className="account-main-subtitle">
@@ -245,7 +245,7 @@ export default function Git({
               title="Refresh Source Control"
               style={{ position: 'absolute', top: 16, right: 16, width: 32, height: 32, padding: 0, justifyContent: 'center' }}
             >
-              <i className="fa-solid fa-rotate-right"></i>
+              <span><i className="fa-solid fa-rotate-right"></i></span>
             </button>
           </div>
 
@@ -274,7 +274,7 @@ export default function Git({
                 })
               }
             >
-              <span className="btn-brand-icon-wrap"><i className="fa-brands fa-git-alt"></i></span>
+              <span className="btn-brand-icon-wrap"><span><i className="fa-brands fa-git-alt"></i></span></span>
               <span className="btn-label-text">{busyAction === 'init' ? 'Initializing...' : 'Initialize Repository'}</span>
             </button>
           </div>
@@ -315,7 +315,7 @@ export default function Git({
                   }
                 })}
               >
-                <i className="fa-solid fa-cloud-arrow-up"></i> {busyAction === 'sync' ? 'Syncing...' : 'Push / Pull (Sync)'}
+                <span><i className="fa-solid fa-cloud-arrow-up"></i></span> {busyAction === 'sync' ? 'Syncing...' : 'Push / Pull (Sync)'}
               </button>
             </div>
 
@@ -403,7 +403,7 @@ export default function Git({
                     }
                   }}
                 >
-                  <i className="fa-solid fa-plus"></i> {busyAction === 'create-branch' ? 'Creating...' : 'Create'}
+                  <span><i className="fa-solid fa-plus"></i></span> {busyAction === 'create-branch' ? 'Creating...' : 'Create'}
                 </button>
               </div>
             </div>
@@ -451,7 +451,7 @@ export default function Git({
                     }
                   }}
                 >
-                  <i className="fa-solid fa-check"></i> {busyAction === 'commit' ? 'Committing...' : 'Commit'}
+                  <span><i className="fa-solid fa-check"></i></span> {busyAction === 'commit' ? 'Committing...' : 'Commit'}
                 </button>
               </div>
             </div>

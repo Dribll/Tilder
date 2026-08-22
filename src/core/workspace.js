@@ -14,6 +14,7 @@ import {
   desktopWriteFile,
   desktopWriteWorkspace,
   trackJumpListItem,
+  revealInExplorer,
 } from './desktopFileApi.js';
 import { isDesktopRuntime } from './runtime.js';
 
@@ -275,6 +276,62 @@ const workspace = {
   selectedPaths: new Set(),
   expandedPaths: new Set(['root']),
   untitledCounter: 1,
+  history: {}, // { [tabId]: [{ timestamp, content }] }
+  markers: {}, // { [path]: { errors, warnings } }
+
+  workspaceSettings: null,
+
+
+  async loadWorkspaceSettings() {
+    this.workspaceSettings = null;
+    if (this.roots.length === 0) {
+      window.dispatchEvent(new CustomEvent('workspace-settings-changed'));
+      return;
+    }
+    
+    try {
+      let content = null;
+      const firstRoot = this.roots[0];
+      if (this.adapter === 'tauri' && firstRoot.systemPath) {
+        const settingsPath = `${firstRoot.systemPath}/.tilder/settings.json`;
+        try {
+          content = await desktopReadFile(settingsPath);
+        } catch (e) {}
+      } else {
+         const settingsNode = this.tree.find(n => n.name === 'settings.json' && n.path.startsWith(firstRoot.path + '/.tilder'));
+         if (settingsNode) {
+             content = await this.readFileContent(settingsNode.path);
+         }
+      }
+      
+      if (content) {
+         this.workspaceSettings = JSON.parse(content);
+      }
+    } catch (e) {
+      console.warn("Failed to parse workspace settings", e);
+    }
+    window.dispatchEvent(new CustomEvent('workspace-settings-changed'));
+  },
+
+  setFileMarkers(path, errors, warnings) {
+    if (errors === 0 && warnings === 0) {
+      delete this.markers[path];
+    } else {
+      this.markers[path] = { errors, warnings };
+    }
+  },
+
+  addHistory(tabId, content) {
+    if (!this.history[tabId]) this.history[tabId] = [];
+    this.history[tabId].push({
+      timestamp: Date.now(),
+      content
+    });
+    // keep last 50
+    if (this.history[tabId].length > 50) {
+      this.history[tabId].shift();
+    }
+  },
 
   getLanguage(name = '') {
     const normalizedName = String(name || '').trim().toLowerCase();
@@ -588,8 +645,11 @@ const workspace = {
     const relativePath = toRelativeWorkspacePath(rootSystemPath || this.roots[0]?.systemPath, entry.path);
     const nodePath = relativePath || 'root';
     if (entry.type === 'folder') {
-      const mappedChildren = entry.children
-        ? sortNodes((entry.children || []).map((child) => this.mapDesktopTreeNode(child, nodePath, rootSystemPath, true)))
+      // Only mark loaded if the children array was actually populated (non-empty).
+      // desktop_read_dir returns Some([]) for folders — that means unloaded, not loaded.
+      const hasRealChildren = Array.isArray(entry.children) && entry.children.length > 0;
+      const mappedChildren = hasRealChildren
+        ? sortNodes(entry.children.map((child) => this.mapDesktopTreeNode(child, nodePath, rootSystemPath, true)))
         : [];
 
       return {
@@ -601,7 +661,7 @@ const workspace = {
         open: this.expandedPaths.has(nodePath) || nodePath === 'root',
         parentPath,
         children: mappedChildren,
-        isLoaded: isLoaded || !!entry.children,
+        isLoaded: isLoaded && hasRealChildren,
       };
     }
 
@@ -616,11 +676,40 @@ const workspace = {
     };
   },
 
+  async addFolderBrowser() {
+    if (this.adapter === 'tauri') {
+      const selection = await desktopPickFolder();
+      if (!selection?.path) return;
+      const selectionPath = selection.path.replace(/\\/g, '/');
+      if (this.roots.some(r => r.systemPath === selectionPath)) return; // Already exists
+      
+      this.roots.push({
+        id: selectionPath,
+        handle: { kind: 'desktop-root', name: selection.name },
+        systemPath: selectionPath,
+        name: selection.name
+      });
+      await this.reloadTree();
+    } else {
+      try {
+        const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        if (this.roots.some(r => r.id === handle.name)) return;
+        this.roots.push({
+          id: handle.name,
+          handle,
+          systemPath: null,
+          name: handle.name
+        });
+        await this.reloadTree();
+      } catch (err) {}
+    }
+  },
+
   async openFolderBrowser() {
     if (this.adapter === 'tauri') {
       const selection = await desktopPickFolder();
       if (!selection?.path) {
-        return;
+        return false; // user cancelled
       }
       const selectionPath = selection.path.replace(/\\/g, '/');
       trackJumpListItem('workspace', selectionPath);
@@ -636,7 +725,7 @@ const workspace = {
       this.tabs = previousTabs;
       this.resetWorkspaceView({ keepTabs: true, selectedPath: 'root' });
       await this.reloadTree();
-      return;
+      return true;
     }
 
     const dirHandle = await window.showDirectoryPicker();
@@ -651,6 +740,7 @@ const workspace = {
     this.tabs = previousTabs;
     this.resetWorkspaceView({ keepTabs: true, selectedPath: 'root' });
     await this.reloadTree();
+    return true;
   },
 
   async addFolderToWorkspace() {
@@ -732,39 +822,52 @@ const workspace = {
       }
     }
 
+    // Hydrate expanded paths on the new tree BEFORE assigning to this.tree
+    // so we don't flash empty folders to the UI.
+    if (this.adapter === 'tauri') {
+      const pathsToLoad = [...this.expandedPaths]
+        .filter(p => p !== 'root')
+        .sort((a, b) => a.split('/').length - b.split('/').length);
+      for (const path of pathsToLoad) {
+        await this.loadDirectory(path, nextTree);
+      }
+    }
+
     this.tree = nextTree;
     this.resetWorkspaceView({
       keepTabs: true,
       selectedPath: this.findNode(this.selectedNodePath) ? this.selectedNodePath : (this.tree[0]?.path || null),
       expandedPaths: this.expandedPaths.size ? this.expandedPaths : new Set(['root']),
     });
-
-    if (this.adapter === 'tauri') {
-      const pathsToLoad = [...this.expandedPaths]
-        .filter(p => p !== 'root')
-        .sort((a, b) => a.split('/').length - b.split('/').length);
-      for (const path of pathsToLoad) {
-        await this.loadDirectory(path);
-      }
+    
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('tilder:workspace-updated'));
     }
 
     this.reconcileTabsWithTree();
     this.normalizeTabs();
+    await this.loadWorkspaceSettings();
   },
-
-  async loadDirectory(path) {
-    const node = this.findNode(path);
+  async loadDirectory(path, tree = this.tree) {
+    const node = this.findNode(path, tree);
     if (!node || node.type !== 'folder' || node.isLoaded) {
       return;
     }
 
     node.loading = true;
     try {
-      if (this.adapter === 'tauri' && node.nativePath) {
-        // Desktop (Tauri) — read from native filesystem
-        const children = await desktopReadDir(node.nativePath);
-        const rootConfig = this.roots.find(r => node.path.startsWith(r.systemPath) || node.nativePath.startsWith(r.systemPath));
-        const rootSystemPath = rootConfig?.systemPath || '';
+      if (this.adapter === 'tauri') {
+        // Desktop (Tauri) - read from native filesystem.
+        // Derive nativePath from rootSystemPath if not directly on the node.
+        const nativePath = node.nativePath || toAbsoluteWorkspacePath(this.rootSystemPath, node.path);
+        const children = await desktopReadDir(nativePath);
+        const rootConfig = this.roots.find(r => {
+          const sys = (r.systemPath || '').replace(/\\/g, '/');
+          const nPath = node.path.replace(/\\/g, '/');
+          const nNative = (node.nativePath || '').replace(/\\/g, '/');
+          return nPath.startsWith(sys) || nNative.startsWith(sys) || sys.startsWith(nPath);
+        });
+        const rootSystemPath = rootConfig?.systemPath || this.rootSystemPath || '';
         node.children = children.map(c => this.mapDesktopTreeNode(c, node.path, rootSystemPath));
         node.isLoaded = true;
       } else if (node.handle && node.handle.kind === 'directory') {
@@ -813,6 +916,12 @@ const workspace = {
       console.error('loadDirectory failed for', path, err);
     } finally {
       node.loading = false;
+      // CRITICAL: Replace this.tree with a new array reference so React useMemo
+      // dependencies (which track workspace.tree by reference) correctly invalidate
+      // and re-render the file tree with the newly loaded children.
+      if (this.tree) {
+        this.tree = [...this.tree];
+      }
     }
   },
 
@@ -1532,8 +1641,34 @@ const workspace = {
   },
 
   async readFile(node) {
-    if (this.adapter === 'tauri' && node?.nativePath) {
-      return desktopReadFile(node.nativePath);
+    if (this.adapter === 'tauri') {
+      // Derive native path from rootSystemPath if nativePath is missing on the node.
+      const nativePath = node?.nativePath || toAbsoluteWorkspacePath(this.rootSystemPath, node?.path);
+      if (nativePath) {
+        // If it's a binary media file, we don't need to read its content to memory.
+        // We will just serve it via the asset:// protocol.
+        if (isBinaryFileName(node?.name || nativePath)) {
+          return {
+            content: '',
+            isBinary: true,
+            mimeType: inferBinaryMimeType(node?.name || nativePath),
+          };
+        }
+
+        const result = await desktopReadFile(nativePath);
+        if (typeof result === 'string' && result.startsWith('data:application/octet-stream;base64,')) {
+          return {
+            content: result.replace('data:application/octet-stream;base64,', ''),
+            isBinary: true,
+            mimeType: inferBinaryMimeType(node?.name || nativePath),
+          };
+        }
+        return {
+          content: result,
+          isBinary: false,
+          mimeType: 'text/plain',
+        };
+      }
     }
 
     await this.verifyPermission(node.handle, false);
@@ -1563,45 +1698,104 @@ const workspace = {
       }
       trackJumpListItem('file', selection.path);
 
-      const id = this.rootSystemPath
-        ? toRelativeWorkspacePath(this.rootSystemPath, selection.path) || `external:${selection.name}`
-        : `external:${selection.path}`;
-      const existing = this.tabs.find((tab) => tab.id === id || tab.nativePath === selection.path);
+      let fileContent = '';
+      let isBinary = false;
+      let mimeType = 'text/plain';
+      
+      try {
+        const rawResult = await desktopReadFile(selection.path);
+        if (typeof rawResult === 'string' && rawResult.startsWith('data:application/octet-stream;base64,')) {
+          fileContent = rawResult.replace('data:application/octet-stream;base64,', '');
+          isBinary = true;
+          mimeType = inferBinaryMimeType(selection.name);
+        } else {
+          fileContent = rawResult;
+        }
+      } catch (e) {
+        console.error('Failed to read external file', e);
+      }
 
+      // Determine if the file lives inside the current workspace root.
+      const relativePath = this.rootSystemPath
+        ? toRelativeWorkspacePath(this.rootSystemPath, selection.path)
+        : '';
+      const isInsideWorkspace = !!relativePath && !relativePath.startsWith('external:');
+      const id = isInsideWorkspace ? relativePath : `external:${selection.path}`;
+      const tabPath = isInsideWorkspace ? relativePath : `external:${selection.name}`;
+
+      // If we already have this tab open, just refresh its content and activate it.
+      const existing = this.tabs.find((tab) => tab.id === id || tab.nativePath === selection.path);
       if (existing) {
-        existing.content = selection.content;
-        existing.savedContent = selection.content;
+        existing.content = fileContent;
+        existing.savedContent = fileContent;
         existing.name = selection.name;
         existing.nativePath = selection.path;
         existing.isUntitled = false;
         existing.isDraft = false;
-        existing.isBinary = !!selection.isBinary;
-        existing.mimeType = selection.mimeType;
-        existing.external = !this.rootSystemPath;
+        existing.isBinary = isBinary;
+        existing.mimeType = mimeType;
+        existing.external = !isInsideWorkspace;
         this.activeTabId = existing.id;
-        this.selectedNodePath = existing.external ? null : existing.path;
+        if (isInsideWorkspace) {
+          this.revealNode(relativePath);
+        } else {
+          this.selectedNodePath = null;
+        }
         return existing;
       }
 
       const tab = {
         id,
-        path: this.rootSystemPath ? id : `external:${selection.name}`,
-        external: !this.rootSystemPath,
+        path: tabPath,
+        external: !isInsideWorkspace,
         isUntitled: false,
         isDraft: false,
         name: selection.name,
         nativePath: selection.path,
-        content: selection.content,
-        savedContent: selection.content,
-        language: selection.isBinary ? 'plaintext' : this.getLanguage(selection.name),
+        content: fileContent,
+        savedContent: fileContent,
+        language: isBinary ? 'plaintext' : this.getLanguage(selection.name),
         dirty: false,
-        isBinary: !!selection.isBinary,
-        mimeType: selection.mimeType,
+        isBinary: isBinary,
+        mimeType: mimeType,
       };
 
       this.tabs.push(tab);
       this.activeTabId = tab.id;
-      this.selectedNodePath = tab.external ? null : tab.path;
+
+      if (isInsideWorkspace) {
+        // Inject the file node into the tree so the explorer, rename, and context
+        // menu all work correctly — even if the folder wasn't expanded yet.
+        const parentPath = this.findParentPath(relativePath);
+        const parentNode = parentPath === 'root'
+          ? this.getRootNode()
+          : this.findNode(parentPath);
+
+        if (parentNode && parentNode.type === 'folder') {
+          // Only inject if not already present (tree may not be loaded for this folder yet).
+          const alreadyInTree = this.findNode(relativePath);
+          if (!alreadyInTree) {
+            if (!parentNode.children) parentNode.children = [];
+            parentNode.children.push({
+              id: relativePath,
+              path: relativePath,
+              name: selection.name,
+              type: 'file',
+              nativePath: selection.path,
+              parentPath,
+              isDraft: false,
+            });
+            this.sortNodeChildren(parentNode);
+          }
+          // Expand the parent so the file is visible in the sidebar.
+          this.expandedPaths.add(parentPath);
+          if (parentNode.type === 'folder') parentNode.open = true;
+        }
+        this.revealNode(relativePath);
+      } else {
+        this.selectedNodePath = null;
+      }
+
       return tab;
     }
 
@@ -1761,6 +1955,18 @@ const workspace = {
     this.activeTabId = tab.id;
     this.selectedNodePath = node.path;
     return tab;
+  },
+
+  openDiffTab(diffTabConfig) {
+    // Check if already open
+    const existing = this.tabs.find(t => t.id === diffTabConfig.id);
+    if (existing) {
+      this.activeTabId = existing.id;
+      return existing;
+    }
+    this.tabs.push(diffTabConfig);
+    this.activeTabId = diffTabConfig.id;
+    return diffTabConfig;
   },
 
   closeTab(id) {
@@ -1930,14 +2136,20 @@ const workspace = {
 
       return {
         ...tab,
+        ...restUpdates,
         id: updatedPath,
         path: updatedPath,
         name: updatedName,
         language: this.getLanguage(updatedName),
         nativePath: updatedNativePath,
-        ...restUpdates,
       };
     });
+
+    window.dispatchEvent(
+      new CustomEvent('tilder-tab-renamed', {
+        detail: { oldPath, nextPath },
+      })
+    );
 
     if (this.activeTabId?.startsWith(oldPath)) {
       this.activeTabId = this.activeTabId.replace(oldPath, nextPath);
@@ -1970,18 +2182,45 @@ const workspace = {
       await desktopWriteFile(tab.nativePath, tab.content ?? '', !!tab.isBinary);
       tab.savedContent = tab.content ?? '';
       tab.dirty = false;
+      this.addHistory(tab.id, tab.content ?? '');
       tab.isUntitled = false;
 
       if (this.rootSystemPath) {
+        // Reload tree to pick up any newly saved files.
         await this.reloadTree();
         const relativePath = toRelativeWorkspacePath(this.rootSystemPath, tab.nativePath);
-        const matchingNode = relativePath ? this.findNode(relativePath) : null;
+        let matchingNode = relativePath ? this.findNode(relativePath) : null;
+
+        // If the node isn't found after reloadTree (because the parent folder wasn't
+        // expanded/loaded), inject it so it's immediately addressable.
+        if (!matchingNode && relativePath && !relativePath.startsWith('external:')) {
+          const parentPath = this.findParentPath(relativePath);
+          const parentNode = parentPath === 'root'
+            ? this.getRootNode()
+            : this.findNode(parentPath);
+          if (parentNode && parentNode.type === 'folder') {
+            if (!parentNode.children) parentNode.children = [];
+            const injected = {
+              id: relativePath,
+              path: relativePath,
+              name: tab.name,
+              type: 'file',
+              nativePath: tab.nativePath,
+              parentPath,
+              isDraft: false,
+            };
+            parentNode.children.push(injected);
+            this.sortNodeChildren(parentNode);
+            matchingNode = injected;
+          }
+        }
 
         if (matchingNode) {
+          const oldId = tab.id;
           tab.id = matchingNode.path;
           tab.path = matchingNode.path;
           tab.name = matchingNode.name;
-          tab.nativePath = matchingNode.nativePath;
+          tab.nativePath = matchingNode.nativePath || tab.nativePath;
           tab.external = false;
           tab.isDraft = false;
           this.selectedNodePath = matchingNode.path;
@@ -1989,13 +2228,23 @@ const workspace = {
           if (parentPath) {
             this.expandedPaths.add(parentPath);
           }
+          // Sync group/preview tab IDs via the rename event if the id changed.
+          if (oldId !== tab.id) {
+            window.dispatchEvent(new CustomEvent('tilder-tab-renamed', {
+              detail: { oldPath: oldId, nextPath: tab.id },
+            }));
+            if (this.activeTabId === oldId) this.activeTabId = tab.id;
+          }
           this.reconcileTabsWithTree();
         } else {
+          // Genuinely outside the workspace — stamp as external and keep it stable.
+          const oldId = tab.id;
           tab.id = `external:${tab.name}`;
           tab.path = tab.id;
           tab.external = true;
           tab.isDraft = false;
           this.selectedNodePath = null;
+          if (this.activeTabId === oldId) this.activeTabId = tab.id;
         }
       } else if (tab.isDraft) {
         const previousPath = tab.path;
@@ -2042,12 +2291,10 @@ const workspace = {
 
         this.normalizeTabs();
       } else {
-        tab.id = `external:${tab.name}`;
-        tab.path = tab.id;
-        tab.external = true;
-        tab.isDraft = false;
-        this.selectedNodePath = null;
-        this.activeTabId = tab.id;
+        // No workspace root and not a draft — pure external file, save in place.
+        // Keep the tab id stable so the editor doesn't lose its model.
+        tab.dirty = false;
+        tab.isUntitled = false;
       }
 
       this.activeTabId = tab.id;
@@ -2074,6 +2321,7 @@ const workspace = {
 
     tab.savedContent = tab.content ?? '';
     tab.dirty = false;
+    this.addHistory(tab.id, tab.content ?? '');
     tab.isUntitled = false;
 
     if (this.rootHandle) {
@@ -2307,6 +2555,10 @@ const workspace = {
       return null;
     }
 
+    if (this.findNode(normalizedPath)) {
+      throw new Error(`A file or folder named "${fileName}" already exists at this location.`);
+    }
+
     if (!this.rootHandle && !this.rootSystemPath) {
       const node = this.createDraftNode(parent.path, fileName, 'file');
       if (node && options.open !== false) {
@@ -2367,6 +2619,10 @@ const workspace = {
       return null;
     }
 
+    if (this.findNode(normalizedPath)) {
+      throw new Error(`A file or folder named "${finalName}" already exists at this location.`);
+    }
+
     const parent = await this.ensureFolderPath(finalParentPath);
     if (!parent || parent.type !== 'folder') {
       return null;
@@ -2398,6 +2654,14 @@ const workspace = {
       node.open = false;
     }
     return node;
+  },
+
+  async revealNodeInExplorer(path) {
+    if (this.adapter !== 'tauri') return;
+    const node = this.findNode(path);
+    if (!node) return;
+    const nativePath = node.nativePath || toAbsoluteWorkspacePath(this.rootSystemPath, node.path);
+    await revealInExplorer(nativePath);
   },
 
   async deleteNode(path) {
@@ -2632,17 +2896,24 @@ const workspace = {
       return node;
     }
 
-    if (this.adapter === 'tauri' && node.nativePath) {
+    if (this.adapter === 'tauri') {
       const oldPath = node.path;
       const nextPath = joinPath(this.findParentPath(node.path), trimmedName);
-      await desktopMovePath(node.nativePath, toAbsoluteWorkspacePath(this.rootSystemPath, nextPath));
+      
+      if (this.findNode(nextPath)) {
+        throw new Error(`A file or folder named "${trimmedName}" already exists.`);
+      }
+
+      const srcNative = node.nativePath || toAbsoluteWorkspacePath(this.rootSystemPath, oldPath);
+      const dstNative = toAbsoluteWorkspacePath(this.rootSystemPath, nextPath);
+      await desktopMovePath(srcNative, dstNative);
       const affectedExpanded = [...this.expandedPaths].filter((entry) => entry === oldPath || entry.startsWith(`${oldPath}/`));
       affectedExpanded.forEach((entry) => {
         this.expandedPaths.delete(entry);
         this.expandedPaths.add(entry.replace(oldPath, nextPath));
       });
       this.remapTabsForPath(oldPath, nextPath, {
-        nativePath: toAbsoluteWorkspacePath(this.rootSystemPath, nextPath),
+        nativePath: dstNative,
       });
       await this.reloadTree();
       this.selectedNodePath = nextPath;
@@ -2673,6 +2944,10 @@ const workspace = {
 
     if (!this.rootHandle || node.isDraft) {
       const oldPath = node.path;
+      const nextPath = joinPath(this.findParentPath(oldPath), trimmedName);
+      if (this.findNode(nextPath)) {
+        throw new Error(`A file or folder named "${trimmedName}" already exists.`);
+      }
       node.name = trimmedName;
       this.updateNodePaths(node, this.findParentPath(oldPath));
       this.sortNodeChildren(this.findNode(this.findParentPath(node.path)));
@@ -2684,6 +2959,23 @@ const workspace = {
     const parent = parentPath === 'root' ? this.getRootNode() : this.findNode(parentPath);
     if (!parent) {
       return node;
+    }
+
+    // Only run the collision check when the parent has a Web FileSystem API handle.
+    // Skip for Tauri (nativePath) and in-memory workspaces where handle is undefined.
+    if (parent.handle) {
+      try {
+        if (node.type === 'file') {
+          await parent.handle.getFileHandle(trimmedName);
+        } else {
+          await parent.handle.getDirectoryHandle(trimmedName);
+        }
+        throw new Error(`An item named '${trimmedName}' already exists.`);
+      } catch (error) {
+        if (error.name !== 'NotFoundError') {
+          throw error;
+        }
+      }
     }
 
     let renamedHandle = null;
@@ -2768,6 +3060,12 @@ const workspace = {
         await this.loadDirectory(path);
       }
     }
+    
+    // CRITICAL: Replace this.tree with a new array reference so React useMemo
+    // dependencies correctly invalidate and re-render the file tree.
+    if (this.tree) {
+      this.tree = [...this.tree];
+    }
   },
 
   collapseAll() {
@@ -2783,7 +3081,40 @@ const workspace = {
     }
   },
 
+  async deleteNodes(paths = []) {
+    for (const p of paths) {
+      await this.deleteNode(p);
+    }
+  },
+
+  async duplicateNodes(paths = []) {
+    const results = [];
+    for (const p of paths) {
+      const res = await this.duplicateNode(p);
+      if (res) results.push(res);
+    }
+    return results;
+  },
+
+  async moveNodes(paths = [], targetParentPath) {
+    const results = [];
+    for (const p of paths) {
+      const res = await this.moveNode(p, targetParentPath);
+      if (res) results.push(res);
+    }
+    return results;
+  },
+
   desktopCopyPath,
 };
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('focus', () => {
+    // Real-time sync: Reload tree on window focus if we have an active Tauri workspace
+    if (workspace.adapter === 'tauri' && workspace.roots.length > 0) {
+      workspace.reloadTree().catch(() => {});
+    }
+  });
+}
 
 export default workspace;

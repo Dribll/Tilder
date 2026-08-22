@@ -120,7 +120,7 @@ function MenuBar(props) {
                   >
                     <div className="subdropdown-trigger-btn">
                       <span>Open Recent</span>
-                      <i className="fa-solid fa-chevron-right"></i>
+                      <span><i className="fa-solid fa-chevron-right"></i></span>
                     </div>
                     <div className="subdropdown-content">
                       <ul>
@@ -283,39 +283,39 @@ function MenuBar(props) {
         {/* CENTER SEARCH BAR (VS Code Style) */}
         <div className="menubar-center-search" onClick={props.openCommandPalette} data-tauri-drag-region>
           <div className="menubar-search-box">
-            <i className="fa-solid fa-magnifying-glass"></i>
+            <span><i className="fa-solid fa-magnifying-glass"></i></span>
             <span>Tilder</span>
           </div>
         </div>
 
         <div id="sidebarSettings">
           <span className="dropdown-trigger-btn" onClick={props.openThemePicker} title="Select Color Theme">
-            <i className="fa-solid fa-paint-roller"></i>
+            <span><i className="fa-solid fa-paint-roller"></i></span>
           </span>
           <span className="dropdown-trigger-btn" onClick={props.checkForUpdates} title="Check for Updates">
-            <i className="fa-solid fa-gear"></i>
+            <span><i className="fa-solid fa-gear"></i></span>
           </span>
           <span className="dropdown-trigger-btn" onClick={props.toggleInfoDisplay} title="About">
-            <i className="fa-solid fa-circle-info"></i>
+            <span><i className="fa-solid fa-circle-info"></i></span>
           </span>
           <span className="dropdown-trigger-btn" onClick={props.toggleSystemMonitor} title="System Monitor">
-            <i className="fa-solid fa-chart-line"></i>
+            <span><i className="fa-solid fa-chart-line"></i></span>
           </span>
           <span className="dropdown-trigger-btn" onClick={props.openSettings}>
-            <i className="fa-solid fa-sliders"></i>
+            <span><i className="fa-solid fa-sliders"></i></span>
           </span>
           <span className="dropdown-trigger-btn" onClick={props.openKeyboardShortcuts}>
-            <i className="fa-regular fa-keyboard"></i>
+            <span><i className="fa-regular fa-keyboard"></i></span>
           </span>
           <span className="dropdown-trigger-btn" onClick={props.toggleTerminalPanel}>
-            <i className="fa-solid fa-terminal"></i>
+            <span><i className="fa-solid fa-terminal"></i></span>
           </span>
           <span className="dropdown-trigger-btn account-menu-trigger" onClick={props.openAccount} title={props.accountDisplayName || 'Open Account Center'}>
             {props.accountAvatarUrl ? (
               <img src={props.accountAvatarUrl} alt={props.accountDisplayName || 'Connected account'} className="account-menu-avatar" />
             ) : (
               <span className={`account-menu-fallback ${props.accountProvider ? 'connected' : ''}`}>
-                {props.accountProvider ? accountInitial : <i className="fa-regular fa-circle-user"></i>}
+                {props.accountProvider ? accountInitial : <span><i className="fa-regular fa-circle-user"></i></span>}
               </span>
             )}
           </span>
@@ -330,7 +330,7 @@ function MenuBar(props) {
                 title="Minimize"
                 style={{ WebkitAppRegion: 'no-drag' }}
               >
-                <i className="fa-solid fa-minus"></i>
+                <span><i className="fa-solid fa-minus"></i></span>
               </div>
               <div
                 className="window-control-btn maximize"
@@ -339,7 +339,7 @@ function MenuBar(props) {
                 title="Maximize / Restore"
                 style={{ WebkitAppRegion: 'no-drag' }}
               >
-                <i className="fa-regular fa-square"></i>
+                <span><i className="fa-regular fa-square"></i></span>
               </div>
               <div
                 className="window-control-btn close"
@@ -348,7 +348,7 @@ function MenuBar(props) {
                 title="Close"
                 style={{ WebkitAppRegion: 'no-drag' }}
               >
-                <i className="fa-solid fa-xmark"></i>
+                <span><i className="fa-solid fa-xmark"></i></span>
               </div>
             </div>
           )}

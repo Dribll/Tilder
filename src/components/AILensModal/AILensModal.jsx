@@ -40,16 +40,16 @@ export default function AILensModal({ isOpen, onClose, targetFile, workspace }) 
       <div className="ai-lens-modal" onClick={(e) => e.stopPropagation()}>
         <div className="ai-lens-header">
           <div className="ai-lens-title">
-            <i className="fa-solid fa-wand-magic-sparkles"></i> AI Workspace Lens
+            <span><i className="fa-solid fa-wand-magic-sparkles"></i></span> AI Workspace Lens
           </div>
           <button className="ai-lens-close" onClick={onClose}>
-            <i className="fa-solid fa-xmark"></i>
+            <span><i className="fa-solid fa-xmark"></i></span>
           </button>
         </div>
         
         <div className="ai-lens-content">
           <div className="ai-lens-target">
-            <i className="fa-regular fa-file-code"></i> {targetFile.split('/').pop()}
+            <span><i className="fa-regular fa-file-code"></i></span> {targetFile.split('/').pop()}
           </div>
           
           {loading ? (

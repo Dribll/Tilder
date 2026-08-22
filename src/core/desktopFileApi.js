@@ -130,4 +130,27 @@ export function trackJumpListItem(type, path) {
   }
 }
 
+export async function registerOpenWithTilder() {
+  ensureDesktop();
+  const exePath = await invoke('get_current_exe_path');
+  const regs = [
+    ['add', 'HKCU\\Software\\Classes\\*\\shell\\Open with Tilder', '/f', '/ve', '/d', 'Open with &Tilder'],
+    ['add', 'HKCU\\Software\\Classes\\*\\shell\\Open with Tilder', '/f', '/v', 'Icon', '/d', `"${exePath}"`],
+    ['add', `HKCU\\Software\\Classes\\*\\shell\\Open with Tilder\\command`, '/f', '/ve', '/d', `"${exePath}" "%1"`],
+    ['add', 'HKCU\\Software\\Classes\\Directory\\shell\\Open with Tilder', '/f', '/ve', '/d', 'Open &Folder in Tilder'],
+    ['add', 'HKCU\\Software\\Classes\\Directory\\shell\\Open with Tilder', '/f', '/v', 'Icon', '/d', `"${exePath}"`],
+    ['add', `HKCU\\Software\\Classes\\Directory\\shell\\Open with Tilder\\command`, '/f', '/ve', '/d', `"${exePath}" "%1"`],
+  ];
+  for (const args of regs) {
+    await desktopExecuteCommand('reg', args);
+  }
+}
+
+export async function unregisterOpenWithTilder() {
+  ensureDesktop();
+  await desktopExecuteCommand('reg', ['delete', 'HKCU\\Software\\Classes\\*\\shell\\Open with Tilder', '/f']).catch(() => {});
+  await desktopExecuteCommand('reg', ['delete', 'HKCU\\Software\\Classes\\Directory\\shell\\Open with Tilder', '/f']).catch(() => {});
+}
+
+
 

@@ -107,7 +107,7 @@ export default function TrashView({ workspace, ariaExpanded, refreshWorkspace })
                 title="Restore"
                 onClick={(e) => handleRestore(e, item)}
               >
-                <i className="fa-solid fa-rotate-left" />
+                <span><i className="fa-solid fa-rotate-left" /></span>
               </button>
               <button
                 type="button"
@@ -115,7 +115,7 @@ export default function TrashView({ workspace, ariaExpanded, refreshWorkspace })
                 title="Delete Forever"
                 onClick={(e) => handleDelete(e, item)}
               >
-                <i className="fa-solid fa-trash" />
+                <span><i className="fa-solid fa-trash" /></span>
               </button>
             </div>
           </div>

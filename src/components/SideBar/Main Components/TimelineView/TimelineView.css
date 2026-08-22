@@ -1,0 +1,118 @@
+.timeline-view-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background-color: var(--tilder-sidebar-bg, #1e1e1e);
+  color: var(--tilder-text-primary, #cccccc);
+}
+
+.timeline-header {
+  padding: 10px 15px;
+  border-bottom: 1px solid var(--tilder-border-color, #333);
+}
+
+.timeline-header h5 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tilder-text-secondary, #999);
+  letter-spacing: 1px;
+}
+
+.timeline-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 0;
+}
+
+.timeline-empty {
+  padding: 15px;
+  text-align: center;
+  color: var(--tilder-text-secondary, #999);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.timeline-list {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.timeline-list::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 21px;
+  width: 2px;
+  background-color: var(--tilder-border-color, #333);
+}
+
+.timeline-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 10px 15px;
+  position: relative;
+  transition: background-color 0.15s;
+}
+
+.timeline-item:hover {
+  background-color: var(--tilder-hover-bg, rgba(255, 255, 255, 0.05));
+}
+
+.timeline-item-icon {
+  position: relative;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  background-color: var(--tilder-sidebar-bg, #1e1e1e);
+  color: var(--tilder-accent-color, #007acc);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+.timeline-item-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.timeline-item-title {
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.timeline-item-time {
+  font-size: 11px;
+  color: var(--tilder-text-secondary, #999);
+}
+
+.timeline-item-actions {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.timeline-item:hover .timeline-item-actions {
+  opacity: 1;
+}
+
+.timeline-item-actions button {
+  background: none;
+  border: none;
+  color: var(--tilder-text-primary, #cccccc);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 3px;
+}
+
+.timeline-item-actions button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}

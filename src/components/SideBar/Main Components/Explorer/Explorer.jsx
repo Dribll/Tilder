@@ -36,7 +36,7 @@ function ExplorerNode({ path, name, isDir, size, depth, onFileOpen }) {
     <div className="explorer-node" style={{ paddingLeft: depth * 16 }}>
       <div className="node-header" onClick={toggle}>
         {isDir ? (
-          <i className={expanded ? 'fa-solid fa-folder-open' : 'fa-solid fa-folder'} />
+          <span><i className={expanded ? 'fa-solid fa-folder-open' : 'fa-solid fa-folder'} /></span>
         ) : (
           <FileIcon extension={name.split('.').pop() || ''} {...defaultStyles["file"]} />
         )}

@@ -95,7 +95,7 @@ export default function GitHub({ ariaExpandedisplaygithub, authSession, openAcco
         <div className="account-glass-card" style={{ padding: '20px' }}>
           <div className="account-card-header" style={{ marginBottom: '16px' }}>
             <div className="account-icon-badge">
-              <i className="fa-brands fa-github"></i>
+              <span><i className="fa-brands fa-github"></i></span>
             </div>
             <h2 className="account-main-title">GitHub</h2>
             <p className="account-main-subtitle">
@@ -109,7 +109,7 @@ export default function GitHub({ ariaExpandedisplaygithub, authSession, openAcco
                 title="Manage Account"
                 style={{ position: 'absolute', top: 16, right: 16, width: 32, height: 32, padding: 0, justifyContent: 'center' }}
               >
-                <i className="fa-solid fa-user-gear"></i>
+                <span><i className="fa-solid fa-user-gear"></i></span>
               </button>
             ) : null}
           </div>
@@ -121,7 +121,7 @@ export default function GitHub({ ariaExpandedisplaygithub, authSession, openAcco
               Sign in with GitHub from the Account modal to browse repositories and use GitHub-backed sync.
             </p>
             <button type="button" className="provider-canva-btn brand-github" onClick={openAccount}>
-              <span className="btn-brand-icon-wrap"><i className="fa-brands fa-github"></i></span>
+              <span className="btn-brand-icon-wrap"><span><i className="fa-brands fa-github"></i></span></span>
               <span className="btn-label-text">Open Account Center</span>
             </button>
           </div>
@@ -131,12 +131,12 @@ export default function GitHub({ ariaExpandedisplaygithub, authSession, openAcco
               <div className="profile-top">
                 <div className="profile-identity">
                   {githubAccount.avatarUrl ? <img src={githubAccount.avatarUrl} alt={githubAccount.displayName || githubAccount.username} className="profile-img-avatar" /> : (
-                    <div className="profile-fallback-avatar"><i className="fa-brands fa-github"></i></div>
+                    <div className="profile-fallback-avatar"><span><i className="fa-brands fa-github"></i></span></div>
                   )}
                   <div className="profile-details">
                     <div className="profile-title-row">
                       <span className="profile-name">{githubAccount.displayName || githubAccount.username}</span>
-                      {authSession?.syncProvider === 'github' ? <span className="profile-platform-pill sync-active" style={{ fontSize: 9 }}><i className="fa-solid fa-cloud-arrow-up"></i> Syncing</span> : null}
+                      {authSession?.syncProvider === 'github' ? <span className="profile-platform-pill sync-active" style={{ fontSize: 9 }}><span><i className="fa-solid fa-cloud-arrow-up"></i></span> Syncing</span> : null}
                     </div>
                     <span className="profile-email">{githubAccount.username ? `@${githubAccount.username}` : githubAccount.email || 'Connected'}</span>
                   </div>
@@ -177,7 +177,7 @@ export default function GitHub({ ariaExpandedisplaygithub, authSession, openAcco
                 disabled={creatingRepo || !repoName.trim()}
                 onClick={handleCreateRepository}
               >
-                <i className="fa-solid fa-plus"></i> {creatingRepo ? 'Creating...' : 'Create GitHub Repo'}
+                <span><i className="fa-solid fa-plus"></i></span> {creatingRepo ? 'Creating...' : 'Create GitHub Repo'}
               </button>
             </div>
 
@@ -198,7 +198,7 @@ export default function GitHub({ ariaExpandedisplaygithub, authSession, openAcco
                         title={`Clone ${repo.fullName}`}
                       >
                         <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <i className="fa-solid fa-code-branch" style={{ opacity: 0.5 }}></i> {repo.fullName}
+                          <span><i className="fa-solid fa-code-branch" style={{ opacity: 0.5 }}></i></span> {repo.fullName}
                         </div>
                         <div style={{ fontSize: 11, opacity: 0.6 }}>
                           {repo.private ? 'Private' : 'Public'} · {repo.defaultBranch || 'main'}

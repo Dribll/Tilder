@@ -920,6 +920,13 @@ const SECTION_DEFINITIONS = [
                 description: 'Show a confirmation dialog before deleting files or folders.'
             },
             {
+                id: 'enableCheckboxes',
+                path: 'explorer.enableCheckboxes',
+                label: 'Enable Checkboxes',
+                type: 'boolean',
+                description: 'Show checkboxes in the file explorer to make multi-selection easier.'
+            },
+            {
                 id: 'compactFolders',
                 path: 'explorer.compactFolders',
                 label: 'Compact Folders',
@@ -1817,7 +1824,8 @@ export default function Settings({ modalType, settings, setSettings, systemFonts
     const [settingsView, setSettingsView] = useState('ui');
     const [jsonDraft, setJsonDraft] = useState(JSON.stringify(settings, null, 2));
     const [jsonError, setJsonError] = useState('');
-
+    const [contextMenuStatus, setContextMenuStatus] = useState(null); // null | 'registered' | 'unregistered' | 'error'
+    const [contextMenuLoading, setContextMenuLoading] = useState(false);
     const sectionScrollRef = useRef(null);
     const searchWrapperRef = useRef(null);
     const sectionRefs = useRef({});
@@ -2023,6 +2031,34 @@ export default function Settings({ modalType, settings, setSettings, systemFonts
         setJsonError('');
     }
 
+    async function handleRegisterContextMenu() {
+        try {
+            setContextMenuLoading(true);
+            const { registerOpenWithTilder } = await import('../../core/desktopFileApi.js');
+            await registerOpenWithTilder();
+            setContextMenuStatus('registered');
+        } catch (e) {
+            setContextMenuStatus('error');
+            console.error('Failed to register context menu:', e);
+        } finally {
+            setContextMenuLoading(false);
+        }
+    }
+
+    async function handleUnregisterContextMenu() {
+        try {
+            setContextMenuLoading(true);
+            const { unregisterOpenWithTilder } = await import('../../core/desktopFileApi.js');
+            await unregisterOpenWithTilder();
+            setContextMenuStatus('unregistered');
+        } catch (e) {
+            setContextMenuStatus('error');
+            console.error('Failed to unregister context menu:', e);
+        } finally {
+            setContextMenuLoading(false);
+        }
+    }
+
     function resetSection(sectionId) {
         const section = SECTION_DEFINITIONS.find((candidate) => candidate.id === sectionId);
         if (!section) {
@@ -2140,7 +2176,7 @@ export default function Settings({ modalType, settings, setSettings, systemFonts
                                         className="tilderSettingsSidebarItemIcon"
                                         style={{ background: SECTION_ICONS[section.id].color }}
                                     >
-                                        <i className={SECTION_ICONS[section.id].icon}></i>
+                                        <span><i className={SECTION_ICONS[section.id].icon}></i></span>
                                     </div>
                                 )}
                                 <div className="tilderSettingsSidebarItemText">
@@ -2327,6 +2363,35 @@ export default function Settings({ modalType, settings, setSettings, systemFonts
                             </div>
                         </section>
                     ))}
+
+                        <section className="tilderSettingsSection">
+                            <div className="tilderSettingsSectionHeader">
+                                <div>
+                                    <h5>OS Integration</h5>
+                                    <p>Deep OS integrations for Tilder</p>
+                                </div>
+                            </div>
+                            <div className="tilderSettingsCards">
+                                <article className="tilderSettingsCard">
+                                    <div className="tilderSettingsCardHeader">
+                                        <div>
+                                            <div className="tilderSettingsCardTitleRow">
+                                                <h6>Context Menu Integration</h6>
+                                            </div>
+                                            <p>Register "Open with Tilder" in the Windows File Explorer context menu.</p>
+                                        </div>
+                                    </div>
+                                    <div className="tilderSettingsCardFooter" style={{ gap: 12 }}>
+                                        <button type="button" className="tilderSettingsResetSection" disabled={contextMenuLoading} onClick={handleRegisterContextMenu}>
+                                            {contextMenuStatus === 'registered' ? 'Registered' : 'Register'}
+                                        </button>
+                                        <button type="button" className="tilderSettingsResetSection" disabled={contextMenuLoading} onClick={handleUnregisterContextMenu}>
+                                            {contextMenuStatus === 'unregistered' ? 'Unregistered' : 'Unregister'}
+                                        </button>
+                                    </div>
+                                </article>
+                            </div>
+                        </section>
                     </div>
                 </div>
                     </>

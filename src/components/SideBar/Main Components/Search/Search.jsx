@@ -92,6 +92,10 @@ export default function Search({
     if (typeof searchRequest.replaceValue === 'string') {
       setReplaceValue(searchRequest.replaceValue);
     }
+
+    if (typeof searchRequest.filesToInclude === 'string') {
+      setIncludeFilter(searchRequest.filesToInclude);
+    }
   }, [ariaExpandedisplaysearch, searchRequest]);
 
   async function applyReplace(entry = null) {

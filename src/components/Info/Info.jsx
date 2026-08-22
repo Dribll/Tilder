@@ -9,7 +9,7 @@ export default function Info(props) {
             <div id="infowrpr" className={`d-${props.InfoDisplay}`} onClick={props.triggerInfoClose}>
                 <div id='info'>
                     <div id="infoClose" className="infoSection" onClick={props.triggerInfoClose}>
-                        <i className="fa-solid fa-xmark fa-lg"></i>
+                        <span><i className="fa-solid fa-xmark fa-lg"></i></span>
                     </div>
                     <div id="infoContent" className="infoSection" align="center">
                         <h5>Info</h5>

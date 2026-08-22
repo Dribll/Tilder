@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { List } from 'react-window';
 
 import OutlineView from '../OutlineView/OutlineView.jsx';
+import TimelineView from '../TimelineView/TimelineView.jsx';
 import { resolveFileIcon, resolveFolderIcon } from '../../../../core/iconTheme.js';
-import { revealInExplorer } from '../../../../core/desktopFileApi.js';
+import { revealInExplorer, desktopCopyPath } from '../../../../core/desktopFileApi.js';
+import { isDesktopRuntime } from '../../../../core/runtime.js';
 import { soundEngine } from '../../../../core/SoundEngine.js';
 import ContextMenu from '../../../ContextMenu/ContextMenu.jsx';
 import TrashView from '../TrashView/TrashView.jsx';
@@ -107,7 +108,7 @@ function InlineInput({ type, depth, onSubmit, onCancel }) {
 }
 
 /* ─────────────────────── Single Tree Node (react-window v2 row renderer) ─────────────────────── */
-function TreeNode({ index, style, ariaAttributes, flatNodes, selectedPath, activeTabPath, pendingAction, dragState, callbacks, multiSelected, showMeta }) {
+function TreeNode({ index, style, ariaAttributes, flatNodes, selectedPath, activeTabPath, pendingAction, dragState, callbacks, multiSelected, showMeta, markers, enableCheckboxes }) {
   const item = flatNodes[index];
 
   if (item.isInlineInput) {
@@ -128,7 +129,8 @@ function TreeNode({ index, style, ariaAttributes, flatNodes, selectedPath, activ
   const isSelected = selectedPath === node.path;
   const isActive = activeTabPath === node.path;
   const isRenaming = pendingAction?.mode === 'rename' && pendingAction.path === node.path;
-  const isDropTarget = isFolder && dragState.dropTarget === node.path && dragState.dragging !== node.path;
+  const draggingPaths = dragState.dragging ? (Array.isArray(dragState.dragging) ? dragState.dragging : [dragState.dragging]) : [];
+  const isDropTarget = isFolder && dragState.dropTarget === node.path && !draggingPaths.includes(node.path);
 
   const folderVisual = isFolder ? resolveFolderIcon(node.name) : null;
   const fileVisual = !isFolder ? resolveFileIcon(node.name) : null;
@@ -172,7 +174,13 @@ function TreeNode({ index, style, ariaAttributes, flatNodes, selectedPath, activ
     soundEngine.playClick();
     callbacks.selectNode(node.path, { multi: e.ctrlKey || e.metaKey, range: e.shiftKey });
     if (isFolder) {
-      await callbacks.toggleFolder(node.path);
+      // Use a simple timestamp to prevent rapid double-click toggling
+      // without relying on e.detail which might be unreliable in some environments.
+      const now = Date.now();
+      if (!node._lastToggle || now - node._lastToggle > 300) {
+        node._lastToggle = now;
+        await callbacks.toggleFolder(node.path);
+      }
     } else if (e.detail === 2) {
       callbacks.openFile(node, { preview: false });
     } else {
@@ -212,7 +220,7 @@ function TreeNode({ index, style, ariaAttributes, flatNodes, selectedPath, activ
     isActive ? 'fp-node--active' : '',
     isDropTarget ? 'fp-node--drop-target' : '',
     multiSelected?.has(node.path) ? 'fp-node--multi-selected' : '',
-    dragState.dragging === node.path ? 'fp-node--dragging' : '',
+    draggingPaths.includes(node.path) ? 'fp-node--dragging' : '',
   ].filter(Boolean).join(' ');
 
   const indentPx = depth * 16 + 8;
@@ -222,53 +230,12 @@ function TreeNode({ index, style, ariaAttributes, flatNodes, selectedPath, activ
       <div
         className={rowClass}
         tabIndex={0}
-        style={{ ...style, paddingLeft: `${indentPx}px` }}
+        style={{ paddingLeft: `${indentPx}px` }}
         onClick={handleClick}
         onKeyDown={handleKeyDown}
-        draggable={!isRenaming}
-        onDragStart={e => {
-          e.stopPropagation();
-          e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('text/plain', node.path);
-          // Create a drag ghost image
-          const ghost = document.createElement('div');
-          ghost.className = 'fp-drag-ghost';
-          const dragCount = (isMultiSel && multiSelected.size > 1) ? multiSelected.size : 1;
-          ghost.textContent = dragCount > 1 ? `${dragCount} items` : node.name;
-          document.body.appendChild(ghost);
-          e.dataTransfer.setDragImage(ghost, -10, -10);
-          setTimeout(() => {
-            if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
-          }, 0);
-          
-          callbacks.setDragging(node.path);
-        }}
-        onDragEnd={() => callbacks.setDragging(null)}
-        onDragOver={e => {
-          if (!isFolder) return;
-          const src = dragState.dragging;
-          if (!src || src === node.path || node.path.startsWith(`${src}/`)) return;
-          e.preventDefault();
-          e.stopPropagation();
-          e.dataTransfer.dropEffect = 'move';
-          callbacks.setDropTarget(node.path);
-        }}
-        onDragLeave={e => {
-          if (!e.currentTarget.contains(e.relatedTarget)) {
-            callbacks.setDropTarget(null);
-          }
-        }}
-        onDrop={async e => {
-          if (!isFolder) return;
-          e.preventDefault();
-          e.stopPropagation();
-          const src = e.dataTransfer.getData('text/plain') || dragState.dragging;
-          callbacks.setDragging(null);
-          callbacks.setDropTarget(null);
-          if (src && src !== node.path && !node.path.startsWith(`${src}/`)) {
-            await callbacks.moveNode(src, node.path);
-          }
-        }}
+        data-path={node.path}
+        data-type={node.type}
+        onMouseDown={e => callbacks.handleNodeMouseDown(e, node)}
         onContextMenu={e => {
           e.preventDefault();
           e.stopPropagation();
@@ -278,10 +245,10 @@ function TreeNode({ index, style, ariaAttributes, flatNodes, selectedPath, activ
       >
         <div className="fp-node-main">
           {/* Multi-select checkbox */}
-          {multiSelected && (
+          {enableCheckboxes && multiSelected && (
             <div className={`fp-node-checkbox${isMultiSel ? ' fp-node-checkbox--checked' : ''}`}
                  onClick={e => { e.stopPropagation(); callbacks.toggleMultiSelect(node.path); }}>
-              {isMultiSel && <i className="fa-solid fa-check" />}
+              {isMultiSel && <span><i className="fa-solid fa-check" /></span>}
             </div>
           )}
 
@@ -294,7 +261,7 @@ function TreeNode({ index, style, ariaAttributes, flatNodes, selectedPath, activ
           {isFolder ? (
             <span className="fp-node-icon" style={{ color: folderVisual.color }}>
               {node.loading
-                ? <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: 13 }} />
+                ? <span><i className="fa-solid fa-spinner fa-spin" style={{ fontSize: 13 }} /></span>
                 : (node.open && folderVisual.OpenIcon)
                   ? <folderVisual.OpenIcon className="fp-icon-svg" />
                   : <folderVisual.Icon className="fp-icon-svg" />}
@@ -320,7 +287,25 @@ function TreeNode({ index, style, ariaAttributes, flatNodes, selectedPath, activ
               }}
             />
           ) : (
-            <span className="fp-node-name">{node.name}</span>
+            <>
+              <span className="fp-node-name" style={{
+                color: (markers && markers[node.path]?.errors > 0) ? '#f48771' : ((markers && markers[node.path]?.warnings > 0) ? '#cca700' : 'inherit')
+              }}>{node.name}</span>
+              {markers && markers[node.path] && (markers[node.path].errors > 0 || markers[node.path].warnings > 0) && (
+                <span className="fp-node-markers" style={{ display: 'flex', gap: '4px', marginLeft: '6px', fontSize: '9px', fontWeight: 'bold' }}>
+                  {markers[node.path].errors > 0 && (
+                    <span className="fp-marker-error" style={{ background: '#f48771', color: '#1e1e1e', padding: '1px 4px', borderRadius: '4px' }}>
+                      {markers[node.path].errors}
+                    </span>
+                  )}
+                  {markers[node.path].warnings > 0 && (
+                    <span className="fp-marker-warn" style={{ background: '#cca700', color: '#1e1e1e', padding: '1px 4px', borderRadius: '4px' }}>
+                      {markers[node.path].warnings}
+                    </span>
+                  )}
+                </span>
+              )}
+            </>
           )}
 
           {/* Hover action buttons */}
@@ -334,7 +319,7 @@ function TreeNode({ index, style, ariaAttributes, flatNodes, selectedPath, activ
                     title="New File"
                     onClick={() => callbacks.startCreate(node.path, 'file')}
                   >
-                    <i className="fa-regular fa-file" />
+                    <span><i className="fa-regular fa-file" /></span>
                   </button>
                   <button
                     type="button"
@@ -342,7 +327,7 @@ function TreeNode({ index, style, ariaAttributes, flatNodes, selectedPath, activ
                     title="New Folder"
                     onClick={() => callbacks.startCreate(node.path, 'folder')}
                   >
-                    <i className="fa-solid fa-folder-plus" />
+                    <span><i className="fa-solid fa-folder-plus" /></span>
                   </button>
                 </>
               )}
@@ -352,7 +337,7 @@ function TreeNode({ index, style, ariaAttributes, flatNodes, selectedPath, activ
                 title="Rename"
                 onClick={() => callbacks.startRename(node)}
               >
-                <i className="fa-solid fa-pen" />
+                <span><i className="fa-solid fa-pen" /></span>
               </button>
               <button
                 type="button"
@@ -360,7 +345,7 @@ function TreeNode({ index, style, ariaAttributes, flatNodes, selectedPath, activ
                 title="Delete"
                 onClick={() => callbacks.deleteNode(node)}
               >
-                <i className="fa-solid fa-trash" />
+                <span><i className="fa-solid fa-trash" /></span>
               </button>
             </div>
           )}
@@ -398,7 +383,27 @@ function OpenEditorItem({ tab, isActive, onActivate, onClose }) {
         {badge && <span className="fp-open-editor-badge">{badge}</span>}
       </button>
       <button type="button" className="fp-open-editor-close" title="Close" onClick={onClose}>
-        <i className="fa-solid fa-xmark" />
+        <span><i className="fa-solid fa-xmark" /></span>
+      </button>
+    </div>
+  );
+}
+
+/* ─────────────────────── Favorite Item ─────────────────────── */
+function FavoriteItem({ path, isActive, onActivate, onRemove }) {
+  const name = path.split('/').pop() || path;
+  const visual = resolveFileIcon(name);
+
+  return (
+    <div className={`fp-open-editor${isActive ? ' fp-open-editor--active' : ''}`}>
+      <button type="button" className="fp-open-editor-main" onClick={onActivate} title={path}>
+        <span className="fp-open-editor-icon" style={{ color: visual.color }}>
+          <visual.Icon />
+        </span>
+        <span className="fp-open-editor-name">{name}</span>
+      </button>
+      <button type="button" className="fp-open-editor-close" title="Remove from Favorites" onClick={onRemove}>
+        <span><i className="fa-solid fa-xmark" /></span>
       </button>
     </div>
   );
@@ -410,22 +415,22 @@ function EmptyState({ onOpenFolder, onAddFolder, onNewFile, onNewFolder }) {
     <div className="fp-empty">
       <div className="fp-empty-card">
         <div className="fp-empty-icon">
-          <i className="fa-regular fa-folder-open" />
+          <span><i className="fa-regular fa-folder-open" /></span>
         </div>
         <h3 className="fp-empty-title">No Folder Opened</h3>
         <p className="fp-empty-desc">Open a project folder or create a new file to start editing.</p>
         <div className="fp-empty-actions">
           <button type="button" className="fp-empty-btn fp-empty-btn--primary" onClick={onOpenFolder}>
-            <i className="fa-regular fa-folder-open" /> Open Folder
+            <span><i className="fa-regular fa-folder-open" /></span> Open Folder
           </button>
           <button type="button" className="fp-empty-btn fp-empty-btn--secondary" onClick={onAddFolder}>
-            <i className="fa-solid fa-folder-tree" /> Add Folder
+            <span><i className="fa-solid fa-folder-tree" /></span> Add Folder
           </button>
           <button type="button" className="fp-empty-btn fp-empty-btn--secondary" onClick={onNewFile}>
-            <i className="fa-regular fa-file" /> New File
+            <span><i className="fa-regular fa-file" /></span> New File
           </button>
           <button type="button" className="fp-empty-btn fp-empty-btn--secondary" onClick={onNewFolder}>
-            <i className="fa-solid fa-folder-plus" /> New Folder
+            <span><i className="fa-solid fa-folder-plus" /></span> New Folder
           </button>
         </div>
       </div>
@@ -437,6 +442,7 @@ function EmptyState({ onOpenFolder, onAddFolder, onNewFile, onNewFolder }) {
 /* ─────────────────────── Main FilePioneer Export ─────────────────────── */
 export default function FilePioneer({
   workspace,
+  workspaceVersion,
   refresh,
   openFile,
   createUntitledFile,
@@ -450,19 +456,30 @@ export default function FilePioneer({
   renameRequestNonce,
   confirmDelete,
   pushNotification,
+  enableCheckboxes = true,
   revealActiveFile,
+  revealNonce,
   copyPath,
   copyRelativePath,
   openToSide,
   handleOpenInTerminal,
   onExplainWithAI,
+  settings,
+  updateSetting,
+  openSearchPanel,
+  compareSource,
+  onSelectForCompare,
+  onCompareWithSelected,
 }) {
   const [pendingAction, setPendingAction] = useState(null); // { mode:'create'|'rename', parentPath, type, path, realPath }
   const [contextMenu, setContextMenu] = useState(null); // { x, y, node }
+  const searchInputRef = useRef(null);
   const [dragState, setDragStateRaw] = useState({ dragging: null, dropTarget: null });
+  const [dragGhostPos, setDragGhostPos] = useState(null);
   const [search, setSearch] = useState('');
   const [outlineExpanded, setOutlineExpanded] = useState(true);
   const [trashExpanded, setTrashExpanded] = useState(false);
+  const [favoritesExpanded, setFavoritesExpanded] = useState(true);
   const [clipboard, setClipboard] = useState(null);
   const [undoStack, setUndoStack] = useState([]);
   
@@ -470,19 +487,190 @@ export default function FilePioneer({
   const [showMeta, setShowMeta] = useState(false);
 
   const scrollRef = useRef(null);
-  const savedScroll = useRef(0);
-  const listRef = useRef(null);
 
+  // Listen for external OS file/folder drops (emitted by Tauri's built-in
+  // WRY IDropTarget handler).
+  useEffect(() => {
+    if (!isDesktopRuntime()) return;
+    let unlisten = null;
+    import('@tauri-apps/api/event').then(({ listen }) => {
+      listen('tauri://drag-drop', async (event) => {
+        // Tauri payload: { paths: string[], position: {x,y} }
+        // Note: position is in physical pixels, convert to logical client pixels
+        const { paths, position } = event.payload || {};
+        if (!paths || !paths.length) return;
+
+        let targetDir = 'root';
+        if (position) {
+          const clientX = position.x / window.devicePixelRatio;
+          const clientY = position.y / window.devicePixelRatio;
+          const elem = document.elementFromPoint(clientX, clientY);
+          const nodeEl = elem?.closest('[data-path]');
+          if (nodeEl) {
+            targetDir = nodeEl.getAttribute('data-path');
+          }
+        }
+
+        let targetNode = workspace?.findNode?.(targetDir);
+        if (targetNode && targetNode.type !== 'folder') {
+          targetDir = workspace?.findParentPath?.(targetDir) || 'root';
+        }
+
+        let parentNativePath = targetDir === 'root'
+          ? workspace?.roots?.[0]?.systemPath
+          : workspace?.findNode?.(targetDir)?.nativePath;
+
+        if (parentNativePath) {
+          const cleanParent = parentNativePath.replace(/\\/g, '/').replace(/\/$/, '');
+          for (const srcPath of paths) {
+            const name = srcPath.replace(/\\/g, '/').split('/').pop();
+            try {
+              await desktopCopyPath(srcPath, cleanParent + '/' + name);
+            } catch (err) {
+              pushNotification?.(`Copy failed: ${err}`, 'error');
+            }
+          }
+          if (workspace?.adapter === 'tauri') {
+            await workspace.reloadTree?.();
+          }
+          refresh();
+        }
+      }).then(u => { unlisten = u; });
+    });
+    return () => { if (unlisten) unlisten(); };
+  }, [workspace, refresh]);
+  const handleNativeDrop = async (e, targetDir) => {
+    // Ask Rust for the native OS paths captured by our custom IDropTarget.
+    // WebView2 doesn't set File.path, so we need this side-channel.
+    let tauriPaths = [];
+    if (isDesktopRuntime()) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        tauriPaths = await invoke('get_last_dropped_paths') ?? [];
+      } catch (_) {}
+    }
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const isAltCopy = e.altKey;
+      let hadFolderDrop = false;
+
+      for (let i = 0; i < e.dataTransfer.files.length; i++) {
+        const file = e.dataTransfer.files[i];
+        // Prefer the native Tauri-supplied path; fall back to Electron-style
+        // file.path if somehow available (non-WebView2 environments).
+        const sourcePath = tauriPaths[i] ?? file.path ?? null;
+        if (sourcePath && workspace.adapter === 'tauri') {
+          // Check if this is a folder drop onto root – add as new workspace root
+          const isFolder = file.type === '' && !file.name.includes('.');
+          if (isFolder && targetDir === 'root') {
+            hadFolderDrop = true;
+            try {
+              await workspace.addFolderToWorkspace?.(sourcePath, file.name);
+            } catch (err) {
+              pushNotification?.(`Cannot add folder: ${err.message}`, 'error');
+            }
+            continue;
+          }
+
+          let parentNativePath = '';
+          if (targetDir === 'root') {
+            parentNativePath = workspace.roots[0]?.systemPath;
+          } else {
+            parentNativePath = workspace.findNode(targetDir)?.nativePath;
+          }
+
+          if (parentNativePath) {
+            const cleanParent = parentNativePath.replace(/\\/g, '/').replace(/\/$/, '');
+            const dest = cleanParent + '/' + file.name;
+            try {
+              await desktopCopyPath(sourcePath, dest);
+            } catch (err) {
+              pushNotification?.(`Copy failed: ${err}`, 'error');
+            }
+          } else {
+            pushNotification?.(`Cannot determine target folder`, 'error');
+          }
+        } else {
+          try {
+            const text = await file.text();
+            const node = workspace.createDraftNode(targetDir, file.name, 'file');
+            if (node) { node.content = text; }
+          } catch (err) {}
+        }
+      }
+      if (workspace.adapter === 'tauri') {
+        await workspace.reloadTree();
+      }
+      refresh();
+      return true;
+    }
+    // Even if no files in dataTransfer, check if Tauri gave us paths (some OS
+    // configurations don't populate dataTransfer.files for folder drops).
+    const tauriPathsOnly = tauriPaths;
+    if (tauriPathsOnly.length > 0 && workspace.adapter === 'tauri') {
+      let parentNativePath = targetDir === 'root'
+        ? workspace.roots[0]?.systemPath
+        : workspace.findNode(targetDir)?.nativePath;
+      if (parentNativePath) {
+        const cleanParent = parentNativePath.replace(/\\/g, '/').replace(/\/$/, '');
+        for (const srcPath of tauriPathsOnly) {
+          const name = srcPath.replace(/\\/g, '/').split('/').pop();
+          try {
+            await desktopCopyPath(srcPath, cleanParent + '/' + name);
+          } catch (err) {
+            pushNotification?.(`Copy failed: ${err}`, 'error');
+          }
+        }
+        await workspace.reloadTree();
+        refresh();
+        return true;
+      }
+    }
+    return false;
+  };
+  const savedScroll = useRef(0);
+  const treeContainerRef = useRef(null);
+  const typingBufferRef = useRef('');
+  const typingTimeoutRef = useRef(null);
+
+  function handleTreeKeyDown(e) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    // Only capture single characters, ignore special keys like ArrowDown
+    if (e.key.length === 1 && !e.repeat) {
+      typingBufferRef.current += e.key.toLowerCase();
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => {
+        typingBufferRef.current = '';
+      }, 700);
+
+      const searchStr = typingBufferRef.current;
+      const match = flatNodes.find(n => !n.isInlineInput && n.node.name.toLowerCase().startsWith(searchStr));
+      if (match) {
+        workspace.setSelectedNode(match.node.path);
+        refresh();
+        const idx = flatNodes.indexOf(match);
+        if (idx !== -1 && treeContainerRef.current) {
+          const el = treeContainerRef.current.children[idx];
+          el?.scrollIntoView({ block: 'nearest' });
+        }
+      }
+    }
+  }
 
 
   /* ── Derived tree data ── */
-  const treeRoots = workspace.tree || [];
+  // workspaceVersion is used in ALL useMemos below to force recompute on every tree mutation
+  const treeRoots = useMemo(() => workspace.tree || [], [workspace.tree, workspaceVersion]);
   const isSingleRoot = treeRoots.length === 1 && treeRoots[0]?.type === 'folder';
   // In single-root mode, show root folder's children directly (VS Code style)
-  const displayNodes = isSingleRoot ? (treeRoots[0]?.children || []) : treeRoots;
+  const displayNodes = useMemo(
+    () => (isSingleRoot ? (treeRoots[0]?.children || []) : treeRoots),
+    [isSingleRoot, treeRoots, workspaceVersion]
+  );
   const sectionLabel = isSingleRoot ? (treeRoots[0]?.name || 'FILES').toUpperCase() : 'FILES';
   const selectedPath = workspace.selectedNodePath;
   const tabs = workspace.tabs || [];
+  const favorites = settings?.explorer?.favorites || [];
 
   // Whether we have any real tree content to show
   const hasTreeContent = treeRoots.length > 0;
@@ -529,7 +717,7 @@ export default function FilePioneer({
     const res = displayNodes.map(filterNode).filter(Boolean);
     res.sort((a, b) => (b.score || 0) - (a.score || 0));
     return res;
-  }, [displayNodes, search]);
+  }, [displayNodes, search, workspaceVersion]);
 
   /* ── Flat Tree Generation for Virtualization ── */
   const flatNodes = useMemo(() => {
@@ -552,18 +740,16 @@ export default function FilePioneer({
     }
     flatten(filteredNodes, 0);
     return list;
-  }, [filteredNodes, pendingAction]);
-
-  // Scroll the selected item into view using react-window's scrollToRow
-  useEffect(() => {
-    if (!listRef.current || !selectedPath || !Array.isArray(flatNodes)) return;
-    const idx = flatNodes.findIndex(item => !item.isInlineInput && item.node?.path === selectedPath);
-    if (idx >= 0) {
-      listRef.current.scrollToRow({ index: idx, align: 'smart' });
-    }
-  // flatNodes is intentionally excluded — we only want to scroll when selection changes
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPath]);
+  }, [filteredNodes, pendingAction, workspaceVersion]);
+
+  // Scroll the selected item into view when selection changes.
+  useEffect(() => {
+    if (!treeContainerRef.current || !selectedPath) return;
+    const el = treeContainerRef.current.querySelector('.fp-node--selected');
+    if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPath, revealNonce]);
 
   /* ── Helpers ── */
   function resolveParentForCreate() {
@@ -670,13 +856,16 @@ export default function FilePioneer({
 
   /* ── Delete ── */
   async function deleteNode(node) {
-    const ok = await confirmDelete(node);
+    const isMultiSel = multiSelected.has(node.path) && multiSelected.size > 1;
+    const nodes = isMultiSel ? Array.from(multiSelected).map(p => workspace.findNode(p)).filter(Boolean) : [node];
+    
+    const ok = await confirmDelete(isMultiSel ? nodes : node);
     if (!ok) return;
 
     // Close tabs associated with this node or its children to prevent auto-save from recreating the file
     if (workspace.tabs) {
       workspace.tabs.forEach(t => {
-        if (t.path && (t.path === node.path || t.path.startsWith(node.path + '/'))) {
+        if (t.path && nodes.some(n => t.path === n.path || t.path.startsWith(n.path + '/'))) {
           workspace.closeTab(t.id);
           if (forceCloseTab) forceCloseTab(t.id);
           else closeTab?.(t.id);
@@ -684,45 +873,42 @@ export default function FilePioneer({
       });
     }
 
-    // Untitled workspaces don't support safe renaming for external handles without prompting.
-    // Bypass soft-delete and permanently delete immediately.
-    if (!workspace.rootHandle && !workspace.rootSystemPath) {
-      try {
-        await workspace.deleteNode(node.path);
-        refresh();
-        pushNotification?.(`Deleted "${node.name}".`, 'info');
-      } catch (err) {
-        console.error('Could not delete:', err);
-        pushNotification?.('Could not delete item.', 'error');
-      }
-      return;
-    }
-
-    const trashName = `${node.name}.tildertrash_${Date.now()}`;
-    const parentPath = workspace.findParentPath?.(node.path) || 'root';
-    const trashPath = parentPath === 'root' ? trashName : `${parentPath}/${trashName}`;
-
+    const trashEntries = [];
     try {
-      await workspace.renameNode(node.path, trashName);
+      for (const n of nodes) {
+        const trashName = `${n.name}.tildertrash_${Date.now()}`;
+        const parentPath = workspace.findParentPath?.(n.path) || 'root';
+        const tPath = parentPath === 'root' ? trashName : `${parentPath}/${trashName}`;
+        try {
+          await workspace.renameNode(n.path, trashName);
+          trashEntries.push({ nodeName: n.name, trashPath: tPath, originalPath: n.path });
+        } catch (err) {
+          await workspace.deleteNode(n.path);
+        }
+      }
       refresh();
     } catch (err) {
-      console.error('Could not soft delete:', err);
-      pushNotification?.('Could not delete item.', 'error');
+      console.error('Could not delete items:', err);
+      pushNotification?.('Could not delete items.', 'error');
       return;
     }
 
-    // Create undo entry
-    const undoId = Date.now();
-    const timer = setTimeout(async () => {
-      setUndoStack(prev => prev.filter(u => u.id !== undoId));
-      try {
-        await workspace.deleteNode(trashPath);
-      } catch(e) { console.error('Failed permanent delete', e); }
-      refresh();
-    }, 5000);
+    // Register each trashed item in the undo stack
+    for (const entry of trashEntries) {
+      const undoId = Date.now() + Math.random();
+      const timer = setTimeout(() => {
+        setUndoStack(prev => prev.filter(u => u.id !== undoId));
+        refresh();
+      }, 5000);
+      setUndoStack(prev => [...prev, { id: undoId, nodeName: entry.nodeName, trashPath: entry.trashPath, originalPath: entry.originalPath, timer }]);
+    }
 
-    setUndoStack(prev => [...prev, { id: undoId, nodeName: node.name, trashPath, originalPath: node.path, timer }]);
-    pushNotification?.(`Deleted "${node.name}". Press Ctrl+Z or click Undo to restore.`, 'warning');
+    pushNotification?.(
+      trashEntries.length > 1
+        ? `Deleted ${trashEntries.length} items. Restore from Trash.`
+        : `Deleted "${nodes[0].name}". Restore from Trash.`,
+      'warning'
+    );
   }
 
   async function undoLastDelete() {
@@ -744,21 +930,28 @@ export default function FilePioneer({
   }
 
   async function handlePaste() {
-    if (!clipboard) return;
+    if (!clipboard || !clipboard.nodes || clipboard.nodes.length === 0) return;
     const n = workspace.findNode(selectedPath);
     const targetPath = (n?.type === 'folder' || selectedPath === 'root') ? selectedPath : (workspace.findParentPath?.(selectedPath) || 'root');
 
     if (clipboard.action === 'cut') {
-      await moveNode(clipboard.node.path, targetPath);
+      await moveNodes(clipboard.nodes.map(node => node.path), targetPath);
       setClipboard(null);
     } else {
-      const dup = await workspace.duplicateNode(clipboard.node.path);
-      if (dup && workspace.findParentPath?.(dup.path) !== targetPath) {
-        await workspace.moveNode(dup.path, targetPath);
+      for (const node of clipboard.nodes) {
+        const dup = await workspace.duplicateNode(node.path);
+        if (dup && workspace.findParentPath?.(dup.path) !== targetPath) {
+          await workspace.moveNode(dup.path, targetPath);
+        }
       }
       refresh();
     }
   }
+
+  const getSelectedNodes = (defaultNodePath) => {
+    const isMulti = multiSelected.has(defaultNodePath) && multiSelected.size > 1;
+    return isMulti ? Array.from(multiSelected).map(p => workspace.findNode(p)).filter(Boolean) : [workspace.findNode(defaultNodePath)].filter(Boolean);
+  };
 
   useEffect(() => {
     function handleKeyboard(e) {
@@ -771,17 +964,17 @@ export default function FilePioneer({
       }
       // Cut/Copy/Paste keyboard shortcuts
       if ((e.ctrlKey || e.metaKey) && e.key === 'x') {
-        const sel = workspace.findNode(selectedPath);
-        if (sel && sel.path !== 'root') {
-          setClipboard({ node: sel, action: 'cut' });
-          pushNotification?.(`Cut "${sel.name}".`, 'info');
+        const nodes = getSelectedNodes(selectedPath).filter(n => n.path !== 'root');
+        if (nodes.length > 0) {
+          setClipboard({ nodes, action: 'cut' });
+          pushNotification?.(`Cut ${nodes.length > 1 ? nodes.length + ' items' : '"' + nodes[0].name + '"'}.`, 'info');
         }
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
-        const sel = workspace.findNode(selectedPath);
-        if (sel && sel.path !== 'root') {
-          setClipboard({ node: sel, action: 'copy' });
-          pushNotification?.(`Copied "${sel.name}".`, 'info');
+        const nodes = getSelectedNodes(selectedPath).filter(n => n.path !== 'root');
+        if (nodes.length > 0) {
+          setClipboard({ nodes, action: 'copy' });
+          pushNotification?.(`Copied ${nodes.length > 1 ? nodes.length + ' items' : '"' + nodes[0].name + '"'}.`, 'info');
         }
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
@@ -793,19 +986,39 @@ export default function FilePioneer({
     const el = document.getElementById('filepioneerarea');
     el?.addEventListener('keydown', handleKeyboard);
     return () => el?.removeEventListener('keydown', handleKeyboard);
-  }, [undoStack, clipboard, selectedPath]);
+  }, [undoStack, clipboard, selectedPath, multiSelected]);
 
   /* ── Move / Duplicate ── */
-  async function moveNode(srcPath, destPath) {
-    const moved = await workspace.moveNode(srcPath, destPath);
-    if (moved) { pushNotification?.(`Moved ${moved.name}.`, 'info'); refresh(); }
-    else pushNotification?.('Could not move that item here.', 'warning');
+  async function moveNodes(srcPaths, destPath) {
+    const paths = Array.isArray(srcPaths) ? srcPaths : [srcPaths];
+    const moved = await workspace.moveNodes(paths, destPath);
+    if (moved && moved.length > 0) { 
+      pushNotification?.(`Moved ${moved.length > 1 ? moved.length + ' items' : moved[0].name}.`, 'info'); 
+      refresh(); 
+    } else pushNotification?.('Could not move item(s) here.', 'warning');
   }
 
   async function duplicateNode(path) {
-    const dup = await workspace.duplicateNode(path);
-    if (dup) { pushNotification?.(`Duplicated ${dup.name}.`, 'info'); refresh(); }
-    else pushNotification?.('Could not duplicate that item.', 'warning');
+    const paths = getSelectedNodes(path).map(n => n.path);
+    const dups = await workspace.duplicateNodes(paths);
+    if (dups && dups.length > 0) { 
+      pushNotification?.(`Duplicated ${dups.length > 1 ? dups.length + ' items' : dups[0].name}.`, 'info'); 
+      refresh(); 
+    } else pushNotification?.('Could not duplicate item(s).', 'warning');
+  }
+
+  async function duplicateAndMoveNodes(srcPaths, destPath) {
+    const paths = Array.isArray(srcPaths) ? srcPaths : [srcPaths];
+    const dups = await workspace.duplicateNodes(paths);
+    if (dups && dups.length > 0) {
+      for (const dup of dups) {
+        if (workspace.findParentPath?.(dup.path) !== destPath) {
+          await workspace.moveNode(dup.path, destPath);
+        }
+      }
+      pushNotification?.(`Copied ${dups.length > 1 ? dups.length + ' items' : dups[0].name}.`, 'info');
+      refresh();
+    } else pushNotification?.('Could not copy item(s) here.', 'warning');
   }
 
   /* ❖ Toggle folder (async to lazy-load) ❖ */
@@ -851,24 +1064,51 @@ export default function FilePioneer({
       case 'delete':
         if (n) await deleteNode(n);
         return;
-      case 'cut':
-        if (n && path !== 'root') {
-          setClipboard({ node: n, action: 'cut' });
-          pushNotification?.(`Cut "${n.name}".`, 'info');
+      case 'cut': {
+        const nodes = getSelectedNodes(path).filter(n => n.path !== 'root');
+        if (nodes.length > 0) {
+          setClipboard({ nodes, action: 'cut' });
+          pushNotification?.(`Cut ${nodes.length > 1 ? nodes.length + ' items' : '"' + nodes[0].name + '"'}.`, 'info');
         }
         return;
-      case 'copy':
-        if (n && path !== 'root') {
-          setClipboard({ node: n, action: 'copy' });
-          pushNotification?.(`Copied "${n.name}".`, 'info');
+      }
+      case 'add-favorite':
+        if (n && updateSetting) {
+          updateSetting('explorer.favorites', [...favorites, n.path]);
         }
         return;
+      case 'remove-favorite':
+        if (n && updateSetting) {
+          updateSetting('explorer.favorites', favorites.filter(p => p !== n.path));
+        }
+        return;
+      case 'find-in-folder':
+        if (n && openSearchPanel) {
+          openSearchPanel({ mode: 'content', query: '', filesToInclude: n.path });
+        }
+        return;
+      case 'copy': {
+        const nodes = getSelectedNodes(path).filter(n => n.path !== 'root');
+        if (nodes.length > 0) {
+          setClipboard({ nodes, action: 'copy' });
+          pushNotification?.(`Copied ${nodes.length > 1 ? nodes.length + ' items' : '"' + nodes[0].name + '"'}.`, 'info');
+        }
+        return;
+      }
       case 'paste':
         await handlePaste();
         return;
-      case 'duplicate':
-        if (n) await duplicateNode(path);
+      case 'duplicate': {
+        const nodes = getSelectedNodes(path).filter(n => n.path !== 'root');
+        if (nodes.length > 0) {
+          await workspace.duplicateNodes(nodes.map(n => n.path));
+          refresh();
+        } else if (n) {
+          await workspace.duplicateNode(n.path);
+          refresh();
+        }
         return;
+      }
       case 'open-to-side':
         if (n?.type === 'file') openToSide?.(path);
         return;
@@ -879,7 +1119,7 @@ export default function FilePioneer({
         await copyRelativePath?.();
         return;
       case 'reveal-in-explorer':
-        if (node?.nativePath) revealInExplorer(node.nativePath);
+        await workspace.revealNodeInExplorer(path);
         return;
       case 'open-in-terminal':
         handleOpenInTerminal?.(path);
@@ -896,6 +1136,18 @@ export default function FilePioneer({
       case 'explain-ai':
         onExplainWithAI?.(path);
         return;
+      case 'select-for-compare': {
+        const tabObj = workspace.tabs?.find(t => t.path === n?.path) || (n ? { id: n.path, name: n.name, path: n.path, content: n.content ?? '', language: workspace.getLanguage?.(n.name) ?? 'plaintext' } : null);
+        if (tabObj) onSelectForCompare?.(tabObj);
+        else pushNotification?.('Open this file in editor before comparing.', 'warning');
+        return;
+      }
+      case 'compare-with-selected': {
+        const tabObj = workspace.tabs?.find(t => t.path === n?.path) || (n ? { id: n.path, name: n.name, path: n.path, content: n.content ?? '', language: workspace.getLanguage?.(n.name) ?? 'plaintext' } : null);
+        if (tabObj) onCompareWithSelected?.(tabObj);
+        else pushNotification?.('Open this file in editor before comparing.', 'warning');
+        return;
+      }
       default:
         pushNotification?.('Action not yet available.', 'warning');
     }
@@ -954,6 +1206,77 @@ export default function FilePioneer({
     });
   }
 
+  function handleNodeMouseDown(e, node) {
+    // Only drag with left click, and not if renaming
+    if (e.button !== 0 || pendingAction?.mode === 'rename') return;
+    
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let dragInitiated = false;
+    let dragPaths = [];
+    let localDropTarget = null;
+    
+    const handleMouseMove = (moveEvent) => {
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+      
+      if (!dragInitiated && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
+        dragInitiated = true;
+        const isMultiSel = multiSelected?.has(node.path);
+        dragPaths = (isMultiSel && multiSelected.size > 1) ? Array.from(multiSelected) : [node.path];
+        setDragging(dragPaths);
+      }
+      
+      if (dragInitiated) {
+        setDragGhostPos({ x: moveEvent.clientX + 10, y: moveEvent.clientY + 10 });
+        
+        // Find elements under cursor to set dropTarget
+        const elem = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+        const nodeEl = elem?.closest('[data-path]');
+        if (nodeEl) {
+          const targetPath = nodeEl.getAttribute('data-path');
+          const targetType = nodeEl.getAttribute('data-type');
+          if (targetType === 'folder' || targetPath === 'root') {
+            // Check if invalid drop onto self or subfolders
+            const isInvalid = dragPaths.some(p => p === targetPath || targetPath.startsWith(`${p}/`));
+            if (!isInvalid) {
+              localDropTarget = targetPath;
+              setDropTarget(targetPath);
+              return;
+            }
+          }
+        }
+        localDropTarget = null;
+        setDropTarget(null);
+      }
+    };
+    
+    const handleMouseUp = async (upEvent) => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      
+      if (dragInitiated) {
+        const currentTarget = localDropTarget;
+        if (currentTarget) {
+          const validPaths = dragPaths.filter(p => p !== currentTarget && !currentTarget.startsWith(`${p}/`));
+          if (validPaths.length > 0) {
+            if (upEvent.altKey) {
+              await duplicateAndMoveNodes(validPaths, currentTarget);
+            } else {
+              await moveNodes(validPaths, currentTarget);
+            }
+          }
+        }
+        setDragging(null);
+        setDropTarget(null);
+        setDragGhostPos(null);
+      }
+    };
+    
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  }
+
   function clearMultiSelect() {
     setMultiSelected(new Set());
   }
@@ -969,13 +1292,16 @@ export default function FilePioneer({
     submitCreate,
     submitRename,
     deleteNode,
-    moveNode,
+    moveNodes,
     duplicateNode,
+    duplicateAndMoveNodes,
     openContextMenu,
     setDragging,
     setDropTarget,
     toggleMultiSelect,
-  }), [workspace, refresh, pendingAction]);
+    handleNativeDrop,
+    handleNodeMouseDown,
+  }), [workspace, refresh, pendingAction, multiSelected, undoStack, clipboard, selectedPath]);
 
   /* ── Context menu derived state ── */
   const ctxNode = contextMenu?.node;
@@ -987,7 +1313,18 @@ export default function FilePioneer({
 
   /* ─────────────── RENDER ─────────────── */
   return (
-    <div id="filepioneerarea" className={`fp-shell sidebarscontent d-${ariaExpandedisplayfilepioneer}`}>
+    <div 
+      id="filepioneerarea" 
+      className={`fp-shell sidebarscontent d-${ariaExpandedisplayfilepioneer}`}
+      tabIndex={-1}
+      onKeyDown={(e) => {
+        if (!e.ctrlKey && !e.altKey && !e.metaKey && /^[a-zA-Z0-9]$/.test(e.key)) {
+          if (document.activeElement?.tagName !== 'INPUT' && searchInputRef.current) {
+            searchInputRef.current.focus();
+          }
+        }
+      }}
+    >
 
       {/* Header */}
       <div className="fp-header">
@@ -996,48 +1333,49 @@ export default function FilePioneer({
         {/* Toolbar */}
         <div className="fp-toolbar">
           <button type="button" className="fp-toolbar-btn" title="New File" onClick={handleNewFile}>
-            <i className="fa-regular fa-file" />
+            <span><i className="fa-regular fa-file" /></span>
           </button>
           <button type="button" className="fp-toolbar-btn" title="New Folder" onClick={handleNewFolder}>
-            <i className="fa-solid fa-folder-plus" />
+            <span><i className="fa-solid fa-folder-plus" /></span>
           </button>
           <button type="button" className="fp-toolbar-btn" title="Add Folder to Workspace" onClick={handleAddFolderClick}>
-            <i className="fa-solid fa-folder-tree" />
+            <span><i className="fa-solid fa-folder-tree" /></span>
           </button>
           <button type="button" className="fp-toolbar-btn" title="Open Folder" onClick={handleOpenFolderClick}>
-            <i className="fa-regular fa-folder-open" />
+            <span><i className="fa-regular fa-folder-open" /></span>
           </button>
           {hasTreeContent && (
             <>
               <button type="button" className="fp-toolbar-btn" title="Refresh" onClick={handleRefresh}>
-                <i className="fa-solid fa-rotate-right" />
+                <span><i className="fa-solid fa-rotate-right" /></span>
               </button>
               <button type="button" className="fp-toolbar-btn" title="Collapse All" onClick={handleCollapseAll}>
-                <i className="fa-solid fa-angles-up" />
+                <span><i className="fa-solid fa-angles-up" /></span>
               </button>
             </>
           )}
           {undoStack.length > 0 && (
             <button type="button" className="fp-toolbar-btn" title={`Undo Delete (${undoStack.length})`} onClick={undoLastDelete}
               style={{ color: '#ffb300' }}>
-              <i className="fa-solid fa-rotate-left" />
+              <span><i className="fa-solid fa-rotate-left" /></span>
             </button>
           )}
           {multiSelected.size > 0 && (
             <button type="button" className="fp-toolbar-btn fp-multi-clear-btn" title={`Clear Selection (${multiSelected.size})`} onClick={clearMultiSelect}>
-              <i className="fa-solid fa-square-minus" style={{ color: '#ff5252' }} />
+              <span><i className="fa-solid fa-square-minus" style={{ color: '#ff5252' }} /></span>
             </button>
           )}
           <button type="button" className={`fp-toolbar-btn ${showMeta ? 'active' : ''}`} title="Toggle Metadata" onClick={() => setShowMeta(v => !v)}>
-            <i className="fa-solid fa-circle-info" />
+            <span><i className="fa-solid fa-circle-info" /></span>
           </button>
         </div>
       </div>
 
       {/* Search bar */}
       <div className="fp-search-bar">
-        <i className="fa-solid fa-magnifying-glass fp-search-icon" />
+        <span><i className="fa-solid fa-magnifying-glass fp-search-icon" /></span>
         <input
+          ref={searchInputRef}
           type="text"
           className="fp-search-input"
           placeholder="Search files..."
@@ -1046,7 +1384,7 @@ export default function FilePioneer({
         />
         {search && (
           <button type="button" className="fp-search-clear" onClick={() => setSearch('')}>
-            <i className="fa-solid fa-xmark" />
+            <span><i className="fa-solid fa-xmark" /></span>
           </button>
         )}
       </div>
@@ -1064,7 +1402,7 @@ export default function FilePioneer({
           gap: '6px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <i className="fa-solid fa-shield-halved" style={{ color: '#ffb300' }} />
+            <span><i className="fa-solid fa-shield-halved" style={{ color: '#ffb300' }} /></span>
             <span style={{ fontWeight: 600 }}>Restricted Mode</span>
           </div>
           <div style={{ color: 'rgba(255, 255, 255, 0.75)', lineHeight: '1.3' }}>
@@ -1095,6 +1433,37 @@ export default function FilePioneer({
           >
             Trust Workspace
           </button>
+        </div>
+      )}
+
+      {/* Favorites section */}
+      {favorites.length > 0 && (
+        <div className="fp-section">
+          <div 
+            className="fp-section-label" 
+            style={{ cursor: 'pointer' }}
+            onClick={() => setFavoritesExpanded(!favoritesExpanded)}
+          >
+            <span><i className={`fa-solid fa-chevron-${favoritesExpanded ? 'down' : 'right'}`} style={{ marginRight: '8px', fontSize: '10px', width: '12px', textAlign: 'center' }}></i></span>
+            FAVORITES
+          </div>
+          {favoritesExpanded && (
+            <div className="fp-open-editors">
+              {favorites.map(favPath => (
+                <FavoriteItem
+                  key={favPath}
+                  path={favPath}
+                  isActive={activeTabId === favPath}
+                  onActivate={() => openFile(favPath)}
+                  onRemove={() => {
+                    if (updateSetting) {
+                      updateSetting('explorer.favorites', favorites.filter(p => p !== favPath));
+                    }
+                  }}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1137,7 +1506,20 @@ export default function FilePioneer({
           }}
         >
           {/* Section label */}
-          <div className="fp-section-label">{sectionLabel}</div>
+          <div className="fp-section-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>{sectionLabel}</span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button 
+                type="button"
+                className="fp-header-action" 
+                title="Add Folder to Workspace" 
+                onClick={(e) => { e.stopPropagation(); workspace.addFolderBrowser(); }}
+                style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0 }}
+              >
+                <span><i className="fa-solid fa-folder-plus"></i></span>
+              </button>
+            </div>
+          </div>
 
           {/* Virtualized file tree */}
           <div
@@ -1147,12 +1529,31 @@ export default function FilePioneer({
               display: 'flex',
               flexDirection: 'column'
             }}
-            onDragOver={e => { if (dragState.dragging) { e.preventDefault(); setDropTarget('root'); } }}
+            onDragEnter={e => e.preventDefault()}
+            onDragOver={e => {
+              e.preventDefault();
+              setDropTarget('root');
+            }}
             onDrop={async e => {
               e.preventDefault();
-              const src = e.dataTransfer.getData('text/plain') || dragState.dragging;
+              if (await handleNativeDrop(e, 'root')) return;
+              
+              let dragPaths = dragState.dragging;
+              if (!dragPaths) {
+                const json = e.dataTransfer.getData('application/json');
+                if (json) {
+                  try { dragPaths = JSON.parse(json); } catch(err) {}
+                }
+                if (!dragPaths) {
+                  const text = e.dataTransfer.getData('text/plain');
+                  if (text) dragPaths = [text];
+                }
+              }
+              if (!Array.isArray(dragPaths)) dragPaths = dragPaths ? [dragPaths] : [];
+              
               setDragging(null); setDropTarget(null);
-              if (src) await moveNode(src, treeRoots[0]?.path || 'root');
+              const validPaths = dragPaths.filter(p => p && p !== 'root');
+              if (validPaths.length > 0) await moveNodes(validPaths, treeRoots[0]?.path || 'root');
             }}
             onClick={e => {
               if (e.target.closest('.fp-node, .fp-inline-input-row')) return;
@@ -1166,24 +1567,49 @@ export default function FilePioneer({
               openContextMenu(e, { path: 'root', type: 'folder', name: sectionLabel, isRoot: true });
             }}
           >
-                        <List
-                  listRef={listRef}
+                {/* Plain scrollable tree — replaces react-window for stability */}
+                <div
+                  ref={treeContainerRef}
                   className="fp-tree-list"
-                  rowCount={flatNodes.length}
-                  rowHeight={32}
-                  rowComponent={TreeNode}
-                  rowProps={{
-                    flatNodes,
-                    selectedPath,
-                    activeTabPath: activeTabId,
-                    pendingAction,
-                    dragState,
-                    callbacks,
-                    multiSelected,
-                    showMeta
-                  }}
-                  style={{ overflowX: 'hidden', flex: 1 }}
-                />
+                  onKeyDown={handleTreeKeyDown}
+                  style={{ overflowX: 'hidden', overflowY: 'auto', flex: 1 }}
+                >
+                  {flatNodes.map((item, index) => {
+                    const key = item.isInlineInput
+                      ? `inline-${item.type}-${item.depth}-${index}`
+                      : item.node.path;
+                    if (item.isInlineInput) {
+                      return (
+                        <div key={key}>
+                          <InlineInput
+                            type={item.type}
+                            depth={item.depth}
+                            onSubmit={item.onSubmit}
+                            onCancel={item.onCancel}
+                          />
+                        </div>
+                      );
+                    }
+                    return (
+                      <TreeNode
+                        key={key}
+                        index={index}
+                        style={{}}
+                        ariaAttributes={{ 'aria-posinset': index + 1, 'aria-setsize': flatNodes.length, role: 'listitem' }}
+                        flatNodes={flatNodes}
+                        selectedPath={selectedPath}
+                        activeTabPath={tabs.find(t => t.id === activeTabId)?.path}
+                        pendingAction={pendingAction}
+                        dragState={dragState}
+                        callbacks={callbacks}
+                        enableCheckboxes={enableCheckboxes}
+                        multiSelected={multiSelected}
+                        showMeta={showMeta}
+                        markers={workspace.markers}
+                      />
+                    );
+                  })}
+                </div>
           </div>
 
           {/* Show a hint when tree is empty but we have a root */}
@@ -1217,7 +1643,7 @@ export default function FilePioneer({
             }}
             onClick={() => setOutlineExpanded(!outlineExpanded)}
           >
-            <i className={`fa-solid fa-chevron-${outlineExpanded ? 'down' : 'right'}`} style={{ marginRight: '8px', fontSize: '10px', width: '12px', textAlign: 'center' }}></i>
+            <span><i className={`fa-solid fa-chevron-${outlineExpanded ? 'down' : 'right'}`} style={{ marginRight: '8px', fontSize: '10px', width: '12px', textAlign: 'center' }}></i></span>
             OUTLINE
           </div>
           {outlineExpanded && (
@@ -1231,6 +1657,7 @@ export default function FilePioneer({
               flexShrink: 0
             }}>
               <OutlineView workspace={workspace} ariaExpandedisplayoutline={true} />
+              <TimelineView workspace={workspace} ariaExpandedisplaytimeline={true} />
             </div>
           )}
           {/* ── Trash Section (collapsible, separated) ── */}
@@ -1250,7 +1677,7 @@ export default function FilePioneer({
             }}
             onClick={() => setTrashExpanded(!trashExpanded)}
           >
-            <i className={`fa-solid fa-chevron-${trashExpanded ? 'down' : 'right'}`} style={{ marginRight: '8px', fontSize: '10px', width: '12px', textAlign: 'center' }}></i>
+            <span><i className={`fa-solid fa-chevron-${trashExpanded ? 'down' : 'right'}`} style={{ marginRight: '8px', fontSize: '10px', width: '12px', textAlign: 'center' }}></i></span>
             TRASH
           </div>
           {trashExpanded && (
@@ -1269,6 +1696,29 @@ export default function FilePioneer({
         </div>
       )}
 
+      {/* Drag Ghost */}
+      {dragGhostPos && dragState.dragging && (
+        <div
+          style={{
+            position: 'fixed',
+            left: dragGhostPos.x,
+            top: dragGhostPos.y,
+            zIndex: 9999,
+            pointerEvents: 'none',
+            background: 'var(--vscode-editor-background, #1e1e1e)',
+            color: 'var(--vscode-editor-foreground, #cccccc)',
+            padding: '4px 8px',
+            border: '1px solid var(--vscode-widget-border, #454545)',
+            borderRadius: '4px',
+            fontSize: '11px',
+            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {dragState.dragging.length > 1 ? `${dragState.dragging.length} items` : dragState.dragging[0].split('/').pop()}
+        </div>
+      )}
+
       {/* Context menu portal */}
       {contextMenu && (() => {
         const items = [];
@@ -1280,6 +1730,17 @@ export default function FilePioneer({
         if (contextMenu.node?.type === 'file') {
           items.push({ label: 'Open to the Side', icon: 'fa-solid fa-columns', onClick: () => handleContextAction('open-to-side') });
         }
+        if (contextMenu.node?.type === 'folder') {
+          items.push({ label: 'Find in Folder...', icon: 'fa-solid fa-magnifying-glass', onClick: () => handleContextAction('find-in-folder') });
+        }
+        if (contextMenu.node?.path && contextMenu.node?.path !== 'root') {
+          if (favorites.includes(contextMenu.node.path)) {
+            items.push({ label: 'Remove from Favorites', icon: 'fa-solid fa-star', onClick: () => handleContextAction('remove-favorite') });
+          } else {
+            items.push({ label: 'Add to Favorites', icon: 'fa-regular fa-star', onClick: () => handleContextAction('add-favorite') });
+          }
+          items.push({ separator: true });
+        }
         if (canRenameDelete) {
           items.push({ label: 'Rename', icon: 'fa-solid fa-pen', onClick: () => handleContextAction('rename'), shortcut: 'F2' });
           items.push({ label: 'Duplicate', icon: 'fa-regular fa-copy', onClick: () => handleContextAction('duplicate') });
@@ -1289,8 +1750,10 @@ export default function FilePioneer({
         if (contextMenu.node?.path !== 'root') {
           items.push({ label: 'Copy Path', icon: 'fa-regular fa-clipboard', onClick: () => handleContextAction('copy-path') });
           items.push({ label: 'Copy Relative Path', icon: 'fa-solid fa-link', onClick: () => handleContextAction('copy-relative-path') });
-          items.push({ separator: true });
-          items.push({ label: 'Reveal in File Explorer', icon: 'fa-solid fa-arrow-up-right-from-square', onClick: () => handleContextAction('reveal-in-explorer') });
+          if (workspace.adapter === 'tauri') {
+            items.push({ separator: true });
+            items.push({ label: 'Reveal in File Explorer', icon: 'fa-solid fa-arrow-up-right-from-square', onClick: () => handleContextAction('reveal-in-explorer') });
+          }
           items.push({ label: 'Open in Integrated Terminal', icon: 'fa-solid fa-terminal', onClick: () => handleContextAction('open-in-terminal') });
           items.push({ separator: true });
         }
@@ -1303,6 +1766,13 @@ export default function FilePioneer({
         items.push({ separator: true });
         items.push({ label: 'Explain with AI', icon: 'fa-solid fa-wand-magic-sparkles', onClick: () => handleContextAction('explain-ai') });
         items.push({ separator: true });
+        if (contextMenu.node?.type === 'file') {
+          if (compareSource) {
+            items.push({ label: `Compare with "${compareSource.name}"`, icon: 'fa-solid fa-left-right', onClick: () => handleContextAction('compare-with-selected') });
+          }
+          items.push({ label: 'Select for Compare', icon: 'fa-regular fa-clone', onClick: () => handleContextAction('select-for-compare') });
+          items.push({ separator: true });
+        }
 
         if (canRenameDelete) {
           items.push({ label: 'Cut', icon: 'fa-solid fa-scissors', onClick: () => handleContextAction('cut'), shortcut: 'Ctrl+X' });

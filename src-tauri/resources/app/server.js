@@ -3169,7 +3169,7 @@ setTimeout(() => {
       console.log('[Monitor] No active monitor data found yet. Starting fallback PowerShell monitor...');
       const scriptPath = path.join(__dirname, 'tilder_monitor_service.ps1');
       if (fsSync.existsSync(scriptPath)) {
-        const { spawn } = require('child_process');
+        // spawn is already imported at the top of this ES module file
         monitorProcess = spawn('powershell.exe', [
           '-ExecutionPolicy', 'Bypass',
           '-WindowStyle', 'Hidden',

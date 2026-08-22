@@ -10,13 +10,13 @@ function welcomePage(props) {
                         <p>Code like a pro!</p>
                     </div>
                     <div id="quick-file-management">
-                        <p className="file-options" onClick={props.triggerNewFile}><i className="fa-solid fa-file-circle-plus"></i> New File</p>
-                        <p className="file-options" onClick={props.triggerNewFolder}><i className="fa-solid fa-folder-plus"></i> New Folder</p>
+                        <p className="file-options" onClick={props.triggerNewFile}><span><i className="fa-solid fa-file-circle-plus"></i></span> New File</p>
+                        <p className="file-options" onClick={props.triggerNewFolder}><span><i className="fa-solid fa-folder-plus"></i></span> New Folder</p>
                         <p className="file-options form" onClick={props.triggerOpenFile}>
-                            <i className="fa-solid fa-file-import"></i>
+                            <span><i className="fa-solid fa-file-import"></i></span>
                             <span className="add-photo-btn" id="welcomePage_openFile">Open File</span>
                         </p>
-                        <p className="file-options" onClick={props.triggerOpenFolder}><i className="fa-regular fa-folder-open"></i> Open Folder</p>
+                        <p className="file-options" onClick={props.triggerOpenFolder}><span><i className="fa-regular fa-folder-open"></i></span> Open Folder</p>
                         <p className="file-options"></p>
                     </div>
                 </div>
@@ -26,7 +26,7 @@ function welcomePage(props) {
                         <a href="https://github.com" className="linkto" target="_blank">
                             <div className="link">
                                 <div className="link-icon">
-                                    <i className="fa-brands fa-github fa-2xl"></i>
+                                    <span><i className="fa-brands fa-github fa-2xl"></i></span>
                                 </div>
                                 <div className="link-content">
                                     <h4>Github</h4>
@@ -37,7 +37,7 @@ function welcomePage(props) {
                         <a href="https://www.youtube.com" className="linkto" target="_blank">
                             <div className="link">
                                 <div className="link-icon">
-                                    <i className="fa-brands fa-youtube fa-2xl"></i>
+                                    <span><i className="fa-brands fa-youtube fa-2xl"></i></span>
                                 </div>
                                 <div className="link-content">
                                     <h4>Youtube</h4>
@@ -58,7 +58,7 @@ function welcomePage(props) {
                         <a href="https://stackoverflow.com" className="linkto" target="_blank">
                             <div className="link">
                                 <div className="link-icon">
-                                    <i className="fa-brands fa-stack-overflow fa-2xl"></i>
+                                    <span><i className="fa-brands fa-stack-overflow fa-2xl"></i></span>
                                 </div>
                                 <div className="link-content">
                                     <h4>Stack Overflow</h4>

@@ -14,13 +14,13 @@ export default function LivePreview({ isOpen, htmlDocument, width, onRefresh, on
         </div>
         <div className="live-preview-actions">
           <button type="button" className="live-preview-btn" onClick={onRefresh} title="Refresh Preview">
-            <i className="fa-solid fa-rotate-right"></i>
+            <span><i className="fa-solid fa-rotate-right"></i></span>
           </button>
           <button type="button" className="live-preview-btn" onClick={onOpenExternal} title="Open In New Tab">
-            <i className="fa-solid fa-up-right-from-square"></i>
+            <span><i className="fa-solid fa-up-right-from-square"></i></span>
           </button>
           <button type="button" className="live-preview-btn" onClick={onClose} title="Close Preview">
-            <i className="fa-solid fa-xmark"></i>
+            <span><i className="fa-solid fa-xmark"></i></span>
           </button>
         </div>
       </div>

@@ -97,7 +97,7 @@ export default function SystemMonitor({ modalType }) {
   if (errorMsg && !stats) {
     return (
       <div className="system-monitor-loading">
-        <i className="fa-solid fa-triangle-exclamation" style={{ fontSize: '2rem', color: '#ff5f5f' }}></i>
+        <span><i className="fa-solid fa-triangle-exclamation" style={{ fontSize: '2rem', color: '#ff5f5f' }}></i></span>
         <p style={{ color: '#ff5f5f', textAlign: 'center', maxWidth: '80%' }}>{errorMsg}</p>
         <p style={{ fontSize: '0.8rem', opacity: 0.7 }}>Tip: You likely need to completely restart the Tilder desktop application (close it and run it again) to load the new backend changes.</p>
       </div>
@@ -166,7 +166,7 @@ export default function SystemMonitor({ modalType }) {
         {/* CPU Panel */}
         <div className="monitor-card cpu-card">
           <div className="monitor-card-header">
-            <h3><i className="fa-solid fa-microchip"></i> CPU Usage</h3>
+            <h3><span><i className="fa-solid fa-microchip"></i></span> CPU Usage</h3>
             <span className="live-badge">LIVE</span>
           </div>
           <div className="monitor-metric-row">
@@ -174,7 +174,7 @@ export default function SystemMonitor({ modalType }) {
             <div className="metric-details">
               <div className="cpu-model">{stats.cpu.model}</div>
               <div className="cores-badge">{stats.cpu.cores} Cores @ {(stats.cpu.speedMax || stats.cpu.speed || 0).toFixed(2)}GHz</div>
-              {stats.cpu.temperature && <div className="cores-badge" style={{ marginLeft: '6px', background: 'rgba(255, 90, 90, 0.15)', color: '#ff8a8a' }}><i className="fa-solid fa-temperature-half"></i> {stats.cpu.temperature}°C</div>}
+              {stats.cpu.temperature && <div className="cores-badge" style={{ marginLeft: '6px', background: 'rgba(255, 90, 90, 0.15)', color: '#ff8a8a' }}><span><i className="fa-solid fa-temperature-half"></i></span> {stats.cpu.temperature}°C</div>}
             </div>
           </div>
           <div className="progress-bar-container">
@@ -198,7 +198,7 @@ export default function SystemMonitor({ modalType }) {
         {/* RAM Panel */}
         <div className="monitor-card ram-card">
           <div className="monitor-card-header">
-            <h3><i className="fa-solid fa-memory"></i> Memory</h3>
+            <h3><span><i className="fa-solid fa-memory"></i></span> Memory</h3>
             <span>{stats.memory.percentage}% Used</span>
           </div>
           <div className="monitor-metric-row">
@@ -231,7 +231,7 @@ export default function SystemMonitor({ modalType }) {
         {currentGpu && (
           <div className="monitor-card gpu-card">
             <div className="monitor-card-header">
-              <h3><i className="fa-solid fa-vr-cardboard"></i> GPU Usage</h3>
+              <h3><span><i className="fa-solid fa-vr-cardboard"></i></span> GPU Usage</h3>
               <span>{currentGpu.utilizationGpu || 0}% Used</span>
             </div>
             <div className="monitor-metric-row">
@@ -239,7 +239,7 @@ export default function SystemMonitor({ modalType }) {
               <div className="metric-details">
                 <div className="cpu-model">{currentGpu.model}</div>
                 <div>VRAM: {formatBytes((currentGpu.vram || 0) * 1024 * 1024)}</div>
-                {currentGpu.temperature && <div className="cores-badge" style={{ background: 'rgba(255, 90, 90, 0.15)', color: '#ff8a8a', marginTop: '4px' }}><i className="fa-solid fa-temperature-half"></i> {currentGpu.temperature}°C</div>}
+                {currentGpu.temperature && <div className="cores-badge" style={{ background: 'rgba(255, 90, 90, 0.15)', color: '#ff8a8a', marginTop: '4px' }}><span><i className="fa-solid fa-temperature-half"></i></span> {currentGpu.temperature}°C</div>}
               </div>
             </div>
             <div className="progress-bar-container">
@@ -266,7 +266,7 @@ export default function SystemMonitor({ modalType }) {
         {/* Host Details */}
         <div className="monitor-card system-info-card">
           <div className="monitor-card-header">
-            <h3><i className="fa-solid fa-circle-info"></i> System Details</h3>
+            <h3><span><i className="fa-solid fa-circle-info"></i></span> System Details</h3>
           </div>
           <table className="monitor-info-table">
             <tbody>
@@ -289,7 +289,7 @@ export default function SystemMonitor({ modalType }) {
         {/* Port Tunnels */}
         <div className="monitor-card active-tunnels-card">
           <div className="monitor-card-header">
-            <h3><i className="fa-solid fa-arrow-right-arrow-left"></i> Active Tunnels</h3>
+            <h3><span><i className="fa-solid fa-arrow-right-arrow-left"></i></span> Active Tunnels</h3>
             <span className="count-badge">{activePorts.length}</span>
           </div>
           <div className="monitor-tunnels-list">

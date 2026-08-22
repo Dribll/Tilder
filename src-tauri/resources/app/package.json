@@ -38,6 +38,7 @@
     "@taplo/cli": "^0.7.0",
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-process": "^2.3.1",
+    "@tauri-apps/plugin-shell": "^2.3.5",
     "@tauri-apps/plugin-updater": "^2.10.1",
     "@tinymce/tinymce-react": "^6.3.0",
     "@vscjava/java-language-server": "^0.1.2",

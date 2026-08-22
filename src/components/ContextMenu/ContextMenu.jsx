@@ -47,7 +47,7 @@ export default function ContextMenu({ x, y, items, onClose }) {
               onClose();
             }}
           >
-            {item.icon && <i className={`${item.icon} context-menu-icon`}></i>}
+            {item.icon && <span><i className={`${item.icon} context-menu-icon`}></i></span>}
             <span className="context-menu-label">{item.label}</span>
             {item.shortcut && <span className="context-menu-shortcut">{item.shortcut}</span>}
           </div>

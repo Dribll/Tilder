@@ -112,6 +112,7 @@ const PANEL_VIEWS = [
   { id: 'output', label: 'Output' },
   { id: 'debugConsole', label: 'Debug Console' },
   { id: 'terminal', label: 'Terminal' },
+  { id: 'tasks', label: 'Tasks' },
   { id: 'ports', label: 'Ports' },
 ];
 
@@ -267,6 +268,86 @@ function DebugConsoleView({
   );
 }
 
+function TasksView({ onRunTask, workspace }) {
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchTasks = async () => {
+      setLoading(true);
+      try {
+        const rootPath = workspace.roots?.[0]?.systemPath;
+        if (!rootPath) {
+          if (mounted) setTasks([]);
+          return;
+        }
+
+        // Extremely fast local fetch of package.json to parse npm scripts
+        const packageJsonPath = `${rootPath}/package.json`;
+        let npmTasks = [];
+        try {
+          const content = await window.__TAURI__.core.invoke('desktop_read_file', { path: packageJsonPath });
+          const parsed = JSON.parse(content);
+          if (parsed && parsed.scripts) {
+            npmTasks = Object.keys(parsed.scripts).map(key => ({
+              id: `npm:${key}`,
+              type: 'npm',
+              name: key,
+              command: `npm run ${key}`,
+              detail: parsed.scripts[key]
+            }));
+          }
+        } catch (e) {
+          // No package.json or could not read
+        }
+        
+        if (mounted) setTasks([...npmTasks]);
+      } catch (err) {
+        console.error("Failed to load tasks:", err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    fetchTasks();
+    return () => { mounted = false; };
+  }, [workspace]);
+
+  if (loading) {
+    return <div className="bottom-panel-empty"><i className="fa-solid fa-spinner fa-spin" style={{marginRight: '8px'}}></i>Loading tasks...</div>;
+  }
+
+  if (tasks.length === 0) {
+    return <div className="bottom-panel-empty">No tasks found in the workspace. (e.g. package.json scripts)</div>;
+  }
+
+  return (
+    <div className="bottom-panel-problems-list" style={{ padding: '8px' }}>
+      {tasks.map(task => (
+        <div key={task.id} className="bottom-panel-problem info" style={{ padding: '6px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', borderRadius: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div className="bottom-panel-problem-title" style={{ fontWeight: 500, fontSize: '13px' }}>
+              <i className="fa-brands fa-npm" style={{ color: '#cb3837', marginRight: '6px' }}></i>
+              {task.name}
+            </div>
+            <div className="bottom-panel-problem-meta" style={{ fontFamily: 'Consolas, monospace', fontSize: '11px', opacity: 0.7, marginTop: '2px' }}>
+              {task.detail}
+            </div>
+          </div>
+          <button 
+            type="button" 
+            style={{ padding: '4px 8px', background: 'var(--accent-color)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+            onClick={() => onRunTask(task)}
+          >
+            <i className="fa-solid fa-play" style={{ marginRight: '6px' }}></i>
+            Run
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ProblemsView({ diagnostics }) {
   if (!diagnostics.length) {
     return <div className="bottom-panel-empty">No problems have been detected in the active editor.</div>;
@@ -310,7 +391,7 @@ function PortsView({ ports, onForwardPort, onRemovePort, onOpenBrowser, onUpdate
           onClick={() => setShowInput((s) => !s)}
           title="Forward a Port"
         >
-          <i className="fa-solid fa-plus"></i> Forward a Port
+          <span><i className="fa-solid fa-plus"></i></span> Forward a Port
         </button>
       </div>
       {showInput && (
@@ -338,7 +419,7 @@ function PortsView({ ports, onForwardPort, onRemovePort, onOpenBrowser, onUpdate
       )}
       {ports.length === 0 && !showInput ? (
         <div className="ports-empty">
-          <div className="ports-empty-icon"><i className="fa-solid fa-arrow-right-arrow-left"></i></div>
+          <div className="ports-empty-icon"><span><i className="fa-solid fa-arrow-right-arrow-left"></i></span></div>
           <div className="ports-empty-text">No forwarded ports. Forward a port to access your locally running services over the internet.</div>
           <button type="button" className="ports-action-btn primary" onClick={() => setShowInput(true)}>
             Forward a Port
@@ -425,7 +506,7 @@ function PortsView({ ports, onForwardPort, onRemovePort, onOpenBrowser, onUpdate
                       title="Open in Browser"
                       onClick={() => onOpenBrowser?.(entry.url)}
                     >
-                      <i className="fa-solid fa-arrow-up-right-from-square"></i>
+                      <span><i className="fa-solid fa-arrow-up-right-from-square"></i></span>
                     </button>
                   )}
                   <button
@@ -434,7 +515,7 @@ function PortsView({ ports, onForwardPort, onRemovePort, onOpenBrowser, onUpdate
                     title="Stop Forwarding"
                     onClick={() => onRemovePort?.(entry.port)}
                   >
-                    <i className="fa-solid fa-xmark"></i>
+                    <span><i className="fa-solid fa-xmark"></i></span>
                   </button>
                 </td>
               </tr>
@@ -536,6 +617,55 @@ function TerminalPane({
       const fitAddon = new FitAddon();
 
       terminal.loadAddon(fitAddon);
+
+      // Web and File link provider
+      terminal.registerLinkProvider({
+        provideLinks: (bufferLineNumber, callback) => {
+          const line = terminal.buffer.active.getLine(bufferLineNumber - 1);
+          if (!line) return callback([]);
+          
+          const text = line.translateToString(true);
+          const links = [];
+          
+          // Match URLs
+          const urlRegex = /https?:\/\/[^\s"'()]+/g;
+          let match;
+          while ((match = urlRegex.exec(text)) !== null) {
+            links.push({
+              range: {
+                start: { x: match.index + 1, y: bufferLineNumber },
+                end: { x: match.index + match[0].length, y: bufferLineNumber }
+              },
+              text: match[0],
+              activate: (e, text) => window.open(text, '_blank')
+            });
+          }
+
+          // Match file paths (e.g. src/App.jsx:42:15 or /absolute/path/file.txt)
+          const fileRegex = /([a-zA-Z0-9_./\-\\ ]+\.[a-zA-Z0-9]+)(?::(\d+))?(?::(\d+))?/g;
+          while ((match = fileRegex.exec(text)) !== null) {
+            // Ignore if it's already part of a URL
+            if (urlRegex.test(match[0])) continue;
+            
+            const filePath = match[1];
+            const lineNum = match[2] ? parseInt(match[2], 10) : undefined;
+            
+            links.push({
+              range: {
+                start: { x: match.index + 1, y: bufferLineNumber },
+                end: { x: match.index + match[0].length, y: bufferLineNumber }
+              },
+              text: match[0],
+              activate: (e, text) => {
+                if (openFile) openFile(filePath, lineNum);
+              }
+            });
+          }
+
+          callback(links);
+        }
+      });
+
       terminal.open(hostRef.current);
       terminalRef.current = terminal;
       fitAddonRef.current = fitAddon;
@@ -1221,7 +1351,7 @@ export default function Terminal({
                     onChange={(e) => setDebugFilterText(e.target.value)}
                     className="debug-console-filter-input"
                   />
-                  <i className="fa-solid fa-filter filter-icon"></i>
+                  <span><i className="fa-solid fa-filter filter-icon"></i></span>
                 </div>
                 <button
                   type="button"
@@ -1229,14 +1359,14 @@ export default function Terminal({
                   onClick={onClearDebugConsole}
                   title="Clear Console"
                 >
-                  <i className="fa-solid fa-ban"></i>
+                  <span><i className="fa-solid fa-ban"></i></span>
                 </button>
               </>
             ) : null}
             {activeView === 'terminal' ? (
               <>
                 <button type="button" className="terminal-toolbar-btn" onClick={() => createNewSession()} title="New Terminal">
-                  <i className="fa-solid fa-plus"></i>
+                  <span><i className="fa-solid fa-plus"></i></span>
                 </button>
                 <button
                   type="button"
@@ -1244,7 +1374,7 @@ export default function Terminal({
                   onClick={() => createNewSession({ split: true })}
                   title="Split Terminal"
                 >
-                  <i className="fa-solid fa-table-columns"></i>
+                  <span><i className="fa-solid fa-table-columns"></i></span>
                 </button>
                 <button
                   type="button"
@@ -1252,10 +1382,10 @@ export default function Terminal({
                   onClick={() => activeSessionApi?.refresh?.()}
                   title="Refresh Terminal"
                 >
-                  <i className="fa-solid fa-arrows-rotate"></i>
+                  <span><i className="fa-solid fa-arrows-rotate"></i></span>
                 </button>
                 <button type="button" className="terminal-toolbar-btn" onClick={renameActiveSession} title="Rename Terminal">
-                  <i className="fa-solid fa-pen"></i>
+                  <span><i className="fa-solid fa-pen"></i></span>
                 </button>
                 <button
                   type="button"
@@ -1263,7 +1393,7 @@ export default function Terminal({
                   onClick={onToggleMaximize}
                   title={isMaximized ? 'Restore Panel Size' : 'Maximize Panel'}
                 >
-                  <i className={`fa-solid ${isMaximized ? 'fa-down-left-and-up-right-to-center' : 'fa-up-right-and-down-left-from-center'}`}></i>
+                  <span><i className={`fa-solid ${isMaximized ? 'fa-down-left-and-up-right-to-center' : 'fa-up-right-and-down-left-from-center'}`}></i></span>
                 </button>
                 {desktopNativeTerminal ? (
                   <button
@@ -1274,7 +1404,7 @@ export default function Terminal({
                     }}
                     title="Open Native Terminal"
                   >
-                    <i className="fa-solid fa-terminal"></i>
+                    <span><i className="fa-solid fa-terminal"></i></span>
                   </button>
                 ) : (
                   <button
@@ -1283,7 +1413,7 @@ export default function Terminal({
                     onClick={() => activeSessionApi?.clear?.()}
                     title="Clear Terminal"
                   >
-                    <i className="fa-solid fa-trash-can"></i>
+                    <span><i className="fa-solid fa-trash-can"></i></span>
                   </button>
                 )}
                 <button
@@ -1292,7 +1422,7 @@ export default function Terminal({
                   onClick={() => closeSession(activeSessionId)}
                   title="Close Terminal Session"
                 >
-                  <i className="fa-solid fa-xmark"></i>
+                  <span><i className="fa-solid fa-xmark"></i></span>
                 </button>
                 {availableProfiles.length ? (
                   <select
@@ -1311,7 +1441,7 @@ export default function Terminal({
               </>
             ) : null}
             <button type="button" className="terminal-toolbar-btn" onClick={onClose} title="Hide Terminal">
-              <i className="fa-solid fa-chevron-down"></i>
+              <span><i className="fa-solid fa-chevron-down"></i></span>
             </button>
           </div>
         </div>
@@ -1368,6 +1498,16 @@ export default function Terminal({
               onUpdatePort={(updatedPorts) => setForwardedPorts(updatedPorts)}
               editingPortId={editingPortId}
               setEditingPortId={handleSetEditingPortId}
+            />
+          </div>
+        ) : null}
+        {activeView === 'tasks' ? (
+          <div className="bottom-panel-content">
+            <TasksView 
+              workspace={workspace} 
+              onRunTask={(task) => {
+                terminalApiRef.current.newSession({ executeInitialCommand: task.command });
+              }} 
             />
           </div>
         ) : null}

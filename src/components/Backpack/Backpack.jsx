@@ -228,7 +228,7 @@ export default function Backpack({ ariaExpandedDisplayBackpack, onInsertSnippet,
       {/* Header */}
       <div className="backpack-header">
         <div className="backpack-header-title">
-          <i className="fa-solid fa-bag-shopping" style={{ color: '#a89dff', fontSize: 14 }} />
+          <span><i className="fa-solid fa-bag-shopping" style={{ color: '#a89dff', fontSize: 14 }} /></span>
           <span>Backpack</span>
           <span className="backpack-count">{snippets.length}</span>
         </div>
@@ -250,7 +250,7 @@ export default function Backpack({ ariaExpandedDisplayBackpack, onInsertSnippet,
             cursor: 'pointer'
           }}
         >
-          <i className="fa-solid fa-file-import" style={{ fontSize: 12 }} />
+          <span><i className="fa-solid fa-file-import" style={{ fontSize: 12 }} /></span>
         </button>
         <button
           type="button"
@@ -265,7 +265,7 @@ export default function Backpack({ ariaExpandedDisplayBackpack, onInsertSnippet,
             cursor: 'pointer'
           }}
         >
-          <i className="fa-solid fa-file-export" style={{ fontSize: 12 }} />
+          <span><i className="fa-solid fa-file-export" style={{ fontSize: 12 }} /></span>
         </button>
         <button
           type="button"
@@ -298,7 +298,7 @@ export default function Backpack({ ariaExpandedDisplayBackpack, onInsertSnippet,
             e.currentTarget.style.color = 'rgba(230, 235, 255, 0.75)';
           }}
         >
-          <i className="fa-solid fa-plus" style={{ fontSize: 10 }} />
+          <span><i className="fa-solid fa-plus" style={{ fontSize: 10 }} /></span>
           Save Selection to Backpack
         </button>
       </div>
@@ -306,7 +306,7 @@ export default function Backpack({ ariaExpandedDisplayBackpack, onInsertSnippet,
       {/* Drop zone visual indicator (always shows when dragging over) */}
       {dropZoneActive && (
         <div className="backpack-dropzone active">
-          <i className="fa-solid fa-plus-circle" style={{ fontSize: 20, opacity: 0.6 }} />
+          <span><i className="fa-solid fa-plus-circle" style={{ fontSize: 20, opacity: 0.6 }} /></span>
           <span>Release to save snippet</span>
         </div>
       )}
@@ -315,7 +315,7 @@ export default function Backpack({ ariaExpandedDisplayBackpack, onInsertSnippet,
       <div className="backpack-list">
         {snippets.length === 0 && (
           <div className="backpack-empty">
-            <i className="fa-solid fa-inbox" style={{ fontSize: 28, opacity: 0.3 }} />
+            <span><i className="fa-solid fa-inbox" style={{ fontSize: 28, opacity: 0.3 }} /></span>
             <span>Your backpack is empty.</span>
             <span style={{ fontSize: 11, opacity: 0.5 }}>Select code in the editor, then click "Save Selection" above.</span>
           </div>
@@ -361,7 +361,7 @@ export default function Backpack({ ariaExpandedDisplayBackpack, onInsertSnippet,
                   style={{ color: '#a89dff' }}
                   onClick={() => onInsertSnippet?.(snippet.code)}
                 >
-                  <i className="fa-solid fa-paste" style={{ fontSize: 10 }} />
+                  <span><i className="fa-solid fa-paste" style={{ fontSize: 10 }} /></span>
                 </button>
                 <button
                   type="button"
@@ -369,7 +369,7 @@ export default function Backpack({ ariaExpandedDisplayBackpack, onInsertSnippet,
                   className="backpack-action-btn"
                   onClick={() => startRename(snippet)}
                 >
-                  <i className="fa-solid fa-pencil" style={{ fontSize: 10 }} />
+                  <span><i className="fa-solid fa-pencil" style={{ fontSize: 10 }} /></span>
                 </button>
                 <button
                   type="button"
@@ -377,7 +377,7 @@ export default function Backpack({ ariaExpandedDisplayBackpack, onInsertSnippet,
                   className="backpack-action-btn danger"
                   onClick={() => deleteSnippet(snippet.id)}
                 >
-                  <i className="fa-solid fa-trash" style={{ fontSize: 10 }} />
+                  <span><i className="fa-solid fa-trash" style={{ fontSize: 10 }} /></span>
                 </button>
               </div>
             </div>

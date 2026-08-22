@@ -345,7 +345,7 @@ export default function PromptDialog({ request, onCancel, onSubmit }) {
         <div className={`confirm-dialog prompt-dialog new-file-premium-dialog ${shake ? 'shake-error' : ''}`} onMouseDown={(event) => event.stopPropagation()}>
           <div className="new-file-dialog-header">
             <div className="new-file-dialog-icon-wrapper">
-              <i className="fa-regular fa-file-code new-file-dialog-header-icon"></i>
+              <span><i className="fa-regular fa-file-code new-file-dialog-header-icon"></i></span>
             </div>
             <div>
               <div className="confirm-dialog-title">{request.title}</div>
@@ -379,7 +379,7 @@ export default function PromptDialog({ request, onCancel, onSubmit }) {
                     }}
                   >
                     <span className="new-file-template-icon" style={{ color: tpl.color }}>
-                      <i className={tpl.icon}></i>
+                      <span><i className={tpl.icon}></i></span>
                     </span>
                     <div className="new-file-template-info">
                       <span className="new-file-template-name">{tpl.name}</span>

@@ -64,7 +64,7 @@ export default function Account({
         {/* Header */}
         <div className="account-card-header">
           <div className="account-icon-badge">
-            <i className="fa-regular fa-circle-user"></i>
+            <span><i className="fa-regular fa-circle-user"></i></span>
           </div>
           <h2 className="account-main-title">Workspace Identity</h2>
           <p className="account-main-subtitle">
@@ -94,14 +94,14 @@ export default function Account({
                           <img src={account.avatarUrl} alt={account.displayName || provider} className="profile-img-avatar" />
                         ) : (
                           <div className="profile-fallback-avatar">
-                            <i className={`fa-brands ${brandIcon}`}></i>
+                            <span><i className={`fa-brands ${brandIcon}`}></i></span>
                           </div>
                         )}
                         <div className="profile-details">
                           <div className="profile-title-row">
                             <span className="profile-name">{account.displayName || account.email || 'Connected User'}</span>
                             <span className="profile-platform-pill">
-                              <i className={`fa-brands ${brandIcon}`}></i> {providerLabel}
+                              <span><i className={`fa-brands ${brandIcon}`}></i></span> {providerLabel}
                             </span>
                           </div>
                           <span className="profile-email">{account.email || 'No email shared'}</span>
@@ -116,7 +116,7 @@ export default function Account({
                         disabled={syncBusy}
                         onClick={() => onSetSyncProvider(provider)}
                       >
-                        <i className="fa-solid fa-arrows-rotate"></i> {selectedForSync ? 'Active Sync Target' : 'Use for Cloud Sync'}
+                        <span><i className="fa-solid fa-arrows-rotate"></i></span> {selectedForSync ? 'Active Sync Target' : 'Use for Cloud Sync'}
                       </button>
                       <button 
                         type="button" 
@@ -124,7 +124,7 @@ export default function Account({
                         disabled={connecting || syncBusy} 
                         onClick={() => onDisconnectProvider(provider)}
                       >
-                        <i className="fa-solid fa-circle-minus"></i> Disconnect
+                        <span><i className="fa-solid fa-circle-minus"></i></span> Disconnect
                       </button>
                     </div>
                   </div>
@@ -140,12 +140,12 @@ export default function Account({
                   onClick={() => onStartOAuth(provider)}
                 >
                   <span className="btn-brand-icon-wrap">
-                    <i className={`fa-brands ${brandIcon}`}></i>
+                    <span><i className={`fa-brands ${brandIcon}`}></i></span>
                   </span>
                   <span className="btn-label-text">
                     {connecting ? 'Authorizing in Browser...' : `Continue with ${providerLabel}`}
                   </span>
-                  <i className="fa-solid fa-chevron-right btn-arrow-icon"></i>
+                  <span><i className="fa-solid fa-chevron-right btn-arrow-icon"></i></span>
                 </button>
               );
             })}
@@ -159,7 +159,7 @@ export default function Account({
               <h3 className="account-section-hdr">Settings Sync</h3>
               {authSession?.syncProvider && (
                 <span className="active-sync-label">
-                  <i className="fa-solid fa-cloud-arrow-up"></i> Syncing to {PROVIDER_LABELS[authSession.syncProvider]}
+                  <span><i className="fa-solid fa-cloud-arrow-up"></i></span> Syncing to {PROVIDER_LABELS[authSession.syncProvider]}
                 </span>
               )}
             </div>
@@ -171,7 +171,7 @@ export default function Account({
                 disabled={syncBusy || !authSession?.syncProvider} 
                 onClick={() => onToggleSyncPreference('syncSettings')}
               >
-                <i className="fa-solid fa-sliders"></i> Settings
+                <span><i className="fa-solid fa-sliders"></i></span> Settings
               </button>
               <button 
                 type="button" 
@@ -179,7 +179,7 @@ export default function Account({
                 disabled={syncBusy || !authSession?.syncProvider} 
                 onClick={() => onToggleSyncPreference('syncLayout')}
               >
-                <i className="fa-solid fa-table-columns"></i> Layout
+                <span><i className="fa-solid fa-table-columns"></i></span> Layout
               </button>
               <button 
                 type="button" 
@@ -187,7 +187,7 @@ export default function Account({
                 disabled={syncBusy || !authSession?.syncProvider} 
                 onClick={() => onToggleSyncPreference('syncShortcuts')}
               >
-                <i className="fa-regular fa-keyboard"></i> Shortcuts
+                <span><i className="fa-regular fa-keyboard"></i></span> Shortcuts
               </button>
             </div>
 
@@ -198,7 +198,7 @@ export default function Account({
                 disabled={!authSession?.syncProvider || syncBusy}
                 onClick={onPullSync}
               >
-                <i className="fa-solid fa-cloud-arrow-down"></i> {syncBusy ? 'Syncing...' : 'Pull from Cloud'}
+                <span><i className="fa-solid fa-cloud-arrow-down"></i></span> {syncBusy ? 'Syncing...' : 'Pull from Cloud'}
               </button>
               <button
                 type="button"
@@ -206,7 +206,7 @@ export default function Account({
                 disabled={!authSession?.syncProvider || syncBusy}
                 onClick={onPushSync}
               >
-                <i className="fa-solid fa-cloud-arrow-up"></i> {syncBusy ? 'Syncing...' : 'Push to Cloud'}
+                <span><i className="fa-solid fa-cloud-arrow-up"></i></span> {syncBusy ? 'Syncing...' : 'Push to Cloud'}
               </button>
             </div>
           </div>
@@ -215,7 +215,7 @@ export default function Account({
         {connectedProviders.length === 0 && (
           <div className="account-panel-section sync-setup-section-empty">
             <div className="empty-sync-card">
-              <i className="fa-solid fa-cloud-arrow-up empty-sync-icon"></i>
+              <span><i className="fa-solid fa-cloud-arrow-up empty-sync-icon"></i></span>
               <p className="empty-sync-text">Settings sync is inactive. Connect a platform account above to securely back up your editor preferences, custom shortcuts, and workbench layout.</p>
             </div>
           </div>

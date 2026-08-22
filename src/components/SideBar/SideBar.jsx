@@ -1,14 +1,14 @@
 import React, { useState, useRef } from "react";
 
 const SIDEBAR_ORDER_KEY = 'tilder-sidebar-order';
-const DEFAULT_ORDER = ['explorer', 'search', 'extensions', 'debug', 'tests', 'git', 'github', 'backpack'];
+const DEFAULT_ORDER = ['explorer', 'search', 'extensions', 'debug', 'tests', 'git', 'github', 'backpack', 'hardware'];
 
 export default function SideBar(props) {
   const [order, setOrder] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(SIDEBAR_ORDER_KEY));
-      if (Array.isArray(saved) && saved.length === DEFAULT_ORDER.length) {
-        return saved;
+      if (Array.isArray(saved) && saved.length >= DEFAULT_ORDER.length - 1) {
+        return Array.from(new Set([...saved, ...DEFAULT_ORDER]));
       }
     } catch {}
     return DEFAULT_ORDER;
@@ -99,6 +99,13 @@ export default function SideBar(props) {
       onClick: props.toggleAriaExpandedgithub,
       iconClass: "fa-brands fa-github fa-xl"
     },
+    hardware: {
+      show: true,
+      id: "hardware",
+      title: "Hardware Manager",
+      onClick: props.toggleAriaExpandedhardware,
+      iconClass: "fa-solid fa-microchip fa-xl"
+    },
     backpack: {
       show: props.showBackpack,
       id: "backpack",
@@ -131,7 +138,7 @@ export default function SideBar(props) {
               }}
             >
               <div title={def.title} id={def.id} className="sidebaricons" onClick={def.onClick}>
-                <i className={def.iconClass}></i>
+                <span><i className={def.iconClass}></i></span>
               </div>
               <span className="sidebarIconBar"></span>
             </div>

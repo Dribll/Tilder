@@ -14,6 +14,9 @@ use std::{
 };
 
 mod jumplist;
+#[cfg(target_os = "windows")]
+mod native_drop;
+mod electronics_cmd;
 pub mod search;
 
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
@@ -62,7 +65,10 @@ fn spawn_backend(app: &AppHandle, port: u16) -> Result<(Child, Vec<String>), Box
         .arg(server_entry.to_string_lossy().as_ref())
         .current_dir(&app_root)
         .env("PORT", port.to_string())
-        .env("TILDER_RESOURCE_DIR", resource_dir.to_string_lossy().as_ref())
+        .env(
+            "TILDER_RESOURCE_DIR",
+            resource_dir.to_string_lossy().as_ref(),
+        )
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
@@ -190,13 +196,15 @@ pub struct DesktopPathSelection {
 #[tauri::command]
 fn open_external_url(app: AppHandle, url: String) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
-    
+
     let target = url.trim();
     if target.is_empty() {
         return Err("Missing OAuth URL.".into());
     }
 
-    app.opener().open_url(target, None::<&str>).map_err(|e| e.to_string())?;
+    app.opener()
+        .open_url(target, None::<&str>)
+        .map_err(|e| e.to_string())?;
 
     Ok(())
 }
@@ -299,9 +307,7 @@ fn desktop_pick_save_path(suggestedName: Option<String>) -> Result<Option<String
     if let Some(name) = suggestedName {
         dialog = dialog.set_file_name(&name);
     }
-    Ok(dialog
-        .save_file()
-        .map(|p| p.to_string_lossy().into_owned()))
+    Ok(dialog.save_file().map(|p| p.to_string_lossy().into_owned()))
 }
 
 // ---------------------------------------------------------------------------
@@ -347,13 +353,16 @@ fn read_tree_recursive(dir: &Path, recursive: bool) -> Result<Vec<DesktopTreeNod
         nodes.push(DesktopTreeNode {
             name,
             path: path_str,
-            node_type: if is_dir { "folder".to_string() } else { "file".to_string() },
+            node_type: if is_dir {
+                "folder".to_string()
+            } else {
+                "file".to_string()
+            },
             is_dir,
             size: meta.len(),
             modified,
             children,
         });
-
     }
 
     Ok(nodes)
@@ -379,7 +388,10 @@ fn desktop_read_file(filePath: String) -> Result<String, String> {
         Ok(content) => Ok(content),
         Err(_) => {
             let bytes = fs::read(path).map_err(|e| e.to_string())?;
-            Ok(format!("data:application/octet-stream;base64,{}", BASE64_STANDARD.encode(&bytes)))
+            Ok(format!(
+                "data:application/octet-stream;base64,{}",
+                BASE64_STANDARD.encode(&bytes)
+            ))
         }
     }
 }
@@ -401,7 +413,10 @@ fn desktop_write_file(filePath: String, content: String, isBinary: bool) -> Resu
 }
 
 #[tauri::command]
-fn desktop_write_workspace(rootPath: String, entries: Vec<serde_json::Value>) -> Result<(), String> {
+fn desktop_write_workspace(
+    rootPath: String,
+    entries: Vec<serde_json::Value>,
+) -> Result<(), String> {
     let root = Path::new(rootPath.trim());
     for entry in entries {
         let rel_path = entry["path"].as_str().unwrap_or("");
@@ -471,7 +486,10 @@ fn copy_path_recursive(src: &Path, dst: &Path) -> Result<(), String> {
 
 #[tauri::command]
 fn desktop_copy_path(sourcePath: String, destinationPath: String) -> Result<(), String> {
-    copy_path_recursive(Path::new(sourcePath.trim()), Path::new(destinationPath.trim()))
+    copy_path_recursive(
+        Path::new(sourcePath.trim()),
+        Path::new(destinationPath.trim()),
+    )
 }
 
 #[tauri::command]
@@ -523,7 +541,11 @@ fn desktop_read_dir(path: String) -> Result<Vec<DesktopTreeNode>, String> {
         children.push(DesktopTreeNode {
             name,
             path: entry_path,
-            node_type: if is_dir { "folder".to_string() } else { "file".to_string() },
+            node_type: if is_dir {
+                "folder".to_string()
+            } else {
+                "file".to_string()
+            },
             is_dir,
             size,
             modified,
@@ -582,7 +604,7 @@ fn get_system_stats() -> Result<serde_json::Value, String> {
     sys.refresh_all();
 
     let total_mem = sys.total_memory(); // bytes
-    let used_mem = sys.used_memory();   // bytes
+    let used_mem = sys.used_memory(); // bytes
     let ram_mb = (used_mem as f64 / 1_048_576.0).round() as u64;
     let cpu_count = sys.cpus().len();
     let global_cpu = sys.global_cpu_usage();
@@ -769,7 +791,10 @@ fn desktop_detect_runtimes() -> Result<serde_json::Value, String> {
     if let Ok(output) = Command::new("node").arg("--version").output() {
         if output.status.success() {
             let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            runtimes.insert("node".to_string(), serde_json::json!({ "version": version }));
+            runtimes.insert(
+                "node".to_string(),
+                serde_json::json!({ "version": version }),
+            );
         }
     }
 
@@ -778,7 +803,10 @@ fn desktop_detect_runtimes() -> Result<serde_json::Value, String> {
         if let Ok(output) = Command::new(cmd).arg("--version").output() {
             if output.status.success() {
                 let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                runtimes.insert("python".to_string(), serde_json::json!({ "version": version, "command": cmd }));
+                runtimes.insert(
+                    "python".to_string(),
+                    serde_json::json!({ "version": version, "command": cmd }),
+                );
                 break;
             }
         }
@@ -789,7 +817,10 @@ fn desktop_detect_runtimes() -> Result<serde_json::Value, String> {
         // Java outputs version to stderr
         let version = String::from_utf8_lossy(&output.stderr).trim().to_string();
         if !version.is_empty() {
-            runtimes.insert("java".to_string(), serde_json::json!({ "version": version }));
+            runtimes.insert(
+                "java".to_string(),
+                serde_json::json!({ "version": version }),
+            );
         }
     }
 
@@ -805,7 +836,10 @@ fn desktop_detect_runtimes() -> Result<serde_json::Value, String> {
     if let Ok(output) = Command::new("rustc").arg("--version").output() {
         if output.status.success() {
             let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            runtimes.insert("rust".to_string(), serde_json::json!({ "version": version }));
+            runtimes.insert(
+                "rust".to_string(),
+                serde_json::json!({ "version": version }),
+            );
         }
     }
 
@@ -872,11 +906,10 @@ fn enable_glass_theme(window: tauri::Window) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
-        use window_vibrancy::apply_mica;
-        // Apply Mica effect on Windows 11 (requires transparent window)
-        // This subtly tints the background based on the desktop wallpaper
-        // without making the window transparent to other apps.
-        let _ = apply_mica(&window, Some(true));
+        use window_vibrancy::apply_acrylic;
+        // Apply Acrylic effect on Windows so the OS desktop shows through
+        // with a frosted glass blur. Blur is deprecated in Win11.
+        let _ = apply_acrylic(&window, Some((18, 18, 22, 100)));
     }
 
     Ok(())
@@ -893,13 +926,28 @@ fn disable_glass_theme(window: tauri::Window) -> Result<(), String> {
 // App entry point
 // ---------------------------------------------------------------------------
 
+/// Kept for backwards-compatibility with the JS frontend call sites.
+/// Now that external file drops are handled via the built-in tauri://drag-drop
+/// event, this always returns an empty list.
+#[tauri::command]
+fn get_last_dropped_paths() -> Vec<String> {
+    vec![]
+}
+
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             open_external_url,
+            electronics_cmd::run_electronics_cli,
+            electronics_cmd::get_electronics_cli_path,
+            electronics_cmd::download_electronics_cli,
+            electronics_cmd::run_electronics_cli_stream,
+            electronics_cmd::electronics_init,
+            electronics_cmd::serial_monitor_start,
             open_new_window,
             list_system_fonts,
             desktop_pick_folder,
@@ -928,7 +976,8 @@ pub fn run() {
             window_close,
             enable_glass_theme,
             disable_glass_theme,
-            jumplist::desktop_update_jump_list
+            jumplist::desktop_update_jump_list,
+            get_last_dropped_paths
         ])
         .manage(BackendState::default())
         .manage(DesktopRuntimeState::default())

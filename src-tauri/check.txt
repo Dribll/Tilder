@@ -1,0 +1,113 @@
+    Checking windows v0.61.3
+    Checking webview2-com-sys v0.38.2
+    Checking tao v0.34.8
+    Checking webview2-com v0.38.2
+    Checking wry v0.54.4
+    Checking tauri-runtime v2.10.1
+    Checking tauri-runtime-wry v2.10.1
+    Checking tauri v2.10.3
+    Checking tauri-plugin-updater v2.10.1
+    Checking tauri-plugin-opener v2.5.3
+    Checking tauri-plugin-process v2.3.1
+    Checking tilder v0.1.0 (D:\Tilder - Copy\desktop-app\src-tauri)
+error[E0432]: unresolved import `windows::core::PROPVARIANT`
+ --> src\jumplist.rs:8:53
+  |
+8 |     use windows::core::{Interface, HSTRING, PCWSTR, PROPVARIANT};
+  |                                                     ^^^^^^^^^^^ no `PROPVARIANT` in the root
+
+error[E0432]: unresolved import `windows::Win32::UI::Shell::PropertiesSystem::PROPERTYKEY`
+  --> src\jumplist.rs:14:71
+   |
+14 |     use windows::Win32::UI::Shell::PropertiesSystem::{IPropertyStore, PROPERTYKEY};
+   |                                                                       ^^^^^^^^^^^ no `PROPERTYKEY` in `Win32::UI::Shell::PropertiesSystem`
+
+error[E0432]: unresolved import `windows::Win32::Foundation::BOOL`
+  --> src\native_drop.rs:28:22
+   |
+28 |         Foundation::{BOOL, HWND, LPARAM, POINTL},
+   |                      ^^^^ no `BOOL` in `Win32::Foundation`
+   |
+   = help: consider importing this struct instead:
+           windows_core::BOOL
+
+error[E0277]: the trait bound `FileDropTarget: IUnknownImpl` is not satisfied
+    --> src\native_drop.rs:142:27
+     |
+ 142 | impl IDropTarget_Impl for FileDropTarget {
+     |                           ^^^^^^^^^^^^^^ unsatisfied trait bound
+     |
+help: the trait `IUnknownImpl` is not implemented for `FileDropTarget`
+    --> src\native_drop.rs:95:1
+     |
+  95 | struct FileDropTarget {
+     | ^^^^^^^^^^^^^^^^^^^^^
+note: there are multiple different versions of crate `windows_core` in the dependency graph
+    --> C:\Users\dhrub\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\windows-core-0.61.2\src\unknown.rs:79:1
+     |
+  79 | pub trait IUnknownImpl {
+     | ^^^^^^^^^^^^^^^^^^^^^^ this is the expected trait
+     |
+    ::: C:\Users\dhrub\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\windows-core-0.57.0\src\unknown.rs:77:1
+     |
+  77 | pub trait IUnknownImpl {
+     | ---------------------- this is the trait that was imported
+     = help: you can use `cargo tree` to explore your dependency tree
+     = help: the following other types implement trait `IUnknownImpl`:
+               FileDropTarget_Impl
+               tao::platform_impl::platform::drop_handler::FileDropHandler_Impl
+               webview2_com::callback::AcceleratorKeyPressedEventHandler_Impl
+               webview2_com::callback::AddScriptToExecuteOnDocumentCreatedCompletedHandler_Impl
+               webview2_com::callback::BasicAuthenticationRequestedEventHandler_Impl
+               webview2_com::callback::BrowserExtensionEnableCompletedHandler_Impl
+               webview2_com::callback::BrowserExtensionRemoveCompletedHandler_Impl
+               webview2_com::callback::BrowserProcessExitedEventHandler_Impl
+             and 84 others
+note: required by a bound in `IDropTarget_Impl`
+    --> C:\Users\dhrub\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\windows-0.61.3\src\Windows\Win32\System\Ole\mod.rs:6105:29
+     |
+6105 | pub trait IDropTarget_Impl: windows_core::IUnknownImpl {
+     |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `IDropTarget_Impl`
+
+error[E0277]: the trait bound `FileDropTarget_Impl: IDropTarget_Impl` is not satisfied
+    --> src\native_drop.rs:94:1
+     |
+  94 | #[implement(IDropTarget)]
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
+     |
+help: the trait `IDropTarget_Impl` is not implemented for `FileDropTarget_Impl`
+    --> src\native_drop.rs:94:1
+     |
+  94 | #[implement(IDropTarget)]
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+help: the following other types implement trait `IDropTarget_Impl`
+    --> src\native_drop.rs:142:1
+     |
+ 142 | impl IDropTarget_Impl for FileDropTarget {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `FileDropTarget`
+     |
+    ::: C:\Users\dhrub\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tao-0.34.8\src\platform_impl\windows\drop_handler.rs:108:1
+     |
+ 108 | impl IDropTarget_Impl for FileDropHandler_Impl {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `tao::platform_impl::platform::drop_handler::FileDropHandler_Impl`
+     |
+    ::: C:\Users\dhrub\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\wry-0.54.4\src\webview2\drag_drop.rs:158:1
+     |
+ 158 | impl IDropTarget_Impl for DragDropTarget_Impl {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `wry::webview2::drag_drop::DragDropTarget_Impl`
+note: required by a bound in `IDropTarget_Vtbl::new`
+    --> C:\Users\dhrub\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\windows-0.61.3\src\Windows\Win32\System\Ole\mod.rs:6113:32
+     |
+6113 |     pub const fn new<Identity: IDropTarget_Impl, const OFFSET: isize>() -> Self {
+     |                                ^^^^^^^^^^^^^^^^ required by this bound in `IDropTarget_Vtbl::new`
+     = note: this error originates in the attribute macro `implement` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0599]: no method named `GetData` found for struct `windows_core::Ref<'_, IDataObject>` in the current scope
+   --> src\native_drop.rs:121:37
+    |
+121 |         let medium = match data_obj.GetData(&fmt) {
+    |                                     ^^^^^^^ method not found in `windows_core::Ref<'_, IDataObject>`
+
+Some errors have detailed explanations: E0277, E0432, E0599.
+For more information about an error, try `rustc --explain E0277`.
+error: could not compile `tilder` (lib) due to 6 previous errors

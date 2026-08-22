@@ -2,6 +2,8 @@ import React, { useEffect } from 'react';
 import { Editor } from '@monaco-editor/react';
 import { emmetCSS, emmetHTML, emmetJSX } from 'emmet-monaco-es';
 import { getExtensionCompletions } from '../../core/extensionsRuntime.js';
+import { fetchScmBlame } from '../../core/scmApi.js';
+import workspace from '../../core/workspace.js';
 import '../../App.css';
 import { disposeEditorResources } from '../../core/editorUtils.js';
 
@@ -202,6 +204,12 @@ function buildEditorOptions(settings, tab, wordBasedSuggestions) {
   return {
     ...settings,
     dragAndDrop: true,
+    multiCursorModifier: 'alt',
+    formatOnPaste: true,
+    formatOnType: true,
+    folding: true,
+    foldingStrategy: 'auto',
+    showFoldingControls: 'mouseover',
     tabSize: tab?.tabSize ?? settings?.tabSize,
     insertSpaces: tab?.insertSpaces ?? settings?.insertSpaces,
     fontFamily: settings?.fontFamily,
@@ -242,7 +250,8 @@ function buildEditorOptions(settings, tab, wordBasedSuggestions) {
       enabled: lightbulbSettings.enabled !== false,
     },
     stickyScroll: {
-      enabled: Boolean(stickyScrollSettings.enabled),
+      enabled: stickyScrollSettings.enabled !== false,
+      maxLineCount: stickyScrollSettings.maxLineCount ?? 5,
     },
     hover: {
       enabled: hoverSettings.enabled !== false,
@@ -252,6 +261,7 @@ function buildEditorOptions(settings, tab, wordBasedSuggestions) {
       cursorMoveOnType: findSettings.cursorMoveOnType !== false,
       autoFindInSelection: findSettings.autoFindInSelection ?? 'never',
       seedSearchStringFromSelection: findSettings.seedSearchStringFromSelection !== false,
+      addExtraSpaceOnTop: findSettings.addExtraSpaceOnTop ?? false,
     },
     linkedEditing: settings?.links !== false,
     autoClosingBrackets: settings?.autoClosingBrackets ?? 'always',
@@ -264,8 +274,9 @@ function buildEditorOptions(settings, tab, wordBasedSuggestions) {
       enabled: minimapSettings.enabled !== false,
       side: minimapSettings.side ?? 'right',
       size: minimapSettings.size ?? 'proportional',
-      showSlider: minimapSettings.showSlider ?? 'mouseover',
-      renderCharacters: minimapSettings.renderCharacters !== false,
+      showSlider: minimapSettings.showSlider ?? 'always',
+      renderCharacters: minimapSettings.renderCharacters === true,
+      autohide: minimapSettings.autohide ?? false,
       maxColumn: minimapSettings.maxColumn ?? 120,
     },
     scrollbar: {
@@ -278,6 +289,7 @@ function buildEditorOptions(settings, tab, wordBasedSuggestions) {
     },
     bracketPairColorization: {
       enabled: bracketPairColorizationSettings.enabled !== false,
+      independentColorPoolPerBracketType: true,
     },
     inlineSuggest: {
       enabled: inlineSuggestSettings.enabled !== false,
@@ -1059,6 +1071,91 @@ function disposeExtensionCompletionProvider(languageId) {
   }
 }
 
+const gitBlameHoverRegistrations = new Map();
+let cachedBlameResult = { path: null, lines: {} };
+
+async function getBlameLines(filePath, rootPath) {
+  if (cachedBlameResult.path === filePath) {
+    return cachedBlameResult.lines;
+  }
+  const blameOutput = await fetchScmBlame(filePath, rootPath);
+  if (!blameOutput) return {};
+
+  const lines = {};
+  const rawLines = blameOutput.split('\n');
+  let currentCommit = null;
+  let currentLineData = {};
+
+  for (const raw of rawLines) {
+    if (!raw) continue;
+    const parts = raw.split(' ');
+    
+    // Check if it's a new commit block (40 char hash followed by line numbers)
+    if (parts[0].length === 40 && !parts[0].includes('-')) {
+      const hash = parts[0];
+      const resultLine = parseInt(parts[2], 10);
+      currentCommit = hash;
+      currentLineData = { hash, resultLine, author: '', summary: '', date: '' };
+      lines[resultLine] = currentLineData;
+    } else if (currentCommit) {
+      if (parts[0] === 'author') {
+        currentLineData.author = parts.slice(1).join(' ');
+      } else if (parts[0] === 'author-time') {
+        const date = new Date(parseInt(parts[1], 10) * 1000);
+        currentLineData.date = date.toLocaleDateString();
+      } else if (parts[0] === 'summary') {
+        currentLineData.summary = parts.slice(1).join(' ');
+      }
+    }
+  }
+
+  cachedBlameResult = { path: filePath, lines };
+  return lines;
+}
+
+function registerGitBlameHoverProvider(monaco, languageId) {
+  if (!languageId) return;
+
+  const existingRegistration = gitBlameHoverRegistrations.get(languageId);
+  if (existingRegistration?.monaco === monaco) return;
+  existingRegistration?.disposable?.dispose?.();
+
+  const disposable = monaco.languages.registerHoverProvider(languageId, {
+    async provideHover(model, position) {
+      const rootPath = workspace.roots?.[0]?.systemPath;
+      // We get the tab path by extracting it from the model URI if possible, 
+      // but Monaco model URIs are tricky. Let's find the active tab from workspace.
+      let activeTabPath = null;
+      const allTabs = workspace.getAllTabs ? workspace.getAllTabs() : [];
+      for (const tab of allTabs) {
+        if (model.uri.path.endsWith(tab.path) || tab.path.endsWith(model.uri.path.replace(/^\//, ''))) {
+          activeTabPath = tab.path;
+          break;
+        }
+      }
+      
+      if (!activeTabPath || !rootPath) return null;
+
+      const lines = await getBlameLines(activeTabPath, rootPath);
+      const blameData = lines[position.lineNumber];
+      if (!blameData) return null;
+
+      if (blameData.hash.startsWith('0000000000000000')) {
+        return { contents: [{ value: 'Not Committed Yet' }] };
+      }
+
+      return {
+        contents: [
+          { value: `**${blameData.author}**, ${blameData.date} • \`${blameData.hash.substring(0, 8)}\`` },
+          { value: `${blameData.summary}` }
+        ]
+      };
+    }
+  });
+
+  gitBlameHoverRegistrations.set(languageId, { monaco, disposable });
+}
+
 function classifyBinaryTab(tab) {
   if (!tab?.isBinary) {
     return 'text';
@@ -1079,6 +1176,57 @@ function classifyBinaryTab(tab) {
   return 'binary';
 }
 
+/**
+ * Parse a unified diff string into line number arrays for git gutter decorations.
+ * Returns { added: number[], modified: number[], deleted: number[] }
+ */
+function parseGitHunks(diffText) {
+  const added = [];
+  const modified = [];
+  const deleted = [];
+
+  if (!diffText) return { added, modified, deleted };
+
+  const lines = diffText.split('\n');
+  let newLineNum = 0;
+  let pendingDeletes = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const hunkMatch = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+    if (hunkMatch) {
+      newLineNum = parseInt(hunkMatch[1], 10);
+      pendingDeletes = 0;
+      continue;
+    }
+
+    if (line.startsWith('---') || line.startsWith('+++') || line.startsWith('diff ') || line.startsWith('index ')) {
+      continue;
+    }
+
+    if (line.startsWith('-')) {
+      pendingDeletes++;
+    } else if (line.startsWith('+')) {
+      if (pendingDeletes > 0) {
+        modified.push(newLineNum); // adjacent delete+add = modification
+      } else {
+        added.push(newLineNum);
+      }
+      newLineNum++;
+      pendingDeletes = 0;
+    } else {
+      if (pendingDeletes > 0) {
+        // Deletion with no following addition = pure delete marker
+        deleted.push(newLineNum);
+        pendingDeletes = 0;
+      }
+      newLineNum++;
+    }
+  }
+
+  return { added, modified, deleted };
+}
+
 export default function MonacoEditor({
   settings,
   tab,
@@ -1096,10 +1244,12 @@ export default function MonacoEditor({
   onPeekDefinition,
   onPeekReferences,
   onRenameSymbol,
+  onMarkersChange,
   intelliSense,
   lspBridge,
   breakpoints = [],
   onToggleBreakpoint,
+  gitDiff = '',
 }) {
   const editorRef = React.useRef(null);
   const monacoRef = React.useRef(null);
@@ -1107,6 +1257,7 @@ export default function MonacoEditor({
   const activeIntelliSenseRef = React.useRef(intelliSense);
   const lspResolverTokenRef = React.useRef(Symbol(`lsp-context:${tab?.id || 'unknown'}`));
   const breakpointDecorationsRef = React.useRef([]);
+  const gitDecorationsRef = React.useRef([]);
   const [binaryViewMode, setBinaryViewMode] = React.useState('preview');
 
   if (!settings || !tab) {
@@ -1139,9 +1290,34 @@ export default function MonacoEditor({
     setBinaryViewMode(canPreviewBinary ? 'preview' : 'raw');
   }, [tab.id, canPreviewBinary]);
 
+  React.useEffect(() => {
+    if (!onMarkersChange) return;
+    const handleMarkerUpdate = (e) => {
+      onMarkersChange(e.detail.path, e.detail.errors, e.detail.warnings);
+    };
+    window.addEventListener('tilder-markers-changed', handleMarkerUpdate);
+    return () => window.removeEventListener('tilder-markers-changed', handleMarkerUpdate);
+  }, [onMarkersChange]);
+
   function handleMount(editor, monaco) {
     editorRef.current = editor;
     monacoRef.current = monaco;
+
+    if (!window.__monacoMarkersRegistered) {
+      window.__monacoMarkersRegistered = true;
+      monaco.editor.onDidChangeMarkers((uris) => {
+        uris.forEach(uri => {
+          const markers = monaco.editor.getModelMarkers({ resource: uri });
+          let errors = 0, warnings = 0;
+          markers.forEach(m => {
+            if (m.severity === monaco.MarkerSeverity.Error) errors++;
+            if (m.severity === monaco.MarkerSeverity.Warning) warnings++;
+          });
+          const path = decodeURIComponent(uri.path.startsWith('/') ? uri.path.substring(1) : uri.path);
+          window.dispatchEvent(new CustomEvent('tilder-markers-changed', { detail: { path, errors, warnings } }));
+        });
+      });
+    }
 
     if (monaco.languages.typescript) {
       monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
@@ -1363,11 +1539,63 @@ export default function MonacoEditor({
     );
   }, [breakpoints]);
 
+  // ── Git gutter decorations (added = green, modified = orange, deleted marker = red) ──
+  React.useEffect(() => {
+    if (!editorRef.current || !monacoRef.current) return;
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+
+    const hunks = parseGitHunks(gitDiff);
+    const decorations = [];
+
+    hunks.added.forEach(line => {
+      decorations.push({
+        range: new monaco.Range(line, 1, line, 1),
+        options: {
+          isWholeLine: false,
+          linesDecorationsClassName: 'tilder-git-added',
+          stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+          overviewRuler: { color: '#3fb950cc', position: monaco.editor.OverviewRulerLane.Left },
+        },
+      });
+    });
+
+    hunks.modified.forEach(line => {
+      decorations.push({
+        range: new monaco.Range(line, 1, line, 1),
+        options: {
+          isWholeLine: false,
+          linesDecorationsClassName: 'tilder-git-modified',
+          stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+          overviewRuler: { color: '#d29922cc', position: monaco.editor.OverviewRulerLane.Left },
+        },
+      });
+    });
+
+    hunks.deleted.forEach(line => {
+      decorations.push({
+        range: new monaco.Range(Math.max(1, line), 1, Math.max(1, line), 1),
+        options: {
+          isWholeLine: false,
+          linesDecorationsClassName: 'tilder-git-deleted',
+          stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+          overviewRuler: { color: '#f85149cc', position: monaco.editor.OverviewRulerLane.Left },
+        },
+      });
+    });
+
+    gitDecorationsRef.current = editor.deltaDecorations(
+      gitDecorationsRef.current,
+      decorations
+    );
+  }, [gitDiff]);
+
   React.useEffect(() => {
     if (monacoRef.current && tab.language) {
       const monaco = monacoRef.current;
       registerLspCompletionProvider(monaco, tab.language, () => activeLspContextRef.current);
       registerLspFeatureProviders(monaco, tab.language, () => activeLspContextRef.current);
+      registerGitBlameHoverProvider(monaco, tab.language);
       if (intelliSense?.providerType !== 'lsp') {
         registerExtensionCompletionProvider(monaco, tab.language);
       } else {
@@ -1511,7 +1739,7 @@ export default function MonacoEditor({
                 style={{ background: 'var(--accent-color)', color: '#fff', border: 'none', marginLeft: 'auto' }}
                 onClick={handleRunExecutable}
               >
-                <i className="fa-solid fa-play" style={{ marginRight: '6px' }}></i>
+                <span><i className="fa-solid fa-play" style={{ marginRight: '6px' }}></i></span>
                 Run Executable
               </button>
             )}

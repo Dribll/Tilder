@@ -84,3 +84,20 @@ export function checkoutScmBranch(payload) {
 export function syncScm(payload) {
   return post('/api/scm/sync', payload);
 }
+
+export async function fetchScmBlame(filePath, workspaceRoot) {
+  if (typeof window !== 'undefined' && window.__TILDER_RUNTIME_MODE__?.toLowerCase().includes('desktop')) {
+    try {
+      const { desktopExecuteCommand } = await import('./desktopFileApi.js');
+      // -p is porcelain format which is easier to parse
+      const res = await desktopExecuteCommand('git', ['blame', '-p', filePath], workspaceRoot);
+      if (res && res.exitCode === 0 && res.stdout) {
+        return res.stdout;
+      }
+    } catch (e) {
+      console.error('Git blame failed:', e);
+    }
+  }
+  // Fallback to node backend if not on desktop or if it fails
+  return post('/api/scm/blame-file', { path: filePath }).then(res => res.blame).catch(() => null);
+}

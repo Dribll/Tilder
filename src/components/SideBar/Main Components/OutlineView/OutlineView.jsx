@@ -22,6 +22,11 @@ export default function OutlineView({ ariaExpandedisplayoutline, workspace }) {
       return;
     }
 
+    // Immediately populate with fallback so outline isn't blank on file open
+    if (activeTab.content && activeTab.language) {
+      setSymbols(generateFallbackSymbols(activeTab.content, activeTab.language));
+    }
+
     let isMounted = true;
     setLoading(true);
     setError(null);
@@ -36,8 +41,11 @@ export default function OutlineView({ ariaExpandedisplayoutline, workspace }) {
             fileName: activeTab.name,
             text: activeTab.content,
           });
-          if (isMounted) {
-            setSymbols(result || []);
+          if (isMounted && result?.length) {
+            setSymbols(result);
+          } else if (isMounted && activeTab.content) {
+            // LSP returned nothing — keep the regex fallback
+            setSymbols(generateFallbackSymbols(activeTab.content, activeTab.language));
           }
         } else {
           // Fallback: comprehensive regex parser
@@ -50,8 +58,8 @@ export default function OutlineView({ ariaExpandedisplayoutline, workspace }) {
       }
     }
 
-    // Debounce symbol fetching
-    const timer = setTimeout(fetchSymbols, 500);
+    // Short debounce for LSP (avoids hammering on every keystroke)
+    const timer = setTimeout(fetchSymbols, 300);
     return () => {
       isMounted = false;
       clearTimeout(timer);
@@ -177,9 +185,9 @@ export default function OutlineView({ ariaExpandedisplayoutline, workspace }) {
               onClick={(e) => hasChildren ? toggleCollapse(e, symId) : null}
               style={{ opacity: hasChildren ? 1 : 0, cursor: hasChildren ? 'pointer' : 'default' }}
             >
-              <i className={`fa-solid fa-chevron-${isCollapsed ? 'right' : 'down'}`}></i>
+              <span><i className={`fa-solid fa-chevron-${isCollapsed ? 'right' : 'down'}`}></i></span>
             </div>
-            <i className={`${getIconForKind(sym.kind)} outline-icon kind-${sym.kind}`}></i>
+            <span><i className={`${getIconForKind(sym.kind)} outline-icon kind-${sym.kind}`}></i></span>
             <span className="outline-name">{sym.name}</span>
             {sym.detail && <span className="outline-detail-badge">{sym.detail}</span>}
           </div>

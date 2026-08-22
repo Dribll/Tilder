@@ -1,0 +1,652 @@
+.hardware-shell {
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  color: var(--tilder-primary-text, #e2e8f0);
+  padding: 0 !important;
+  position: relative;
+  display: flex; /* The wrapper handles visibility, we need flex internally */
+}
+
+/* Ensure display flex is active when the parent wrapper makes it visible */
+.d-flex.hardware-shell {
+  display: flex !important;
+}
+.d-none.hardware-shell {
+  display: none !important;
+}
+
+/* Center helper for status screens */
+.hw-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 32px 20px;
+  text-align: center;
+}
+
+.hw-center h3 {
+  color: #e2e8f0;
+}
+
+.hw-center p {
+  color: rgba(226, 232, 240, 0.7);
+}
+
+/* Install button */
+.hw-install-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: var(--tilder-accent, #3b82f6);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.hw-install-btn:hover {
+  background: #2563eb;
+}
+
+/* Progress bar */
+.hw-progress-bar {
+  width: 80%;
+  max-width: 240px;
+  height: 4px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  margin-top: 20px;
+  overflow: hidden;
+}
+
+.hw-progress-fill {
+  height: 100%;
+  background: var(--tilder-accent, #3b82f6);
+  border-radius: 2px;
+  animation: hw-indeterminate 1.5s ease-in-out infinite;
+  transform-origin: left;
+}
+
+@keyframes hw-indeterminate {
+  0%   { width: 0%; margin-left: 0%; }
+  50%  { width: 70%; margin-left: 15%; }
+  100% { width: 0%; margin-left: 100%; }
+}
+
+/* Header */
+.hardware-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
+
+.hardware-eyebrow {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  margin: 0;
+  opacity: 0.7;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hardware-toolbar-btn {
+  background: transparent;
+  border: none;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.hardware-toolbar-btn:hover:not(:disabled) {
+  opacity: 1;
+  background: rgba(255,255,255,0.1);
+}
+
+.hardware-toolbar-btn:disabled {
+  cursor: not-allowed;
+}
+
+/* Ready Area & Device Bar */
+.hw-ready {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.hw-device-bar {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.hw-device-row {
+  margin-bottom: 8px;
+}
+
+.hw-device-row label {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+  opacity: 0.6;
+}
+
+.hw-device-row select {
+  width: 100%;
+  padding: 6px 8px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: inherit;
+  border-radius: 5px;
+  outline: none;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.hw-device-row select:focus {
+  border-color: var(--tilder-accent, #3b82f6);
+}
+
+.hw-icon-btn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: inherit;
+  border-radius: 5px;
+  cursor: pointer;
+  padding: 0 8px;
+  transition: background 0.2s;
+}
+.hw-icon-btn:hover {
+  background: rgba(255,255,255,0.14);
+}
+
+.hw-action-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.hardware-btn {
+  flex: 1;
+  padding: 8px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: inherit;
+  border-radius: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.hardware-btn:hover:not(:disabled) {
+  background: rgba(255,255,255,0.14);
+}
+
+.hardware-btn.primary {
+  background: var(--tilder-accent, #3b82f6);
+  border-color: transparent;
+  color: #fff;
+}
+
+.hardware-btn.primary:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.hardware-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Tabs */
+.hw-main-tabs {
+  display: flex;
+  background: rgba(0,0,0,0.2);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  overflow-x: auto;
+}
+
+.hw-main-tabs::-webkit-scrollbar {
+  height: 0;
+}
+
+.hw-main-tab {
+  flex: 1;
+  min-width: max-content;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: inherit;
+  opacity: 0.6;
+  padding: 10px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.hw-main-tab:hover {
+  opacity: 1;
+  background: rgba(255,255,255,0.05);
+}
+
+.hw-main-tab.active {
+  opacity: 1;
+  border-bottom-color: var(--tilder-accent, #3b82f6);
+  color: var(--tilder-accent, #3b82f6);
+  background: rgba(255,255,255,0.05);
+}
+
+/* Tab Area */
+.hw-tab-area {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Output Console */
+.hw-console {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.hw-console-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  background: rgba(0,0,0,0.3);
+  font-size: 10px;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+.hw-console-header button {
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.7;
+}
+.hw-console-header button:hover { opacity: 1; }
+
+.hw-console-body {
+  flex: 1;
+  padding: 8px;
+  overflow-y: auto;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  background: #0f0f11;
+}
+
+.hw-console-empty {
+  opacity: 0.4;
+  font-style: italic;
+}
+
+.hw-console-line {
+  display: flex;
+  gap: 8px;
+  word-break: break-all;
+}
+
+.hw-line-prefix {
+  opacity: 0.5;
+  user-select: none;
+}
+
+.hw-line-error { color: #f87171; }
+.hw-line-stderr { color: #fca5a5; }
+.hw-line-success { color: #4ade80; }
+.hw-line-info { color: #60a5fa; }
+.hw-line-stdout { color: #e2e8f0; }
+
+/* Serial Monitor */
+.hw-serial {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.hw-serial-toolbar {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  background: rgba(0,0,0,0.2);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.hw-serial-toolbar select {
+  flex: 1;
+  padding: 4px;
+  font-size: 11px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #fff;
+  border-radius: 4px;
+}
+.hw-serial-btn {
+  padding: 4px 8px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.hw-serial-btn:hover {
+  background: rgba(255,255,255,0.2);
+}
+.hw-serial-btn.connected {
+  background: #f87171;
+  border-color: #f87171;
+}
+
+.hw-serial-output {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  background: #0f0f11;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.hw-serial-line {
+  display: flex;
+  gap: 8px;
+  word-break: break-all;
+}
+.hw-sl-prefix {
+  opacity: 0.5;
+  user-select: none;
+}
+.hw-sl-tx { color: #60a5fa; }
+.hw-sl-rx { color: #e2e8f0; }
+.hw-sl-info { color: #fcd34d; font-style: italic; }
+.hw-sl-error { color: #f87171; font-weight: bold; }
+
+.hw-serial-input {
+  display: flex;
+  padding: 8px;
+  gap: 8px;
+  background: rgba(0,0,0,0.3);
+}
+.hw-serial-input input {
+  flex: 1;
+  padding: 6px 8px;
+  background: #1a1a24;
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #fff;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 12px;
+}
+.hw-serial-input button {
+  padding: 6px 12px;
+  background: var(--tilder-accent, #3b82f6);
+  border: none;
+  color: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.hw-serial-input button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Library Manager & Sub-tabs */
+.hw-lib-manager {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.hw-tab-bar {
+  display: flex;
+  padding: 6px;
+  gap: 6px;
+  background: rgba(0,0,0,0.1);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.hw-tab {
+  flex: 1;
+  padding: 4px;
+  background: transparent;
+  border: none;
+  color: #fff;
+  opacity: 0.5;
+  cursor: pointer;
+  font-size: 11px;
+  border-radius: 4px;
+}
+.hw-tab.active {
+  background: rgba(255,255,255,0.1);
+  opacity: 1;
+}
+.hw-tab-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  overflow: hidden;
+}
+
+.lib-search-form {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.lib-search-form input {
+  flex: 1;
+  padding: 8px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: inherit;
+  border-radius: 5px;
+  outline: none;
+  font-size: 12px;
+}
+.lib-search-form input:focus { border-color: var(--tilder-accent, #3b82f6); }
+.lib-search-form button {
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: inherit;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.lib-results {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hw-empty-msg {
+  text-align: center;
+  opacity: 0.5;
+  font-size: 12px;
+  margin-top: 20px;
+}
+
+.lib-card {
+  background: rgba(0,0,0,0.2);
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.lib-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 6px;
+}
+.lib-name {
+  font-size: 13px;
+  font-weight: 500;
+  margin-right: 6px;
+}
+.lib-version {
+  font-size: 10px;
+  opacity: 0.6;
+  background: rgba(255,255,255,0.1);
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+.lib-desc {
+  font-size: 11px;
+  opacity: 0.75;
+  margin: 0 0 6px 0;
+  line-height: 1.4;
+}
+.lib-author {
+  font-size: 10px;
+  opacity: 0.45;
+}
+.lib-install-btn {
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid var(--tilder-accent, #3b82f6);
+  color: var(--tilder-accent, #3b82f6);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.lib-install-btn:hover:not(:disabled) {
+  background: var(--tilder-accent, #3b82f6);
+  color: #fff;
+}
+.lib-install-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.5);
+}
+
+.hw-install-progress {
+  padding: 12px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+.hw-install-log {
+  margin-top: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  opacity: 0.7;
+  max-height: 80px;
+  overflow-y: auto;
+}
+
+/* Board Manager */
+.hw-board-manager {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 10px;
+}
+.hw-boards-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hw-board-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(0,0,0,0.2);
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.hw-board-info {
+  flex: 1;
+}
+.hw-board-name {
+  font-size: 13px;
+  font-weight: 500;
+  margin-right: 6px;
+}
+.hw-installed-badge {
+  font-size: 9px;
+  text-transform: uppercase;
+  background: rgba(74, 222, 128, 0.2);
+  color: #4ade80;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.hw-board-desc {
+  font-size: 11px;
+  opacity: 0.7;
+  margin: 4px 0;
+}
+.hw-board-id {
+  font-size: 10px;
+  opacity: 0.4;
+  font-family: monospace;
+}
+.hw-board-install-btn {
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid var(--tilder-accent, #3b82f6);
+  color: var(--tilder-accent, #3b82f6);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.hw-board-install-btn:hover:not(:disabled) {
+  background: var(--tilder-accent, #3b82f6);
+  color: #fff;
+}
+.hw-board-install-btn.installed {
+  border-color: rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.5);
+  cursor: default;
+}
+.hw-board-install-btn.installed:hover {
+  background: transparent;
+}
