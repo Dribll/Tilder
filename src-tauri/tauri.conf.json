@@ -60,7 +60,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEEwNzFDRjY3NjlEMEVGREUKUldUZTc5QnBaODl4b0xqN3E4SFF1VmVQdU5ZVHIwcXBYLzVYbjYvcmRESFhEZzd6U0E5aHIrbEwK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMzRkQ5N0E0OENDNkJBQjcKUldTM3VzYU1wSmY5TTI1MnE2dktucFpDMGx2aDErczV1TVVHeGdEUGd0MkJ1Z2xoaEc0NnRta2cK",
       "endpoints": [
         "https://github.com/Dribll/Tilder/releases/latest/download/latest.json"
       ]
