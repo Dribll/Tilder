@@ -1,0 +1,6 @@
+D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Release\net8.0\win-x64\publish\appsettings.Development.json
+D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Release\net8.0\win-x64\publish\appsettings.json
+D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Release\net8.0\win-x64\publish\TilderMonitorService.pdb
+D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Release\net8.0\win-x64\publish\MonoPosixHelper.dll
+D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Release\net8.0\win-x64\publish\libMonoPosixHelper.dll
+D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Release\net8.0\win-x64\publish\TilderMonitorService.exe

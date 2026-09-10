@@ -42,6 +42,27 @@ function resolveTargetTriple() {
   return match[1].trim();
 }
 
+async function copyFileWithRetry(src, dest, retries = 6) {
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      await fs.copyFile(src, dest);
+      return;
+    } catch (err) {
+      if ((err.code === 'EBUSY' || err.code === 'EPERM' || err.code === 'EACCES') && attempt < retries) {
+        await delay(200 * (attempt + 1));
+        continue;
+      }
+      try {
+        const [srcStat, destStat] = await Promise.all([fs.stat(src), fs.stat(dest)]);
+        if (srcStat.size === destStat.size && srcStat.size > 0) {
+          return;
+        }
+      } catch {}
+      throw err;
+    }
+  }
+}
+
 async function copyDir(src, dest) {
   await fs.mkdir(dest, { recursive: true });
   const entries = await fs.readdir(src, { withFileTypes: true });
@@ -51,7 +72,7 @@ async function copyDir(src, dest) {
     if (entry.isDirectory()) {
       await copyDir(srcPath, destPath);
     } else {
-      await fs.copyFile(srcPath, destPath);
+      await copyFileWithRetry(srcPath, destPath);
     }
   }
 }
@@ -145,6 +166,13 @@ async function main() {
   await copyIntoStage('package.json');
   await copyIntoStage('package-lock.json');
   await copyIntoStage('tilder_monitor_service.ps1');
+  const rootEnvPath = path.join(projectRoot, '.env');
+  const envExists = await fs.stat(rootEnvPath).then(() => true).catch(() => false);
+  if (envExists) {
+    await copyIntoStage('.env');
+  } else {
+    await fs.writeFile(path.join(stagedAppDir, '.env'), 'NODE_ENV=production\nPORT=33210\n');
+  }
   await copyIntoStage('dist');
 
   const isDev = process.argv.includes('--dev');
@@ -170,11 +198,7 @@ async function main() {
     }
   }
 
-  const envPath = path.join(projectRoot, '.env');
-  const hasEnvFile = await fs.stat(envPath).then(() => true).catch(() => false);
-  if (hasEnvFile) {
-    await copyIntoStage('.env');
-  }
+
 
   await syncStageToReleaseRuntime();
   await syncStageToDebugRuntime();

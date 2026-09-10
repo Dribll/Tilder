@@ -481,13 +481,32 @@ export default function HardwareManager({ ariaExpandedisplayhardware, pushNotifi
   function getSketchPath() {
     const tab = workspace.getActiveTab?.() || workspace.tabs?.find(t => t.id === workspace.activeTabId);
     if (!tab) return null;
-    if (!tab.name.endsWith('.ino') && !tab.name.endsWith('.cpp')) return null;
-    // Get parent directory for .ino files
+    if (!tab.name?.endsWith('.ino') && !tab.name?.endsWith('.cpp')) return null;
     if (tab.nativePath) {
-      return tab.nativePath.replace(/[/\\][^/\\]+$/, '');
+      const idx = Math.max(tab.nativePath.lastIndexOf('/'), tab.nativePath.lastIndexOf('\\'));
+      return idx !== -1 ? tab.nativePath.slice(0, idx) : tab.nativePath;
+    }
+    if (workspace.rootSystemPath && tab.path) {
+      const rel = tab.path.replace(/^root\/?/, '');
+      const full = workspace.rootSystemPath + '/' + rel;
+      const idx = Math.max(full.lastIndexOf('/'), full.lastIndexOf('\\'));
+      return (idx !== -1 ? full.slice(0, idx) : full).replace(/\//g, '\\');
     }
     return null;
   }
+
+  useEffect(() => {
+    function onArduinoAction(e) {
+      const action = e.detail?.action;
+      if (action === 'compile' || action === 'verify') {
+        handleVerify();
+      } else if (action === 'upload') {
+        handleUpload();
+      }
+    }
+    window.addEventListener('tilder:arduino-action', onArduinoAction);
+    return () => window.removeEventListener('tilder:arduino-action', onArduinoAction);
+  }, [selectedBoard, selectedPort, ports]);
 
   async function handleVerify() {
     const sketchPath = getSketchPath();
@@ -508,10 +527,12 @@ export default function HardwareManager({ ariaExpandedisplayhardware, pushNotifi
         pushNotification?.('✓ Compilation successful!', 'success');
       } else {
         addOutput({ type: 'error', data: 'Compilation failed.' });
-        pushNotification?.('Compilation failed. Check output.', 'error');
+        pushNotification?.('Compilation failed. Check the Output tab for details.', 'error');
       }
     } catch (e) {
-      addOutput({ type: 'error', data: String(e) });
+      const msg = String(e);
+      addOutput({ type: 'error', data: msg });
+      pushNotification?.(`Compilation error: ${msg}`, 'error');
     }
     setCompiling(false);
   }
@@ -531,10 +552,17 @@ export default function HardwareManager({ ariaExpandedisplayhardware, pushNotifi
         pushNotification?.('✓ Upload successful!', 'success');
       } else {
         addOutput({ type: 'error', data: 'Upload failed.' });
-        pushNotification?.('Upload failed. Check output.', 'error');
+        pushNotification?.('Upload failed. The port might be busy or disconnected.', 'error');
       }
     } catch (e) {
-      addOutput({ type: 'error', data: String(e) });
+      const msg = String(e);
+      addOutput({ type: 'error', data: msg });
+      // Give a clearer message for common port-busy/access-denied errors
+      if (msg.toLowerCase().includes('access denied') || msg.toLowerCase().includes('busy') || msg.toLowerCase().includes('could not open port') || msg.toLowerCase().includes('serial port')) {
+        pushNotification?.(`Port error: ${selectedPort} is busy or disconnected. Close any serial monitor and try again.`, 'error');
+      } else {
+        pushNotification?.(`Upload error: ${msg}`, 'error');
+      }
     }
     setUploading(false);
   }
@@ -693,3 +721,4 @@ export default function HardwareManager({ ariaExpandedisplayhardware, pushNotifi
     </div>
   );
 }
+

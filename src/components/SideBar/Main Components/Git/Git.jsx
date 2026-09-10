@@ -23,6 +23,14 @@ function toFriendlyError(error, fallback) {
     return 'This workspace is too large to mirror as-is for Source Control. Tilder now skips generated folders like node_modules, dist, build, and target. Refresh Source Control and try again.';
   }
 
+  if (message.includes('not a git repository') || message.includes('no such file or directory') || message.toLowerCase().includes('enoent') || message.toLowerCase().includes('no such file')) {
+    return 'Not a Git repository. Click "Initialize Repository" to create one, or open a folder that already has a .git directory.';
+  }
+
+  if (message.includes('does not have any commits yet') || message.includes('ambiguous argument')) {
+    return 'No commits yet. Stage your changes and make your first commit.';
+  }
+
   return message || fallback;
 }
 

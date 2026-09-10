@@ -379,7 +379,7 @@ export default function Search({
     };
   }, [ariaExpandedisplaysearch, caseSensitive, excludeFilter, includeFilter, mode, query, scope, useRegex, wholeWord, workspace, workspaceVersion]);
 
-  return (
+    return (
     <div id="searcharea" className={`sidebarscontent d-${ariaExpandedisplaysearch}`}>
       <div className="search-shell">
         <div className="search-header">
@@ -397,30 +397,6 @@ export default function Search({
           <button type="button" className={`search-mode-btn ${mode === 'symbols' ? 'active' : ''}`} onClick={() => setMode('symbols')}>
             Symbols
           </button>
-        </div>
-
-        <div className="search-go-block">
-          <div className="search-scope-label">Go</div>
-          <div className="search-go-row">
-            <button type="button" className="search-go-chip" onClick={onGoToLine}>
-              Line
-            </button>
-            <button type="button" className="search-go-chip" onClick={onGoToFile}>
-              File
-            </button>
-            <button type="button" className="search-go-chip" onClick={onGoToSymbolInWorkspace}>
-              Workspace Symbol
-            </button>
-            <button type="button" className="search-go-chip" onClick={onGoToSymbolInEditor}>
-              Editor Symbol
-            </button>
-            <button type="button" className="search-go-chip" onClick={onGoToDefinition}>
-              Definition
-            </button>
-            <button type="button" className="search-go-chip" onClick={onGoToReferences}>
-              References
-            </button>
-          </div>
         </div>
 
         <div className="search-input-group">
@@ -474,22 +450,26 @@ export default function Search({
           </div>
         ) : null}
 
-        <input
-          type="text"
-          className="search-input secondary"
-          value={includeFilter}
-          onChange={(event) => setIncludeFilter(event.target.value)}
-          placeholder="Include files: src, .js, components"
-          spellCheck={false}
-        />
-        <input
-          type="text"
-          className="search-input secondary"
-          value={excludeFilter}
-          onChange={(event) => setExcludeFilter(event.target.value)}
-          placeholder="Exclude files: dist, node_modules"
-          spellCheck={false}
-        />
+        {mode === 'content' && (
+          <div className="search-filters">
+            <input
+              type="text"
+              className="search-input"
+              value={includeFilter}
+              onChange={(event) => setIncludeFilter(event.target.value)}
+              placeholder="Include: src, .js"
+              spellCheck={false}
+            />
+            <input
+              type="text"
+              className="search-input"
+              value={excludeFilter}
+              onChange={(event) => setExcludeFilter(event.target.value)}
+              placeholder="Exclude: dist, node_modules"
+              spellCheck={false}
+            />
+          </div>
+        )}
 
         <div className="search-scope-block">
           <div className="search-scope-label">Smart Scope</div>
@@ -507,7 +487,17 @@ export default function Search({
           </div>
         </div>
 
-        {recentQueries.length ? (
+        <div className="search-go-block">
+          <div className="search-scope-label">Quick Go</div>
+          <div className="search-go-row">
+            <button type="button" className="search-go-chip" onClick={onGoToLine}>Line</button>
+            <button type="button" className="search-go-chip" onClick={onGoToFile}>File</button>
+            <button type="button" className="search-go-chip" onClick={onGoToSymbolInWorkspace}>Workspace Symbol</button>
+            <button type="button" className="search-go-chip" onClick={onGoToDefinition}>Definition</button>
+          </div>
+        </div>
+
+        {recentQueries.length > 0 && (
           <div className="search-history-block">
             <div className="search-scope-label">Quick Recall</div>
             <div className="search-history-row">
@@ -518,7 +508,7 @@ export default function Search({
               ))}
             </div>
           </div>
-        ) : null}
+        )}
 
         <div className="search-summary">
           {error
@@ -527,60 +517,41 @@ export default function Search({
             ? loading
               ? 'Searching...'
               : `${summary.matches} result${summary.matches === 1 ? '' : 's'} in ${summary.files} file${summary.files === 1 ? '' : 's'}`
-            : 'Search your workspace, open editors, code only, or assets.'}
+            : 'Search your workspace, open editors, or assets.'}
         </div>
 
-        <div className="search-results">
-          {!query.trim() ? (
-            <div className="search-empty-state">
-              <div className="search-empty-title">Search Everything</div>
-              <p>Find text in files, search by file name, or switch to Smart Scope for code-only and open-editor search.</p>
-            </div>
-          ) : null}
-
-          {error ? <div className="search-empty-state search-error-state">{error}</div> : null}
-
-          {query.trim() && !loading && !results.length ? <div className="search-empty-state">No matches found.</div> : null}
-
-          {(Array.isArray(results) ? results : []).map((result) => (
-            <div key={result.path} className="search-result-card">
-              <div className="search-result-file-row">
-                <button type="button" className="search-result-file" onClick={() => openSearchResult(result)}>
-                  <span className="search-result-name">{result.name}</span>
-                  <span className="search-result-path">{result.path}</span>
-                </button>
-                {mode === 'content' && showReplace ? (
-                  <button
-                    type="button"
-                    className="search-result-action"
-                    disabled={loading || replaceBusy === result.path}
-                    onClick={() => applyReplace(result)}
-                  >
-                    {replaceBusy === result.path ? 'Replacing...' : 'Replace File'}
-                  </button>
-                ) : null}
-              </div>
-
-              {(mode === 'content' || mode === 'symbols') && Array.isArray(result.matches) ? (
-                <div className="search-result-matches">
-                  {result.matches.map((match, index) => (
-                    <button
-                      key={`${result.path}-${match.line}-${index}`}
-                      type="button"
-                      className="search-result-match"
-                      onClick={() => openSearchResult({ ...result, ...match })}
+        {summary.matches > 0 && (
+          <div className="search-results">
+            {results.map((result) => {
+              const fileKey = result.file.path;
+              const isExpanded = expandedFiles.has(fileKey);
+              return (
+                <div key={fileKey} className="search-result-group">
+                  <div className="search-result-file" onClick={() => toggleExpand(fileKey)}>
+                    <i className={`fa-solid ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'} search-result-file-icon`}></i>
+                    <span className="search-result-file-name">{result.file.name}</span>
+                    <span className="search-result-file-path">{workspace.findParentPath(result.file.path) || ''}</span>
+                    <span className="search-result-file-count" style={{marginLeft: 'auto', fontSize: '10px', color: 'rgba(174,183,214,0.4)'}}>{result.matches.length}</span>
+                  </div>
+                  {isExpanded && result.matches.map((match, matchIndex) => (
+                    <div
+                      key={matchIndex}
+                      className="search-result-line"
+                      onClick={() => onResultClick(result.file, match)}
                     >
-                      <span className="search-result-line">
-                        {mode === 'symbols' ? `${match.type} • ${match.line}:${match.column}` : `${match.line}:${match.column}`}
+                      <span className="search-result-line-number">{match.line}</span>
+                      <span className="search-result-line-text">
+                        {match.text.substring(0, match.start)}
+                        <span className="search-result-match-highlight">{match.text.substring(match.start, match.end)}</span>
+                        {match.text.substring(match.end)}
                       </span>
-                      <span className="search-result-preview">{mode === 'symbols' ? `${match.name} — ${match.preview}` : match.preview}</span>
-                    </button>
+                    </div>
                   ))}
                 </div>
-              ) : null}
-            </div>
-          ))}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

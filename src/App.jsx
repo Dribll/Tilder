@@ -34,6 +34,7 @@ import KeyboardShortcuts from './components/KeyboardShortcuts/KeyboardShortcuts.
 import SystemMonitor from './components/SystemMonitor/SystemMonitor.jsx';
 import MonacoEditor from './components/Editor/MonacoEditor.jsx';
 import OfficeEditor from './components/Editor/OfficeEditor.jsx';
+import MonacoDiffEditor from './components/Editor/MonacoDiffEditor.jsx';
 const isOfficeFile = (name) => /\.(docx|xlsx|csv|pptx)$/i.test(name || '');
 
 const isBinaryMediaFile = (name) => /\.(png|jpg|jpeg|gif|bmp|webp|svg|ico|pdf|mp4|mp3|wav|webm|mov|avi)$/i.test(name || '');
@@ -1179,6 +1180,27 @@ function App() {
     setActivePanel('search');
     setSearchRequest({ ...nextRequest, nonce: Date.now() });
     setSearchFocusNonce((current) => current + 1);
+  }
+
+  const [compareSource, setCompareSource] = React.useState(null);
+
+  function handleSelectForCompare(tab) {
+    setCompareSource(tab);
+  }
+
+  function handleCompareWithSelected(tab) {
+    if (!compareSource) return;
+    const diffTab = {
+      id: 'diff:' + compareSource.id + ':' + tab.id,
+      name: compareSource.name + ' <-> ' + tab.name,
+      isDiff: true,
+      originalTab: compareSource,
+      modifiedTab: tab,
+      dirty: false,
+    };
+    workspace.openDiffTab(diffTab);
+    assignTabToFocusedGroup(diffTab.id, { preview: false });
+    refresh();
   }
 
   function openCommandPalette() {
@@ -7004,7 +7026,14 @@ function App() {
                         />
                       ) : null}
                       {!splitEditorOpen && activeTab ? (
-                          isOfficeFile(activeTab.name) ? (
+                          activeTab.isDiff ? (
+  <MonacoDiffEditor
+    tab={activeTab.modifiedTab}
+    originalTab={activeTab.originalTab}
+    settings={settings}
+    style={{ flex: 1, height: '100%' }}
+  />
+) : isOfficeFile(activeTab.name) ? (
   <OfficeEditor tab={activeTab} onChange={handleEditorChange} />
 ) : (
   <MonacoEditor
@@ -7323,6 +7352,9 @@ function App() {
             <FilePioneer
               ariaExpandedisplayfilepioneer={panelDisplay('filepioneer')}
               workspace={workspace}
+              workspaceVersion={version}
+              settings={settings}
+              updateSetting={updateSetting}
               openFile={handleOpenNode}
               createUntitledFile={handleCreateUntitledFile}
               closeTab={handleCloseTab}
@@ -7341,6 +7373,10 @@ function App() {
               openToSide={openSplitEditorRight}
               handleOpenInTerminal={handleOpenInTerminal}
               onExplainWithAI={(path) => setAiLensTarget(path)}
+              openSearchPanel={openSearchPanel}
+              compareSource={compareSource}
+              onSelectForCompare={handleSelectForCompare}
+              onCompareWithSelected={handleCompareWithSelected}
             />
             <HardwareManager
               ariaExpandedisplayhardware={panelDisplay('hardware')}

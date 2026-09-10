@@ -130,89 +130,113 @@
 }
 
 .hw-device-bar {
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.1);
+  padding: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .hw-device-row {
-  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 4px 6px;
+  transition: all 0.2s;
+}
+
+.hw-device-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .hw-device-row label {
-  display: block;
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin-bottom: 4px;
-  opacity: 0.6;
+  opacity: 0.5;
+  width: 44px;
+  flex-shrink: 0;
+  text-align: right;
+  margin-right: 8px;
 }
 
 .hw-device-row select {
-  width: 100%;
-  padding: 6px 8px;
-  background: rgba(0,0,0,0.25);
-  border: 1px solid rgba(255,255,255,0.12);
-  color: inherit;
-  border-radius: 5px;
+  flex: 1;
+  padding: 4px 6px;
+  background: transparent;
+  border: none;
+  color: #dde2f5;
   outline: none;
-  font-size: 12px;
+  font-size: 11.5px;
   cursor: pointer;
-  transition: border-color 0.2s;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23dde2f5%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  background-size: 8px auto;
+  padding-right: 20px;
 }
 
-.hw-device-row select:focus {
-  border-color: var(--tilder-accent, #3b82f6);
+.hw-device-row select option {
+  background: #1e1e2e;
+  color: #dde2f5;
 }
 
 .hw-icon-btn {
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.12);
-  color: inherit;
-  border-radius: 5px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
   cursor: pointer;
-  padding: 0 8px;
-  transition: background 0.2s;
+  padding: 4px 8px;
+  font-size: 11px;
+  transition: all 0.2s;
 }
 .hw-icon-btn:hover {
-  background: rgba(255,255,255,0.14);
+  background: rgba(255, 255, 255, 0.1);
+  color: #dde2f5;
 }
 
 .hw-action-row {
   display: flex;
-  gap: 8px;
-  margin-top: 12px;
+  gap: 6px;
 }
 
 .hardware-btn {
   flex: 1;
-  padding: 8px;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.12);
-  color: inherit;
-  border-radius: 5px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #dde2f5;
+  border-radius: 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  font-size: 12px;
-  transition: all 0.2s;
+  font-size: 11.5px;
   font-weight: 500;
+  transition: all 0.2s;
 }
 
 .hardware-btn:hover:not(:disabled) {
-  background: rgba(255,255,255,0.14);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 .hardware-btn.primary {
-  background: var(--tilder-accent, #3b82f6);
-  border-color: transparent;
-  color: #fff;
+  background: rgba(142, 149, 255, 0.15);
+  border-color: rgba(142, 149, 255, 0.25);
+  color: #c4a9ff;
 }
 
 .hardware-btn.primary:hover:not(:disabled) {
-  background: #2563eb;
+  background: rgba(142, 149, 255, 0.25);
+  border-color: rgba(142, 149, 255, 0.4);
 }
 
 .hardware-btn:disabled {
@@ -650,3 +674,4 @@
 .hw-board-install-btn.installed:hover {
   background: transparent;
 }
+

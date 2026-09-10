@@ -174,13 +174,7 @@ function TreeNode({ index, style, ariaAttributes, flatNodes, selectedPath, activ
     soundEngine.playClick();
     callbacks.selectNode(node.path, { multi: e.ctrlKey || e.metaKey, range: e.shiftKey });
     if (isFolder) {
-      // Use a simple timestamp to prevent rapid double-click toggling
-      // without relying on e.detail which might be unreliable in some environments.
-      const now = Date.now();
-      if (!node._lastToggle || now - node._lastToggle > 300) {
-        node._lastToggle = now;
-        await callbacks.toggleFolder(node.path);
-      }
+      await callbacks.toggleFolder(node.path);
     } else if (e.detail === 2) {
       callbacks.openFile(node, { preview: false });
     } else {
@@ -392,6 +386,8 @@ function OpenEditorItem({ tab, isActive, onActivate, onClose }) {
 /* ─────────────────────── Favorite Item ─────────────────────── */
 function FavoriteItem({ path, isActive, onActivate, onRemove }) {
   const name = path.split('/').pop() || path;
+  const parts = path.split('/');
+  const parentDir = parts.length > 1 ? parts[parts.length - 2] : '';
   const visual = resolveFileIcon(name);
 
   return (
@@ -401,6 +397,7 @@ function FavoriteItem({ path, isActive, onActivate, onRemove }) {
           <visual.Icon />
         </span>
         <span className="fp-open-editor-name">{name}</span>
+        {parentDir && <span className="fp-open-editor-dir">{parentDir}</span>}
       </button>
       <button type="button" className="fp-open-editor-close" title="Remove from Favorites" onClick={onRemove}>
         <span><i className="fa-solid fa-xmark" /></span>
@@ -1023,6 +1020,14 @@ export default function FilePioneer({
 
   /* ❖ Toggle folder (async to lazy-load) ❖ */
   async function toggleFolder(path) {
+    const originalNode = workspace.findNode ? workspace.findNode(path) : null;
+    const now = Date.now();
+    if (originalNode) {
+      if (originalNode._lastToggle && now - originalNode._lastToggle < 300) {
+        return; // debounce rapid double-clicks
+      }
+      originalNode._lastToggle = now;
+    }
     soundEngine.playPop();
     await workspace.toggleFolder(path);
     refresh();
@@ -1113,10 +1118,16 @@ export default function FilePioneer({
         if (n?.type === 'file') openToSide?.(path);
         return;
       case 'copy-path':
-        await copyPath?.();
+        navigator.clipboard.writeText(n?.nativePath || n?.path || path).catch(() => {});
+        pushNotification?.('Path copied to clipboard.', 'info');
         return;
       case 'copy-relative-path':
-        await copyRelativePath?.();
+        navigator.clipboard.writeText(n?.path || path).catch(() => {});
+        pushNotification?.('Relative path copied to clipboard.', 'info');
+        return;
+      case 'copy-name':
+        navigator.clipboard.writeText(n?.name || path.split('/').pop()).catch(() => {});
+        pushNotification?.('Name copied.', 'info');
         return;
       case 'reveal-in-explorer':
         await workspace.revealNodeInExplorer(path);
@@ -1454,7 +1465,28 @@ export default function FilePioneer({
                   key={favPath}
                   path={favPath}
                   isActive={activeTabId === favPath}
-                  onActivate={() => openFile(favPath)}
+                  onActivate={async () => {
+                    const parts = favPath.split('/');
+                    let currentPath = '';
+                    for (const part of parts) {
+                      currentPath = currentPath ? currentPath + '/' + part : part;
+                      const n = workspace.findNode(currentPath);
+                      if (n && n.type === 'folder' && !n.isLoaded) {
+                        await workspace.loadDirectory(currentPath);
+                      }
+                    }
+                    workspace.revealNode(favPath);
+                    const target = workspace.findNode(favPath);
+                    if (target) {
+                      if (target.type !== 'folder') {
+                        openFile(target);
+                      } else {
+                        refresh();
+                      }
+                    } else {
+                      pushNotification?.('File not found in workspace.', 'warning');
+                    }
+                  }}
                   onRemove={() => {
                     if (updateSetting) {
                       updateSetting('explorer.favorites', favorites.filter(p => p !== favPath));
@@ -1750,6 +1782,7 @@ export default function FilePioneer({
         if (contextMenu.node?.path !== 'root') {
           items.push({ label: 'Copy Path', icon: 'fa-regular fa-clipboard', onClick: () => handleContextAction('copy-path') });
           items.push({ label: 'Copy Relative Path', icon: 'fa-solid fa-link', onClick: () => handleContextAction('copy-relative-path') });
+          items.push({ label: 'Copy Name', icon: 'fa-solid fa-i-cursor', onClick: () => handleContextAction('copy-name') });
           if (workspace.adapter === 'tauri') {
             items.push({ separator: true });
             items.push({ label: 'Reveal in File Explorer', icon: 'fa-solid fa-arrow-up-right-from-square', onClick: () => handleContextAction('reveal-in-explorer') });

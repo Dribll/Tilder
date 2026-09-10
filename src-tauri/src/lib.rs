@@ -549,13 +549,20 @@ fn desktop_read_dir(path: String) -> Result<Vec<DesktopTreeNode>, String> {
             is_dir,
             size,
             modified,
-            children: if is_dir { Some(vec![]) } else { None },
+            // Return the folder subtree with the entry so the desktop Explorer
+            // can render its contents immediately instead of depending on a
+            // second lazy-read request after the click.
+            children: if is_dir {
+                Some(read_tree_recursive(&entry.path(), true).unwrap_or_default())
+            } else {
+                None
+            },
         });
     }
     Ok(children)
 }
 
-/// Alias for `desktop_read_dir` — the Explorer component invokes this name.
+/// Alias for `desktop_read_dir` â the Explorer component invokes this name.
 #[tauri::command]
 fn list_directory(path: String) -> Result<Vec<DesktopTreeNode>, String> {
     desktop_read_dir(path)
@@ -566,10 +573,20 @@ fn reveal_in_explorer(path: String) -> Result<(), String> {
     let target = path.trim();
     #[cfg(target_os = "windows")]
     {
-        Command::new("explorer")
-            .args(["/select,", target])
-            .spawn()
-            .map_err(|e| e.to_string())?;
+        let win_path = target.replace('/', "\\");
+        let p = std::path::Path::new(&win_path);
+        if p.is_dir() {
+            Command::new("explorer")
+                .arg(&win_path)
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        } else {
+            use std::os::windows::process::CommandExt;
+            Command::new("explorer")
+                .raw_arg(format!("/select,\"{}\"", win_path))
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        }
     }
     #[cfg(target_os = "macos")]
     {

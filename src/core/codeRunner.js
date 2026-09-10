@@ -97,6 +97,16 @@ export async function runCodeLocally({ name, language, source }) {
 
 export function getRunCommandForTab(tab, runtimes, cwd) {
   if (!tab || !tab.name) return null;
+
+  const getRuntimeExecutable = (runtime, fallback) => {
+    const candidate = typeof runtime === 'string'
+      ? runtime
+      : runtime?.executable || runtime?.path || runtime?.command;
+    const value = String(candidate || fallback || '').trim();
+    if (!value) return '';
+    return /\s/.test(value) ? `"${value.replace(/"/g, '\\"')}"` : value;
+  };
+  const availableRuntimes = runtimes || {};
   
   const ext = tab.name.split('.').pop().toLowerCase();
   let lang = languageIdToCommandLang(tab.language) || languageIdToCommandLang(ext) || ext;
@@ -136,39 +146,39 @@ export function getRunCommandForTab(tab, runtimes, cwd) {
   let runCommand = null;
   switch (lang) {
     case 'python':
-      runCommand = runtimes.python ? `${runtimes.python.executable} -u "${fileName}"` : `python -u "${fileName}"`;
+      runCommand = `${getRuntimeExecutable(availableRuntimes.python, 'python')} -u "${fileName}"`;
       break;
     case 'javascript':
     case 'node':
-      runCommand = runtimes.node ? `${runtimes.node.executable} "${fileName}"` : `node "${fileName}"`;
+      runCommand = `${getRuntimeExecutable(availableRuntimes.node, 'node')} "${fileName}"`;
       break;
     case 'typescript':
       runCommand = `npx ts-node "${fileName}"`;
       break;
     case 'java':
-      if (runtimes.javac && runtimes.java) {
-        runCommand = `${runtimes.javac.executable} "${fileName}" && ${runtimes.java.executable} "${fileNoExt}"`;
+      if (availableRuntimes.javac || availableRuntimes.java) {
+        runCommand = `${getRuntimeExecutable(availableRuntimes.javac, 'javac')} "${fileName}" && ${getRuntimeExecutable(availableRuntimes.java, 'java')} "${fileNoExt}"`;
       } else {
         runCommand = `javac "${fileName}" && java "${fileNoExt}"`;
       }
       break;
     case 'rust':
-      runCommand = runtimes.rust 
-        ? `${runtimes.rust.executable} "${fileName}" -o "${fileNoExt}${exeExt}" && .\\"${fileNoExt}${exeExt}"`
+      runCommand = availableRuntimes.rust
+        ? `${getRuntimeExecutable(availableRuntimes.rust, 'rustc')} "${fileName}" -o "${fileNoExt}${exeExt}" && .\\"${fileNoExt}${exeExt}"`
         : `rustc "${fileName}" -o "${fileNoExt}${exeExt}" && .\\"${fileNoExt}${exeExt}"`;
       break;
     case 'c':
-      runCommand = runtimes.gcc
-        ? `${runtimes.gcc.executable} "${fileName}" -o "${fileNoExt}${exeExt}" && .\\"${fileNoExt}${exeExt}"`
+      runCommand = availableRuntimes.gcc
+        ? `${getRuntimeExecutable(availableRuntimes.gcc, 'gcc')} "${fileName}" -o "${fileNoExt}${exeExt}" && .\\"${fileNoExt}${exeExt}"`
         : `gcc "${fileName}" -o "${fileNoExt}${exeExt}" && .\\"${fileNoExt}${exeExt}"`;
       break;
     case 'cpp':
-      runCommand = runtimes['g++']
-        ? `${runtimes['g++'].executable} "${fileName}" -o "${fileNoExt}${exeExt}" && .\\"${fileNoExt}${exeExt}"`
+      runCommand = availableRuntimes['g++']
+        ? `${getRuntimeExecutable(availableRuntimes['g++'], 'g++')} "${fileName}" -o "${fileNoExt}${exeExt}" && .\\"${fileNoExt}${exeExt}"`
         : `g++ "${fileName}" -o "${fileNoExt}${exeExt}" && .\\"${fileNoExt}${exeExt}"`;
       break;
     case 'go':
-      runCommand = runtimes.go ? `${runtimes.go.executable} run "${fileName}"` : `go run "${fileName}"`;
+      runCommand = `${getRuntimeExecutable(availableRuntimes.go, 'go')} run "${fileName}"`;
       break;
     case 'exe':
       runCommand = `.\\"${fileName}\\"`;

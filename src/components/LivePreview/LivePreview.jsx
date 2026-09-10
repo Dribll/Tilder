@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function LivePreview({ isOpen, htmlDocument, width, onRefresh, onOpenExternal, onClose }) {
+export default function LivePreview({ isOpen, htmlDocument, width, onRefresh, onOpenExternal, onOpenInBrowser, onClose }) {
   if (!isOpen) {
     return null;
   }
@@ -16,6 +16,16 @@ export default function LivePreview({ isOpen, htmlDocument, width, onRefresh, on
           <button type="button" className="live-preview-btn" onClick={onRefresh} title="Refresh Preview">
             <span><i className="fa-solid fa-rotate-right"></i></span>
           </button>
+          {onOpenInBrowser ? (
+            <button
+              type="button"
+              className="live-preview-btn"
+              onClick={onOpenInBrowser}
+              title="Open in Chrome/Edge (with Pulse Lens auto-connected)"
+            >
+              <span><i className="fa-solid fa-globe"></i></span>
+            </button>
+          ) : null}
           <button type="button" className="live-preview-btn" onClick={onOpenExternal} title="Open In New Tab">
             <span><i className="fa-solid fa-up-right-from-square"></i></span>
           </button>

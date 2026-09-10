@@ -114,7 +114,53 @@ const PANEL_VIEWS = [
   { id: 'terminal', label: 'Terminal' },
   { id: 'tasks', label: 'Tasks' },
   { id: 'ports', label: 'Ports' },
+  { id: 'pulseLens', label: 'PULSE LENS' },
 ];
+
+
+function PulseLensLogViewer({ logs }) {
+  if (!logs || !logs.length) {
+    return <div className="bottom-panel-empty">No Pulse Lens output.</div>;
+  }
+  return (
+    <div className="bottom-panel-log-list" style={{ userSelect: 'text' }}>
+      <table className="pulse-lens-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid var(--vscode-panel-border, #444)', height: '24px' }}>
+            <th style={{ padding: '0 8px', width: '60%' }}>ENTRIES</th>
+            <th style={{ padding: '0 8px', width: '40%' }}>DETAILS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {logs.map((log) => {
+            const date = new Date(log.timestamp);
+            const timeStr = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}.${date.getMilliseconds().toString().padStart(3, '0')}`;
+            const colorMap = {
+              log: 'var(--vscode-debugConsole-infoForeground, #75beff)',
+              error: 'var(--vscode-debugConsole-errorForeground, #f48771)',
+              warn: 'var(--vscode-debugConsole-warningForeground, #cca700)',
+              info: 'var(--vscode-debugConsole-infoForeground, #75beff)'
+            };
+            const color = colorMap[log.type] || colorMap.log;
+
+            return (
+              <tr key={log.id} style={{ borderBottom: '1px solid var(--vscode-panel-border, rgba(68, 68, 68, 0.4))' }}>
+                <td style={{ padding: '4px 8px', fontFamily: 'monospace', color }}>
+                  <span style={{ color: '#888', marginRight: '8px' }}>[{timeStr}]</span>
+                  {log.msg}
+                  {log.count > 1 && <span style={{ marginLeft: '8px', padding: '0 4px', background: '#444', borderRadius: '8px', fontSize: '11px', color: '#fff' }}>x{log.count}</span>}
+                </td>
+                <td style={{ padding: '4px 8px', color: '#ccc' }}>
+                  {log.file}:{log.line}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 function BottomPanelTabs({ activeView, onChangeView }) {
   return (
@@ -314,11 +360,11 @@ function TasksView({ onRunTask, workspace }) {
   }, [workspace]);
 
   if (loading) {
-    return <div className="bottom-panel-empty"><i className="fa-solid fa-spinner fa-spin" style={{marginRight: '8px'}}></i>Loading tasks...</div>;
+    return <div key="loading" className="bottom-panel-empty"><i className="fa-solid fa-spinner fa-spin" style={{marginRight: '8px'}}></i>Loading tasks...</div>;
   }
 
   if (tasks.length === 0) {
-    return <div className="bottom-panel-empty">No tasks found in the workspace. (e.g. package.json scripts)</div>;
+    return <div key="empty" className="bottom-panel-empty">No tasks found in the workspace. (e.g. package.json scripts)</div>;
   }
 
   return (
@@ -371,12 +417,15 @@ function PortsView({ ports, onForwardPort, onRemovePort, onOpenBrowser, onUpdate
   const [showInput, setShowInput] = React.useState(false);
   const [portInput, setPortInput] = React.useState('');
   const [descInput, setDescInput] = React.useState('');
+  const [showCredentials, setShowCredentials] = React.useState(false);
+  const [customUser, setCustomUser] = React.useState('tilder');
+  const [customPass, setCustomPass] = React.useState('tilder');
 
   function handleSubmit(e) {
     e.preventDefault();
     const num = parseInt(portInput, 10);
     if (!num || num < 1 || num > 65535) return;
-    onForwardPort?.(num, descInput.trim() || `Port ${num}`);
+    onForwardPort?.(num, descInput.trim() || `Port ${num}`, 'public', customUser.trim() || 'tilder', customPass.trim() || 'tilder');
     setPortInput('');
     setDescInput('');
     setShowInput(false);
@@ -413,6 +462,37 @@ function PortsView({ ports, onForwardPort, onRemovePort, onOpenBrowser, onUpdate
             value={descInput}
             onChange={(e) => setDescInput(e.target.value)}
           />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button
+              type="button"
+              className="ports-action-btn"
+              style={{ fontSize: 11, padding: '2px 8px', opacity: 0.75 }}
+              onClick={() => setShowCredentials(s => !s)}
+            >
+              <i className="fa-solid fa-key" style={{ marginRight: 4 }} />
+              {showCredentials ? 'Hide Credentials' : 'Set Private Credentials'}
+            </button>
+          </div>
+          {showCredentials && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                className="ports-input"
+                placeholder="Username (default: tilder)"
+                value={customUser}
+                onChange={(e) => setCustomUser(e.target.value)}
+                style={{ flex: 1, minWidth: 120 }}
+              />
+              <input
+                type="password"
+                className="ports-input"
+                placeholder="Password (default: tilder)"
+                value={customPass}
+                onChange={(e) => setCustomPass(e.target.value)}
+                style={{ flex: 1, minWidth: 120 }}
+              />
+            </div>
+          )}
           <button type="submit" className="ports-action-btn primary">Forward</button>
           <button type="button" className="ports-action-btn" onClick={() => setShowInput(false)}>Cancel</button>
         </form>
@@ -486,7 +566,7 @@ function PortsView({ ports, onForwardPort, onRemovePort, onOpenBrowser, onUpdate
                       const updated = ports.map((p) => p.port === entry.port ? { ...p, visibility: newVis } : p);
                       if (onUpdatePort) onUpdatePort(updated);
                       // Restart the tunnel with the new visibility
-                      if (onForwardPort) onForwardPort(entry.port, entry.description, newVis);
+                      if (onForwardPort) onForwardPort(entry.port, entry.description, newVis, entry.username || 'tilder', entry.password || 'tilder');
                     }}
                   >
                     <option value="public">Public</option>
@@ -573,6 +653,11 @@ function TerminalPane({
       return undefined;
     }
 
+    // Refs to hold event handlers/hostEl so cleanup closure can access them
+    const _hostElRef = { current: null };
+    const _contextMenuRef = { current: null };
+    const _auxClickRef = { current: null };
+
     const initTerminal = () => {
       if (!hostRef.current) return;
 
@@ -591,6 +676,9 @@ function TerminalPane({
         allowTransparency: true,
         allowProposedApi: true,
         windowsMode: true,
+        smoothScrollDuration: 0,
+        fastScrollModifier: 'alt',
+        rightClickSelectsWord: false,
         theme: {
           background: 'transparent',
           foreground: '#ecf1ff',
@@ -637,7 +725,7 @@ function TerminalPane({
                 end: { x: match.index + match[0].length, y: bufferLineNumber }
               },
               text: match[0],
-              activate: (e, text) => window.open(text, '_blank')
+              activate: (e, text) => { if (e.ctrlKey || e.metaKey) handleOpenBrowser(text); }
             });
           }
 
@@ -669,6 +757,90 @@ function TerminalPane({
       terminal.open(hostRef.current);
       terminalRef.current = terminal;
       fitAddonRef.current = fitAddon;
+
+      // ─── Fast Keyboard Shortcuts (Ctrl+C / Ctrl+V / Ctrl+Shift+C / Ctrl+Shift+V) ───
+      terminal.attachCustomKeyEventHandler((event) => {
+        if (event.type !== 'keydown') return true;
+
+        const isCtrl = event.ctrlKey || event.metaKey;
+        const isShift = event.shiftKey;
+        const key = event.key.toLowerCase();
+
+        // Ctrl+C / Ctrl+Shift+C: Copy selected text if selection exists
+        if (isCtrl && key === 'c') {
+          if (terminal.hasSelection()) {
+            const sel = terminal.getSelection();
+            navigator.clipboard.writeText(sel).catch(() => {});
+            return false; // don't send SIGINT ^C to shell if user wanted to copy
+          }
+          if (isShift) return false;
+          return true; // if no selection, let ^C cancel current running command
+        }
+
+        // Ctrl+V / Ctrl+Shift+V: Paste from clipboard
+        if (isCtrl && key === 'v') {
+          navigator.clipboard.readText().then((text) => {
+            if (text) {
+              if (bridgeReadyRef.current) {
+                socketRef.current?.emit('terminal:input', text);
+              } else {
+                terminal.write(text);
+              }
+            }
+          }).catch(() => {});
+          return false;
+        }
+
+        // Ctrl+A: Select all
+        if (isCtrl && key === 'a' && !isShift) {
+          terminal.selectAll();
+          return false;
+        }
+
+        return true;
+      });
+
+      // ─── Mouse QuickEdit Mode: Right-Click Copy & Paste ───
+      // Store handlers in outer refs so cleanup closure can access them
+      _hostElRef.current = hostRef.current;
+      _contextMenuRef.current = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (terminal.hasSelection()) {
+          const sel = terminal.getSelection();
+          try {
+            await navigator.clipboard.writeText(sel);
+            terminal.clearSelection();
+          } catch (err) {}
+        } else {
+          try {
+            const text = await navigator.clipboard.readText();
+            if (text) {
+              if (bridgeReadyRef.current) {
+                socketRef.current?.emit('terminal:input', text);
+              } else {
+                terminal.write(text);
+              }
+            }
+          } catch (err) {}
+        }
+      };
+
+      _auxClickRef.current = async (e) => {
+        if (e.button === 1) {
+          e.preventDefault();
+          try {
+            const text = await navigator.clipboard.readText();
+            if (text && bridgeReadyRef.current) {
+              socketRef.current?.emit('terminal:input', text);
+            }
+          } catch (err) {}
+        }
+      };
+
+      _hostElRef.current?.addEventListener('contextmenu', _contextMenuRef.current);
+      _hostElRef.current?.addEventListener('auxclick', _auxClickRef.current);
       
       // Delay measurement slightly to ensure font is active in DOM
       const forceFit = () => {
@@ -808,6 +980,11 @@ function TerminalPane({
     initTerminal();
 
     return () => {
+      _hostElRef.current?.removeEventListener('contextmenu', _contextMenuRef.current);
+      _hostElRef.current?.removeEventListener('auxclick', _auxClickRef.current);
+      _hostElRef.current = null;
+      _contextMenuRef.current = null;
+      _auxClickRef.current = null;
       resizeObserverRef.current?.disconnect();
       socketRef.current?.disconnect();
       terminalRef.current?.dispose();
@@ -936,6 +1113,7 @@ export default function Terminal({
   diagnostics = [],
   outputEntries = [],
   debugConsoleEntries = [],
+  pulseLensLogs = [],
   onEvaluateDebug,
   debugSession,
   onClearDebugConsole,
@@ -1010,11 +1188,11 @@ export default function Terminal({
     return () => clearInterval(interval);
   }, [activeView, hasConnecting]);
 
-  function startTunnel(port, description, visibility) {
+  function startTunnel(port, description, visibility, username = 'tilder', password = 'tilder') {
     // Optimistically add/update port in UI as connecting
     setForwardedPorts((prev) => {
       const existing = prev.find((e) => e.port === port);
-      const newEntry = { port, description, visibility, status: 'connecting', url: null };
+      const newEntry = { port, description, visibility, status: 'connecting', url: null, username, password };
       if (existing) {
         return prev.map((e) => e.port === port ? newEntry : e);
       }
@@ -1024,7 +1202,7 @@ export default function Terminal({
     apiFetch('/api/ports', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ port, description, visibility }),
+      body: JSON.stringify({ port, description, visibility, username, password }),
     })
       .then(async (res) => {
         if (!res.ok) {
@@ -1047,8 +1225,8 @@ export default function Terminal({
       });
   }
 
-  function handleForwardPort(port, description, visibility = 'public') {
-    startTunnel(port, description, visibility);
+  function handleForwardPort(port, description, visibility = 'public', username = 'tilder', password = 'tilder') {
+    startTunnel(port, description, visibility, username, password);
   }
 
   function handleRemovePort(port) {
@@ -1060,7 +1238,14 @@ export default function Terminal({
   }
 
   function handleOpenBrowser(url) {
-    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    if (!url) return;
+    apiFetch('/api/open-link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    }).catch(() => {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    });
   }
 
   useEffect(() => {
@@ -1488,6 +1673,11 @@ export default function Terminal({
             />
           </div>
         ) : null}
+        {activeView === 'pulseLens' ? (
+          <div className="bottom-panel-content" style={{ padding: 0, overflow: 'auto' }}>
+            <PulseLensLogViewer logs={pulseLensLogs} />
+          </div>
+        ) : null}
         {activeView === 'ports' ? (
           <div className="bottom-panel-content ports-panel-content">
             <PortsView
@@ -1536,3 +1726,9 @@ export default function Terminal({
     </div>
   );
 }
+
+
+
+
+
+

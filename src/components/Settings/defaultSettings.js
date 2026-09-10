@@ -552,6 +552,15 @@ const defaultSettings = {
       }
     }
   },
+  pulseLens: {
+    enabled: true,
+    showHoverTooltips: true,
+    logLevel: 'info',
+    networkLogging: true,
+    predictiveLoggingEnabled: false,
+    showWelcomeMessageInTools: true,
+    allowedHosts: 'localhost, 127.0.0.1'
+  },
   zenMode: {
     fullScreen: true,
     centerLayout: true,

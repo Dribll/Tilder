@@ -1,0 +1,4 @@
+d:\Tilder - Copy\desktop-app\src-tauri\windows\monitor_bin\appsettings.Development.json
+d:\Tilder - Copy\desktop-app\src-tauri\windows\monitor_bin\appsettings.json
+d:\Tilder - Copy\desktop-app\src-tauri\windows\monitor_bin\TilderMonitorService.pdb
+d:\Tilder - Copy\desktop-app\src-tauri\windows\monitor_bin\TilderMonitorService.exe

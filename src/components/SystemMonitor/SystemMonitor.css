@@ -275,3 +275,173 @@
 .tunnel-link:hover {
   text-decoration: underline;
 }
+
+/* NEW SYSTEM MONITOR STYLES */
+
+.temp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ccc;
+}
+.temp-cool { background: rgba(56, 239, 125, 0.15); color: #38ef7d; }
+.temp-warm { background: rgba(255, 171, 0, 0.15); color: #ffab00; }
+.temp-hot { background: rgba(255, 95, 95, 0.15); color: #ff5f5f; }
+
+.cpu-cores-heatmap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+.core-box {
+  flex: 1 1 calc(12.5% - 4px);
+  min-width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.3s ease;
+}
+
+.multi-panel-card {
+  display: flex;
+  flex-direction: column;
+}
+.cooling-power-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex-grow: 1;
+}
+
+.fans-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+.fan-gauge-box {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.fan-icon-spin {
+  font-size: 1.5rem;
+  color: #00d2ff;
+  animation: spin 3s linear infinite;
+}
+@keyframes spin { 100% { transform: rotate(360deg); } }
+.fan-details {
+  display: flex;
+  flex-direction: column;
+}
+.fan-rpm {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #fff;
+}
+.rpm-unit { font-size: 0.65rem; color: rgba(255, 255, 255, 0.5); }
+.fan-name { font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px; }
+
+.battery-box {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.battery-icon {
+  font-size: 1.5rem;
+  color: #38ef7d;
+}
+.batt-pct { font-size: 1.1rem; font-weight: 700; color: #fff; }
+.batt-status { font-size: 0.8rem; color: rgba(255, 255, 255, 0.7); }
+
+.storage-card-full {
+  grid-column: 1 / -1;
+}
+.storage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+.storage-drive-card {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.storage-drive-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.drive-letter-box {
+  background: rgba(141, 90, 255, 0.2);
+  color: #a89eff;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+.drive-info-stack {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  overflow: hidden;
+}
+.drive-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.drive-type {
+  font-size: 0.7rem;
+  padding: 1px 4px;
+  border-radius: 4px;
+  width: max-content;
+  margin-top: 2px;
+}
+.badge-nvme { background: rgba(56, 239, 125, 0.15); color: #38ef7d; }
+.badge-hdd { background: rgba(0, 210, 255, 0.15); color: #00d2ff; }
+
+.storage-progress-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.storage-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+.storage-bar-bg {
+  background: rgba(0, 0, 0, 0.3);
+  height: 6px;
+}
+
+.no-data-sm {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.85rem;
+  font-style: italic;
+  padding: 10px 0;
+}

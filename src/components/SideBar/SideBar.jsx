@@ -1,14 +1,23 @@
 import React, { useState, useRef } from "react";
 
 const SIDEBAR_ORDER_KEY = 'tilder-sidebar-order';
-const DEFAULT_ORDER = ['explorer', 'search', 'extensions', 'debug', 'tests', 'git', 'github', 'backpack', 'hardware'];
+const DEFAULT_ORDER = ['explorer', 'search', 'codesearch', 'extensions', 'debug', 'tests', 'git', 'github', 'backpack', 'hardware'];
+
+function normalizeSidebarOrder(savedOrder) {
+  if (!Array.isArray(savedOrder)) {
+    return DEFAULT_ORDER;
+  }
+
+  // Keep old persisted layouts compatible while removing stale or duplicate ids.
+  return Array.from(new Set([...savedOrder.filter((id) => DEFAULT_ORDER.includes(id)), ...DEFAULT_ORDER]));
+}
 
 export default function SideBar(props) {
   const [order, setOrder] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(SIDEBAR_ORDER_KEY));
       if (Array.isArray(saved) && saved.length >= DEFAULT_ORDER.length - 1) {
-        return Array.from(new Set([...saved, ...DEFAULT_ORDER]));
+        return normalizeSidebarOrder(saved);
       }
     } catch {}
     return DEFAULT_ORDER;

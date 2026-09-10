@@ -13,14 +13,18 @@
     "security": {
       "assetProtocol": {
         "enable": true,
-        "scope": ["**/*"]
+        "scope": [
+          "**/*"
+        ]
       },
       "csp": null
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "windows": {
       "nsis": {
         "installMode": "perMachine",
@@ -28,7 +32,9 @@
         "compression": "none"
       }
     },
-    "externalBin": ["binaries/tilder-node"],
+    "externalBin": [
+      "binaries/tilder-node"
+    ],
     "resources": {
       "resources/app/.env": "app/.env",
       "resources/app/server.js": "app/server.js",
@@ -41,7 +47,7 @@
       "resources/app/shared/": "app/shared/",
       "resources/app/src/": "app/src/",
       "resources/app/node_modules/": "app/node_modules/",
-      "windows/monitor_bin/TilderMonitorService.exe": "monitor_bin/TilderMonitorService.exe"
+      "windows/monitor_bin/": "monitor_bin/"
     },
     "icon": [
       "icons/32x32.png",

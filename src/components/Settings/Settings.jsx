@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import defaultSettings, { mergeWithDefaultSettings } from './defaultSettings.js';
 
 const SECTION_ICONS = {
+    'pulse-lens': { icon: 'fa-solid fa-bolt', color: 'linear-gradient(135deg, #FFB300, #e6a200)' },
     'text-editor': { icon: 'fa-solid fa-font', color: 'linear-gradient(135deg, #007AFF, #0051e5)' },
     'cursor-selection': { icon: 'fa-solid fa-i-cursor', color: 'linear-gradient(135deg, #5856D6, #413dcc)' },
     'layout-folding': { icon: 'fa-solid fa-layer-group', color: 'linear-gradient(135deg, #FF9500, #e57d00)' },
@@ -1537,7 +1538,38 @@ const SECTION_DEFINITIONS = [
                 description: 'Enables workspace trust to prevent automatic code execution in untrusted folders.'
             }
         ]
-    }
+    },
+    {
+        id: 'pulse-lens',
+        title: 'Pulse Lens',
+        description: 'Configure Pulse Lens inline logs and bottom panel behavior.',
+        items: [
+            {
+                id: 'plEnabled',
+                path: 'pulseLens.enabled',
+                label: 'Enable Pulse Lens',
+                type: 'boolean',
+                description: 'Enables or disables Pulse Lens features globally.',
+                keywords: ['console ninja', 'inline logs']
+            },
+            {
+                id: 'plHover',
+                path: 'pulseLens.showHoverTooltips',
+                label: 'Show Hover Tooltips',
+                type: 'boolean',
+                description: 'Show detailed hover tooltips on inline logs.',
+                keywords: ['hover', 'tooltip']
+            },
+            {
+                id: 'plNetwork',
+                path: 'pulseLens.networkLogging',
+                label: 'Network Logging',
+                type: 'boolean',
+                description: 'Capture detailed network requests.',
+                keywords: ['network', 'fetch', 'xhr']
+            }
+        ]
+    },
 ];
 
 function getValueByPath(source, path) {

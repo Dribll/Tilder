@@ -1,0 +1,42 @@
+
+.pl-inline-container {
+  display: flex;
+  align-items: center;
+  margin-left: 10px;
+  pointer-events: none;
+  font-family: var(--vscode-editor-font-family, Consolas, monospace);
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
+.pl-inline-widget {
+  background: var(--vscode-editor-background, #1e1e1e);
+  padding: 0 4px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0.85;
+}
+
+.pl-icon {
+  font-size: 0.9em;
+}
+
+.pl-count {
+  background: var(--vscode-badge-background, #4d4d4d);
+  color: var(--vscode-badge-foreground, #ffffff);
+  padding: 1px 4px;
+  border-radius: 10px;
+  font-size: 0.85em;
+  font-weight: bold;
+}
+
+.pl-sep {
+  color: var(--vscode-editorLineNumber-foreground, #858585);
+  margin: 0 4px;
+}
+
+.pl-msg {
+  font-style: italic;
+}
