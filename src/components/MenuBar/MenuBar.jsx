@@ -143,7 +143,7 @@ function MenuBar(props) {
                   <li onClick={() => { props.saveAsActiveFile(); closeAll(); }}>Save As</li>
                   <li onClick={() => { props.saveWorkspace(); closeAll(); }}>Save Workspace</li>
                   <li onClick={() => { props.saveWorkspaceAs(); closeAll(); }}>Save Workspace As</li>
-                  <li onClick={closeAll}>Change Save Root Directory</li>
+                  <li onClick={() => { props.triggerOpenFolder?.(); closeAll(); }}>Change Save Root Directory</li>
                   <hr className="dropdowncontent-hr" />
                   <li onClick={quit}>Quit Editor</li>
                 </ul>
@@ -186,7 +186,7 @@ function MenuBar(props) {
               </span>
               <div className="dropdown-content">
                 <li onClick={() => { props.openCommandPalette(); closeAll(); }}>Command Palette</li>
-                <li onClick={closeAll}>Open View</li>
+                <li onClick={() => { props.openCommandPalette('view '); closeAll(); }}>Open View</li>
                 <hr className="dropdowncontent-hr" />
                 <li onClick={() => { props.openSettings(); closeAll(); }}>Settings</li>
                 <li onClick={() => { props.openKeyboardShortcuts(); closeAll(); }}>Keyboard Shortcuts</li>
@@ -272,9 +272,14 @@ function MenuBar(props) {
               <div className="dropdown-content">
                 <li onClick={() => { props.openWelcome?.(); closeAll(); }}>Welcome</li>
                 <hr className="dropdowncontent-hr" />
+                <li onClick={() => { window.open('https://github.com/Dribll/Tilder/wiki', '_blank'); closeAll(); }}>Documentation</li>
+                <li onClick={() => { window.open('https://github.com/Dribll/Tilder/releases', '_blank'); closeAll(); }}>Release Notes</li>
+                <li onClick={() => { window.open('https://github.com/Dribll/Tilder/issues/new', '_blank'); closeAll(); }}>Report Issue</li>
+                <hr className="dropdowncontent-hr" />
                 <li onClick={() => { props.checkForUpdates?.(); closeAll(); }}>Check for Updates...</li>
                 <hr className="dropdowncontent-hr" />
-                <li onClick={() => { props.toggleInfoDisplay(); closeAll(); }}>About</li>
+                <li onClick={() => { props.toggleDevTools?.(); closeAll(); }}>Toggle Developer Tools</li>
+                <li onClick={() => { props.toggleInfoDisplay(); closeAll(); }}>About Tilder</li>
               </div>
             </div>
           </div>

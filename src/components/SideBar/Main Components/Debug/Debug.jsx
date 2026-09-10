@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import CodeViz from '../../../CodeViz/CodeViz.jsx';
 import { debugApi } from '../../../../core/debugApi.js';
+import { desktopExecuteCommand } from '../../../../core/desktopFileApi.js';
 
 // ─── Section Wrapper ─────────────────────────────────────────────────────────
 
@@ -269,11 +270,38 @@ export default function Debug({
 
     if (command && window.tilderExecuteTerminalCommand) {
       setTestStates(prev => ({ ...prev, [test.name]: 'running' }));
-      window.tilderExecuteTerminalCommand(command);
-      
-      setTimeout(() => {
-        setTestStates(prev => ({ ...prev, [test.name]: Math.random() > 0.15 ? 'passed' : 'failed' }));
-      }, 4000);
+
+      // Try real execution first via Tauri desktop API
+      const wsRoot = window.__tilderWorkspaceRoot || null;
+      const parts = command.split(' ');
+      const bin = parts[0];
+      const args = parts.slice(1);
+
+      desktopExecuteCommand(bin, args, wsRoot)
+        .then(result => {
+          const passed = (result?.exitCode ?? result?.code ?? 0) === 0;
+          setTestStates(prev => ({ ...prev, [test.name]: passed ? 'passed' : 'failed' }));
+        })
+        .catch(() => {
+          // Fallback: send to terminal and detect via output if desktop API unavailable
+          window.tilderExecuteTerminalCommand(command);
+          // Listen for terminal exit signal (custom event dispatched by terminal on command finish)
+          const handler = (e) => {
+            if (e.detail?.command === command || e.detail?.exitCode !== undefined) {
+              window.removeEventListener('tilder:terminal-command-done', handler);
+              setTestStates(prev => ({ ...prev, [test.name]: (e.detail.exitCode === 0) ? 'passed' : 'failed' }));
+            }
+          };
+          window.addEventListener('tilder:terminal-command-done', handler);
+          // Safety timeout: if no event after 30s mark as unknown
+          setTimeout(() => {
+            window.removeEventListener('tilder:terminal-command-done', handler);
+            setTestStates(prev => {
+              if (prev[test.name] === 'running') return { ...prev, [test.name]: 'unknown' };
+              return prev;
+            });
+          }, 30000);
+        });
     }
   };
 

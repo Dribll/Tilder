@@ -1,0 +1,143 @@
+app.get('/pulse-lens.js', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Content-Type', 'application/javascript');
+  const serverPort = port;
+  res.send(`(function(){
+  if(window.__PULSE_LENS_INITIALIZED) return;
+  window.__PULSE_LENS_INITIALIZED = true;
+  var _url = 'http://localhost:${serverPort}/api/pulse-lens/log';
+  var _rawFile = (document.currentScript && document.currentScript.getAttribute('data-file')) || window.location.pathname || '';
+  var _file = _rawFile.replace(/^\\/([a-zA-Z]:)/, '$1').replace(/\\\\/g, '/');
+
+  var _orig = {
+    log: console.log,
+    error: console.error,
+    warn: console.warn,
+    info: console.info
+  };
+
+  window.__pulse = function(line, method) {
+    var args = Array.prototype.slice.call(arguments, 2);
+    try {
+      if (_orig[method]) _orig[method].apply(console, args);
+      else console.log.apply(console, args);
+    } catch(e) {}
+
+    var msg = args.map(function(x){
+      if (typeof x === 'object') {
+        try { return JSON.stringify(x); } catch(e) { return String(x); }
+      }
+      return String(x);
+    }).join(' ');
+
+    try {
+      fetch(_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          msg: msg,
+          path: _file,
+          line: line,
+          isError: method === 'error',
+          method: method
+        })
+      }).catch(function(){});
+    } catch(e) {}
+  };
+
+  function wrap(m) {
+    return function() {
+      var args = Array.prototype.slice.call(arguments);
+      window.__pulse.apply(null, [1, m].concat(args));
+    };
+  }
+  console.log = wrap('log');
+  console.error = wrap('error');
+  console.warn = wrap('warn');
+  console.info = wrap('info');
+
+  window.addEventListener('error', function(evt) {
+    window.__pulse(evt.lineno || 1, 'error', evt.message || 'Script error');
+  });
+
+  window.addEventListener('unhandledrejection', function(evt) {
+    var reason = evt.reason ? (evt.reason.message || String(evt.reason)) : 'Unhandled Rejection';
+    window.__pulse(1, 'error', 'Unhandled Rejection: ' + reason);
+  });
+
+  console.log('[Pulse Lens] Connected to Tilder on port ${serverPort}');
+})();`);
+});
+
+// Live Server: instruments HTML with exact line numbers and serves to Chrome/Edge
+app.get('/live', async (req, res) => {
+  const targetPath = String(req.query.file || req.query.path || '').trim();
+  if (!targetPath) {
+    return res.status(400).send('Missing file parameter. Use /live?file=<absolute_or_relative_path>');
+  }
+
+  try {
+    const rawContent = await fs.readFile(targetPath, 'utf8');
+    const ext = path.extname(targetPath).toLowerCase();
+    
+    if (ext === '.html' || ext === '.htm') {
+      // Console Ninja-style Source Code Instrumentation
+      const rawLines = rawContent.split('\n');
+      const instrumentedLines = [];
+      for (let i = 0; i < rawLines.length; i++) {
+        const lineNum = i + 1;
+        const modified = rawLines[i].replace(/\bconsole\.(log|error|warn|info)\s*\(/g, (match, method) => {
+          return `__pulse(${lineNum}, '${method}', `;
+        });
+        instrumentedLines.push(modified);
+      }
+      let html = instrumentedLines.join('\n');
+
+      const injectedScript = `<script src="http://localhost:${port}/pulse-lens.js" data-file="${targetPath.replace(/\\/g, '/')}"></script>`;
+      if (html.includes('<head>')) {
+        html = html.replace('<head>', '<head>' + injectedScript);
+      } else if (html.includes('<body>')) {
+        html = html.replace('<body>', '<body>' + injectedScript);
+      } else {
+        html = injectedScript + html;
+      }
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(html);
+    }
+
+    const mimeTypes = {
+      '.css': 'text/css',
+      '.js': 'text/javascript',
+      '.mjs': 'text/javascript',
+      '.json': 'application/json',
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.svg': 'image/svg+xml'
+    };
+    res.setHeader('Content-Type', mimeTypes[ext] || 'text/plain; charset=utf-8');
+    res.send(rawContent);
+  } catch (err) {
+    res.status(404).send(`Could not read file at ${targetPath}: ${err.message}`);
+  }
+});
+
+app.use('/extensions-assets', express.static(extensionsAssetDir));
+app.use(express.static(distPath));
+
+app.use((_request, response) => {
+  response.sendFile(path.join(distPath, 'index.html'));
+});
+
+server.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') {
+    console.log(`Port ${port} is already in use. Assuming background service is running.`);
+    process.exit(0);
+  }
+});
+
+server.listen(port, () => {
+  console.log(`Tilder server running on http://localhost:${port}`);
+});
+
+

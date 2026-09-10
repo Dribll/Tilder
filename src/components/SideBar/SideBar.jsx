@@ -57,6 +57,13 @@ export default function SideBar(props) {
     } catch {}
   }
 
+  // Badge counts passed as props from App.jsx
+  const badges = {
+    git: props.gitChangesCount || 0,
+    debug: props.problemsCount || 0,
+    extensions: props.extensionUpdatesCount || 0,
+  };
+
   const iconDefs = {
     explorer: {
       show: props.showExplorer,
@@ -130,6 +137,7 @@ export default function SideBar(props) {
         {order.map((key, index) => {
           const def = iconDefs[key];
           if (!def || !def.show) return null;
+          const badgeCount = badges[key] || 0;
           return (
             <div
               key={key}
@@ -146,8 +154,13 @@ export default function SideBar(props) {
                 cursor: 'grab'
               }}
             >
-              <div title={def.title} id={def.id} className="sidebaricons" onClick={def.onClick}>
+              <div title={def.title} id={def.id} className="sidebaricons" onClick={def.onClick} style={{ position: 'relative' }}>
                 <span><i className={def.iconClass}></i></span>
+                {badgeCount > 0 && (
+                  <span className="sidebar-badge" aria-label={`${badgeCount} notifications`}>
+                    {badgeCount > 99 ? '99+' : badgeCount}
+                  </span>
+                )}
               </div>
               <span className="sidebarIconBar"></span>
             </div>
@@ -157,3 +170,4 @@ export default function SideBar(props) {
     </>
   );
 }
+

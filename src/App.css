@@ -10158,7 +10158,34 @@ nav {
 
     padding-bottom: 2px;
 
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    scroll-behavior: smooth;
+
 }
+
+.tabs-list:hover {
+    scrollbar-color: rgba(255,255,255,0.18) transparent;
+}
+
+.tabs-list::-webkit-scrollbar {
+    height: 3px;
+}
+
+.tabs-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.tabs-list::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 3px;
+}
+
+.tabs-list:hover::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.18);
+}
+
+
 
 
 
@@ -20171,4 +20198,62 @@ body[data-theme="tilder-tahoe"] .menubar-icon-btn i {
     color: #38e1e8;
     background: rgba(0, 151, 157, 0.25);
     border-color: rgba(0, 151, 157, 0.4);
+}
+
+/* ── Sidebar Activity Bar Badges ─────────────────────────────────────────── */
+.sidebar-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 10px;
+    background: #e8503a;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+    pointer-events: none;
+    z-index: 10;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+
+/* ── Pinned Tabs (VS Code Parity) ───────────────────────────────────────── */
+.tab-pinned {
+    min-width: 40px !important;
+    width: 40px !important;
+    flex: 0 0 40px;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+.tab-pinned .tab-name,
+.tab-pinned .tabPin {
+    display: none !important;
+}
+
+.tab-pinned .tab-file-icon {
+    font-size: 16px;
+    margin: 0;
+}
+
+.tab-pinned.active .tab-file-icon {
+    transform: scale(1.1);
+    transition: transform 0.1s ease;
+}
+
+.tab-file-icon {
+    margin-right: 6px;
+    display: inline-flex;
+    align-items: center;
+    font-size: 14px;
+}
+.tab-file-icon svg {
+    width: 1em;
+    height: 1em;
 }

@@ -298,6 +298,14 @@ function buildEditorOptions(settings, tab, wordBasedSuggestions) {
       indentation: guidesSettings.indentation !== false,
       bracketPairs: guidesSettings.bracketPairs !== false,
     },
+    inlayHints: {
+      enabled: settings?.inlayHints?.enabled !== false ? 'on' : 'off',
+      fontSize: settings?.inlayHints?.fontSize ?? 11,
+      fontFamily: settings?.inlayHints?.fontFamily ?? '',
+      padding: settings?.inlayHints?.padding !== false,
+    },
+    codeLens: settings?.codeLens !== false,
+    'semanticHighlighting.enabled': settings?.semanticHighlighting?.enabled !== false,
   };
 }
 

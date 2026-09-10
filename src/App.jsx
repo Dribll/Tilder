@@ -6850,6 +6850,12 @@ function App() {
           accountAvatarUrl={activeAccount?.avatarUrl || ''}
           accountDisplayName={activeAccount?.displayName || activeAccount?.username || activeAccount?.email || ''}
           accountProvider={activeAccountProvider}
+          toggleDevTools={async () => {
+            try {
+              const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+              getCurrentWebviewWindow().openDevtools?.();
+            } catch { /* web mode — DevTools via browser */ }
+          }}
         />
         ) : null}
         <div className="mainsect">

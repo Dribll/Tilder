@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("TilderMonitorService")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+71f44f912982c2d5ca0edc4073a8eaf46c5bb68e")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+82cfdfeec1df6681aafd111657a3bd22827f710b")]
 [assembly: System.Reflection.AssemblyProductAttribute("TilderMonitorService")]
 [assembly: System.Reflection.AssemblyTitleAttribute("TilderMonitorService")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

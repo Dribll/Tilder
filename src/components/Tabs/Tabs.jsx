@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 import { isDesktopRuntime } from '../../core/runtime.js';
+import { resolveFileIcon } from '../../core/iconTheme.js';
 
 
 
@@ -82,6 +83,16 @@ export default function Tabs({
 
   const colorMenuRef = useRef(null);
 
+  const tabsListRef = useRef(null);
+
+  // Auto-scroll active tab into view when switching tabs
+  useEffect(() => {
+    if (!tabsListRef.current) return;
+    const activeEl = tabsListRef.current.querySelector('.tab.active');
+    if (activeEl) {
+      activeEl.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+    }
+  }, [activeTabId]);
 
 
   useEffect(() => {
@@ -185,7 +196,7 @@ export default function Tabs({
       <div className="tabs" onDragEnd={clearDrop}>
 
         <div
-
+          ref={tabsListRef}
           className="tabs-list"
 
           onDragOver={(event) => event.preventDefault()}
@@ -210,73 +221,60 @@ export default function Tabs({
 
               {dropInsertBefore === index ? <div className="tab-drop-indicator" aria-hidden="true" /> : null}
 
-              <div
+              {(() => {
+                const iconDef = tab.name ? resolveFileIcon(tab.name) : null;
+                const IconComp = iconDef ? iconDef.Icon : null;
+                return (
+                  <div
+                    className={`tab ${tab.id === activeTabId ? 'active' : ''} ${tab.isPreview ? 'tab-preview' : ''} ${tab.colorLabel ? 'tab-has-color' : ''} ${tab.pinned ? 'tab-pinned' : ''}`}
+                    style={tab.colorLabel ? { '--tab-color-label': tab.colorLabel } : undefined}
+                    onClick={() => setActiveTab(tab.id)}
+                    onContextMenu={(e) => handleTabContextMenu(e, tab)}
+                    onMouseDown={(e) => {
+                      if (e.button === 1) {
+                        e.preventDefault();
+                        closeTab(tab.id);
+                      }
+                    }}
+                    title={tab.path || tab.name}
+                    draggable
+                    onDragStart={(event) => {
+                      onTabDragStart?.(tab.id, groupId, index);
+                      event.dataTransfer.setData('application/tilder-tab', tab.id);
+                      event.dataTransfer.effectAllowed = 'move';
+                    }}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      const before = event.clientX < rect.left + rect.width / 2;
+                      setDropInsertBefore(before ? index : index + 1);
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      const insert = dropInsertBefore != null ? dropInsertBefore : index + 1;
+                      onTabDrop?.(groupId, insert);
+                      clearDrop();
+                    }}
+                  >
+                    {tab.colorLabel ? (
+                      <span className="tab-color-dot" style={{ background: tab.colorLabel }} aria-hidden="true" />
+                    ) : null}
+                    
+                    {IconComp && (
+                      <span className="tab-file-icon" style={{ color: iconDef.color }}>
+                        <IconComp />
+                      </span>
+                    )}
 
-                className={`tab ${tab.id === activeTabId ? 'active' : ''} ${tab.isPreview ? 'tab-preview' : ''} ${tab.colorLabel ? 'tab-has-color' : ''}`}
+                    {!tab.pinned && <span className="tab-name">{tab.name}</span>}
 
-                style={tab.colorLabel ? { '--tab-color-label': tab.colorLabel } : undefined}
-
-                onClick={() => setActiveTab(tab.id)}
-
-                onContextMenu={(e) => handleTabContextMenu(e, tab)}
-
-                title={tab.name}
-
-                draggable
-
-                onDragStart={() => {
-
-                  onTabDragStart?.(tab.id, groupId, index);
-
-                }}
-
-                onDragOver={(event) => {
-
-                  event.preventDefault();
-
-                  event.stopPropagation();
-
-                  const rect = event.currentTarget.getBoundingClientRect();
-
-                  const before = event.clientX < rect.left + rect.width / 2;
-
-                  setDropInsertBefore(before ? index : index + 1);
-
-                }}
-
-                onDrop={(event) => {
-
-                  event.preventDefault();
-
-                  event.stopPropagation();
-
-                  const insert = dropInsertBefore != null ? dropInsertBefore : index + 1;
-
-                  onTabDrop?.(groupId, insert);
-
-                  clearDrop();
-
-                }}
-
-              >
-
-                {tab.colorLabel ? (
-
-                  <span className="tab-color-dot" style={{ background: tab.colorLabel }} aria-hidden="true" />
-
-                ) : null}
-
-                <span className="tab-name">{tab.name}</span>
-
-                {tab.pinned ? (
-
-                  <span className="tab-pin" title="Pinned tab">
-
-                    {'\uD83D\uDCCC'}
-
-                  </span>
-
-                ) : null}
+                    {tab.pinned ? (
+                      <span className="tab-pin" title="Pinned tab" style={{ display: 'none' }}>
+                        {'\uD83D\uDCCC'}
+                      </span>
+                    ) : null}
 
                 <span className={`tab-dirty ${tab.dirty ? 'visible' : ''}`}>{tab.dirty ? '*' : ''}</span>
 
@@ -325,6 +323,8 @@ export default function Tabs({
                 </button>
 
               </div>
+            );
+          })()}
 
             </React.Fragment>
 

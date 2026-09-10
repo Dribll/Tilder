@@ -676,13 +676,88 @@ export default function FilePioneer({
   const filteredNodes = useMemo(() => {
     const term = search.trim().toLowerCase();
 
+    // Build exclude matchers from settings
+    const excludePatterns = settings?.explorer?.exclude || [];
+    function isExcluded(name) {
+      if (!excludePatterns.length) return false;
+      return excludePatterns.some(pat => {
+        // Simple glob: **/name or *name or exact
+        const base = pat.replace(/^\*\*\//, '').replace(/^\*/, '');
+        return name === base || name.endsWith('/' + base);
+      });
+    }
+
+    const compactFolders = settings?.explorer?.compactFolders !== false;
+
+    // Compact single-child folder chains into one merged node
+    function compact(node) {
+      if (node.type !== 'folder' || !compactFolders) return node;
+      const kids = (node.children || []).filter(k => k?.name && !k.name.includes('.tildertrash_') && !isExcluded(k.name));
+      if (kids.length === 1 && kids[0].type === 'folder') {
+        const child = compact(kids[0]);
+        return {
+          ...child,
+          name: node.name + '/' + child.name,
+          path: child.path,
+          _compactedFrom: node.path,
+        };
+      }
+      return { ...node, children: kids.map(compact) };
+    }
+
     if (!term) {
+      const nestingEnabled = settings?.explorer?.fileNesting?.enabled === true;
+      const nestingPatterns = settings?.explorer?.fileNesting?.patterns || [
+        '${capture}.test.*', '${capture}.spec.*', '${capture}.css',
+        '${capture}.scss', '${capture}.less', '${capture}.d.ts',
+        '${capture}.map', '${capture}.min.*',
+      ];
+
+      function applyFileNesting(nodes) {
+        if (!nestingEnabled || !nodes?.length) return nodes;
+        const files = [];
+        const folders = [];
+        nodes.forEach(n => (n.type === 'folder' ? folders : files).push(n));
+
+        // Build a map from baseName -> primary file node
+        const primaries = new Map();
+        files.forEach(f => {
+          const dotIdx = f.name.indexOf('.');
+          const base = dotIdx > 0 ? f.name.slice(0, dotIdx) : f.name;
+          if (!primaries.has(base)) primaries.set(base, f);
+        });
+
+        const nested = new Set();
+        nestingPatterns.forEach(pattern => {
+          files.forEach(primary => {
+            const dotIdx = primary.name.indexOf('.');
+            if (dotIdx <= 0) return;
+            const capture = primary.name.slice(0, dotIdx);
+            const glob = pattern.replace('${capture}', capture).replace('*', '.*');
+            const re = new RegExp(`^${glob}$`);
+            files.forEach(candidate => {
+              if (candidate.path === primary.path) return;
+              if (re.test(candidate.name) && !nested.has(candidate.path)) {
+                nested.add(candidate.path);
+                primary._nestedChildren = primary._nestedChildren || [];
+                if (!primary._nestedChildren.find(c => c.path === candidate.path)) {
+                  primary._nestedChildren.push(candidate);
+                }
+              }
+            });
+          });
+        });
+
+        const visibleFiles = files.filter(f => !nested.has(f.path));
+        return [...folders.map(f => ({ ...f, children: applyFileNesting(f.children) })), ...visibleFiles];
+      }
+
       function stripTrash(nodes) {
         return (nodes || [])
-          .filter(n => n?.name && !n.name.includes('.tildertrash_'))
-          .map(n => n.type === 'folder' && n.children ? { ...n, children: stripTrash(n.children) } : n);
+          .filter(n => n?.name && !n.name.includes('.tildertrash_') && !isExcluded(n.name))
+          .map(n => n.type === 'folder' && n.children ? compact(n) : n);
       }
-      return stripTrash(displayNodes);
+      return applyFileNesting(stripTrash(displayNodes));
     }
 
     function scoreMatch(name, q) {
@@ -732,6 +807,10 @@ export default function FilePioneer({
         list.push({ node, depth, isInlineInput: false });
         if (node.type === 'folder' && node.open && node.children) {
           flatten(node.children, depth + 1);
+        }
+        // File nesting: render _nestedChildren as indented sub-rows
+        if (node._nestedChildren?.length && node._nestOpen !== false) {
+          flatten(node._nestedChildren.map(c => ({ ...c, _isNested: true })), depth + 1);
         }
       }
     }
