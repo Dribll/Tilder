@@ -5033,12 +5033,48 @@ function App() {
         workspace.isTrusted = true;
       }
 
+      // Load workspace-level settings from .tilder/settings.json
+      loadWorkspaceSettings();
+
       pushNotification(`Opened folder ${workspace.rootName || 'workspace'}.`);
       refresh();
     } catch (err) {
       if (err?.message && !err.message.toLowerCase().includes('user abort') && !err.message.toLowerCase().includes('cancelled')) {
         pushNotification(err.message || 'Could not open folder.', 'error');
       }
+    }
+  }
+
+  async function loadWorkspaceSettings() {
+    try {
+      const rootSystemPath = workspace.rootSystemPath;
+      if (!rootSystemPath) return;
+      const settingsPath = `${rootSystemPath}/.tilder/settings.json`;
+      // Try reading the file directly via desktopFileApi
+      const { desktopReadFile } = await import('./core/desktopFileApi.js');
+      const raw = await desktopReadFile(settingsPath).catch(() => null);
+      if (!raw) return;
+      const wsSettings = JSON.parse(raw);
+      if (typeof wsSettings === 'object' && wsSettings !== null) {
+        setSettings(current => {
+          // Deep merge workspace settings on top of user settings
+          function deepMerge(base, override) {
+            const result = { ...base };
+            for (const [k, v] of Object.entries(override)) {
+              if (v && typeof v === 'object' && !Array.isArray(v) && typeof result[k] === 'object') {
+                result[k] = deepMerge(result[k], v);
+              } else {
+                result[k] = v;
+              }
+            }
+            return result;
+          }
+          return deepMerge(current, wsSettings);
+        });
+        pushNotification('Workspace settings loaded from .tilder/settings.json.', 'info');
+      }
+    } catch {
+      // Workspace settings file absent or invalid — silent
     }
   }
 

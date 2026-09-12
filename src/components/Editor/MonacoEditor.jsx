@@ -1272,6 +1272,23 @@ export default function MonacoEditor({
     return null;
   }
 
+  // files.associations: override language based on user glob patterns
+  function resolveEffectiveLanguage(tabName, tabLang) {
+    const associations = settings?.files?.associations;
+    if (!associations || !tabName) return tabLang;
+    for (const [glob, langId] of Object.entries(associations)) {
+      // Convert glob to regex: *.ext → /^.*\.ext$/  or exact match
+      const pattern = glob
+        .replace(/[-[\]{}()+?.,\\^$|#\s]/g, '\\$&') // escape regex chars except *
+        .replace(/\\\*/g, '.*'); // replace escaped * back to .*
+      try {
+        if (new RegExp(`^${pattern}$`, 'i').test(tabName)) return langId;
+      } catch { /* invalid pattern */ }
+    }
+    return tabLang;
+  }
+  const effectiveLanguage = resolveEffectiveLanguage(tab.name, tab.language);
+
   const binaryKind = classifyBinaryTab(tab);
   const isBinaryTab = binaryKind !== 'text';
   const canPreviewBinary = binaryKind === 'image' || binaryKind === 'pdf' || binaryKind === 'audio' || binaryKind === 'video';
@@ -1800,7 +1817,7 @@ export default function MonacoEditor({
         <Editor
           height="100%"
           theme={settings?.theme?.active && settings.theme.active !== 'tilder-night' ? 'vs-dark' : 'tilder-night'}
-          language={tab.language}
+          language={effectiveLanguage}
             value={tab.content}
             onChange={onChange}
             onMount={handleMount}

@@ -482,6 +482,32 @@ export default function FilePioneer({
   
   const [multiSelected, setMultiSelected] = useState(new Set());
   const [showMeta, setShowMeta] = useState(false);
+  const [gitignorePatterns, setGitignorePatterns] = useState([]);
+
+  // Parse root .gitignore and load exclude patterns
+  useEffect(() => {
+    if (!workspace || !workspace.rootSystemPath) {
+      setGitignorePatterns([]);
+      return;
+    }
+    if (settings?.explorer?.useGitignore === false) {
+      setGitignorePatterns([]);
+      return;
+    }
+    import('../../../../core/desktopFileApi.js').then(({ desktopReadFile }) => {
+      const gitignorePath = `${workspace.rootSystemPath}/.gitignore`;
+      desktopReadFile(gitignorePath)
+        .then(content => {
+          const patterns = (content || '').split('\n')
+            .map(l => l.trim())
+            .filter(l => l && !l.startsWith('#') && !l.startsWith('!'))
+            .map(l => l.replace(/^\//, '').replace(/\/$/, '')); // strip leading/trailing slashes
+          setGitignorePatterns(patterns);
+        })
+        .catch(() => setGitignorePatterns([]));
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace?.rootSystemPath, workspaceVersion, settings?.explorer?.useGitignore]);
 
   const scrollRef = useRef(null);
 
@@ -676,11 +702,12 @@ export default function FilePioneer({
   const filteredNodes = useMemo(() => {
     const term = search.trim().toLowerCase();
 
-    // Build exclude matchers from settings
+    // Build exclude matchers from settings + .gitignore patterns
     const excludePatterns = settings?.explorer?.exclude || [];
+    const allExcludePatterns = [...excludePatterns, ...gitignorePatterns];
     function isExcluded(name) {
-      if (!excludePatterns.length) return false;
-      return excludePatterns.some(pat => {
+      if (!allExcludePatterns.length) return false;
+      return allExcludePatterns.some(pat => {
         // Simple glob: **/name or *name or exact
         const base = pat.replace(/^\*\*\//, '').replace(/^\*/, '');
         return name === base || name.endsWith('/' + base);
@@ -789,7 +816,7 @@ export default function FilePioneer({
     const res = displayNodes.map(filterNode).filter(Boolean);
     res.sort((a, b) => (b.score || 0) - (a.score || 0));
     return res;
-  }, [displayNodes, search, workspaceVersion]);
+  }, [displayNodes, search, workspaceVersion, gitignorePatterns, settings?.explorer?.exclude, settings?.explorer?.compactFolders, settings?.explorer?.fileNesting?.enabled]);
 
   /* ── Flat Tree Generation for Virtualization ── */
   const flatNodes = useMemo(() => {
