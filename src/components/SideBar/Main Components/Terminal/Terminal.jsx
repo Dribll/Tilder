@@ -348,7 +348,25 @@ function TasksView({ onRunTask, workspace }) {
           // No package.json or could not read
         }
         
-        if (mounted) setTasks([...npmTasks]);
+        let tilderTasks = [];
+        try {
+          const tilderTasksPath = `${rootPath}/.tilder/tasks.json`;
+          const content = await window.__TAURI__.core.invoke('desktop_read_file', { path: tilderTasksPath });
+          const parsed = JSON.parse(content);
+          if (parsed && Array.isArray(parsed.tasks)) {
+            tilderTasks = parsed.tasks.map((task, idx) => ({
+              id: `tilder:${task.label || idx}`,
+              type: task.type || 'shell',
+              name: task.label || `Task ${idx + 1}`,
+              command: task.command || '',
+              detail: task.detail || (task.type === 'shell' ? `> ${task.command}` : 'Custom Task')
+            }));
+          }
+        } catch (e) {
+          // No .tilder/tasks.json
+        }
+        
+        if (mounted) setTasks([...npmTasks, ...tilderTasks]);
       } catch (err) {
         console.error("Failed to load tasks:", err);
       } finally {

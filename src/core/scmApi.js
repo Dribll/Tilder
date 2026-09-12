@@ -85,6 +85,14 @@ export function syncScm(payload) {
   return post('/api/scm/sync', payload);
 }
 
+export function stashScm(payload) {
+  return post('/api/scm/stash', payload);
+}
+
+export function stashPopScm(payload) {
+  return post('/api/scm/stash-pop', payload);
+}
+
 export async function fetchScmBlame(filePath, workspaceRoot) {
   if (typeof window !== 'undefined' && window.__TILDER_RUNTIME_MODE__?.toLowerCase().includes('desktop')) {
     try {

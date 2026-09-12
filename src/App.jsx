@@ -4593,19 +4593,9 @@ function App() {
   }
 
   async function handlePeekDefinition() {
-    if (!builtInFeatures.quickNavigation) {
-      notifyExtensionDisabled('Quick Navigation');
-      return;
-    }
-
-    closeGoOverlay();
-    const { query, results } = await fetchDefinitionResults();
-    if (!results.length) {
-      pushNotification(`No definition found for ${query || 'the current symbol'}.`, 'warning');
-      return;
-    }
-
-    openNavigationOverlay('definition', query, results);
+    runEditorAction('editor.action.peekDefinition', () => {
+      pushNotification('No active editor to peek definition.', 'warning');
+    });
   }
 
   async function handleGoToReferences() {
@@ -4625,7 +4615,9 @@ function App() {
   }
 
   async function handlePeekReferences() {
-    await handleGoToReferences();
+    runEditorAction('editor.action.referenceSearch.trigger', () => {
+      pushNotification('No active editor to peek references.', 'warning');
+    });
   }
 
   async function handleRenameSymbol() {

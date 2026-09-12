@@ -1444,14 +1444,6 @@ export default function MonacoEditor({
       editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.F12, () => onGoToReferences());
     }
 
-    if (onPeekDefinition) {
-      editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.F12, () => onPeekDefinition());
-    }
-
-    if (onPeekReferences) {
-      editor.addCommand(monaco.KeyMod.Alt | monaco.KeyMod.Shift | monaco.KeyCode.F12, () => onPeekReferences());
-    }
-
     if (onRenameSymbol) {
       editor.addCommand(monaco.KeyCode.F2, () => onRenameSymbol());
     }

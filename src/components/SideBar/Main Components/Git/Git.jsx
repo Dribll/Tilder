@@ -11,6 +11,8 @@ import {
   stageScmFile,
   unstageScmFile,
   syncScm,
+  stashScm,
+  stashPopScm,
 } from '../../../../core/scmApi.js';
 
 function toFriendlyError(error, fallback) {
@@ -412,6 +414,46 @@ export default function Git({
                   }}
                 >
                   <span><i className="fa-solid fa-plus"></i></span> {busyAction === 'create-branch' ? 'Creating...' : 'Create'}
+                </button>
+              </div>
+            </div>
+
+            <div className="account-panel-section">
+              <h3 className="account-section-hdr">Stash</h3>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                <button
+                  type="button"
+                  className="action-btn-pill"
+                  style={{ flex: 1, justifyContent: 'center' }}
+                  disabled={Boolean(busyAction) || loading || !hasPendingChanges}
+                  onClick={() => runScmAction(stashScm, {
+                    busyKey: 'stash',
+                    successMessage: 'Changes stashed successfully.',
+                    applyResult: async (nextState) => {
+                      if (nextState?.workspaceSnapshot) {
+                        await workspace.applyScmSnapshot(nextState.workspaceSnapshot);
+                      }
+                    }
+                  })}
+                >
+                  {busyAction === 'stash' ? 'Stashing...' : 'Stash Changes'}
+                </button>
+                <button
+                  type="button"
+                  className="action-btn-pill"
+                  style={{ flex: 1, justifyContent: 'center' }}
+                  disabled={Boolean(busyAction) || loading}
+                  onClick={() => runScmAction(stashPopScm, {
+                    busyKey: 'stash-pop',
+                    successMessage: 'Stash popped successfully.',
+                    applyResult: async (nextState) => {
+                      if (nextState?.workspaceSnapshot) {
+                        await workspace.applyScmSnapshot(nextState.workspaceSnapshot);
+                      }
+                    }
+                  })}
+                >
+                  {busyAction === 'stash-pop' ? 'Popping...' : 'Pop Stash'}
                 </button>
               </div>
             </div>

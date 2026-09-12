@@ -1147,6 +1147,27 @@ const SECTION_DEFINITIONS = [
                 label: 'Auto Reveal',
                 type: 'boolean',
                 description: 'Automatically reveals and selects the active file in the explorer.'
+            },
+            {
+                id: 'explorerFileNesting',
+                path: 'explorer.fileNesting.enabled',
+                label: 'File Nesting',
+                type: 'boolean',
+                description: 'Nest related files (e.g. app.test.js under app.js) in the file tree.'
+            },
+            {
+                id: 'explorerUseGitignore',
+                path: 'explorer.useGitignore',
+                label: 'Respect .gitignore',
+                type: 'boolean',
+                description: 'Hides files/folders listed in the workspace root .gitignore from the explorer tree.'
+            },
+            {
+                id: 'filesWatcherExclude',
+                path: 'files.watcherExclude',
+                label: 'Watcher Exclude',
+                type: 'object',
+                description: 'Glob patterns of file paths to exclude from file watching. Format: {"**/.git/objects/**": true}'
             }
         ]
     },
@@ -1858,6 +1879,10 @@ export default function Settings({ modalType, settings, setSettings, systemFonts
     const [jsonError, setJsonError] = useState('');
     const [contextMenuStatus, setContextMenuStatus] = useState(null); // null | 'registered' | 'unregistered' | 'error'
     const [contextMenuLoading, setContextMenuLoading] = useState(false);
+    const [profiles, setProfiles] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('tilderSettingsProfiles') || '{}'); } catch { return {}; }
+    });
+    const [profileNameInput, setProfileNameInput] = useState('');
     const sectionScrollRef = useRef(null);
     const searchWrapperRef = useRef(null);
     const sectionRefs = useRef({});
@@ -1897,6 +1922,31 @@ export default function Settings({ modalType, settings, setSettings, systemFonts
             })
         })).filter((section) => section.items.length > 0);
     }, [searchIndex, searchQuery]);
+
+    const saveProfile = () => {
+        if (!profileNameInput.trim()) return;
+        const newProfiles = { ...profiles, [profileNameInput.trim()]: settings };
+        setProfiles(newProfiles);
+        localStorage.setItem('tilderSettingsProfiles', JSON.stringify(newProfiles));
+        setProfileNameInput('');
+        if (window.pushNotification) window.pushNotification(`Profile '${profileNameInput}' saved.`, 'success');
+    };
+
+    const loadProfile = (name) => {
+        if (profiles[name]) {
+            setSettings(profiles[name]);
+            setJsonDraft(JSON.stringify(profiles[name], null, 2));
+            if (window.pushNotification) window.pushNotification(`Profile '${name}' applied.`, 'success');
+        }
+    };
+
+    const deleteProfile = (name) => {
+        const newProfiles = { ...profiles };
+        delete newProfiles[name];
+        setProfiles(newProfiles);
+        localStorage.setItem('tilderSettingsProfiles', JSON.stringify(newProfiles));
+        if (window.pushNotification) window.pushNotification(`Profile '${name}' deleted.`, 'info');
+    };
 
     const searchResults = useMemo(() => {
         const query = normalizeString(searchQuery);
@@ -2188,6 +2238,34 @@ export default function Settings({ modalType, settings, setSettings, systemFonts
                         >
                             JSON
                         </button>
+                    </div>
+
+                    <div className="tilderSettingsProfileManager" style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px', padding: '0 12px 12px' }}>
+                        <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--vscode-descriptionForeground)', fontWeight: 'bold' }}>Profiles</div>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                            <input 
+                                type="text" 
+                                className="tilderSettingsSearchInput" 
+                                placeholder="Profile name..." 
+                                value={profileNameInput}
+                                onChange={e => setProfileNameInput(e.target.value)}
+                                style={{ flex: 1, padding: '4px 8px', height: '24px', fontSize: '12px' }}
+                            />
+                            <button className="tilderSettingsButton" onClick={saveProfile} style={{ padding: '0 8px', height: '24px', fontSize: '12px', background: 'var(--vscode-button-background)', color: 'var(--vscode-button-foreground)', border: 'none', borderRadius: '2px', cursor: 'pointer' }}>Save</button>
+                        </div>
+                        {Object.keys(profiles).length > 0 && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
+                                {Object.keys(profiles).map(name => (
+                                    <div key={name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--vscode-editor-inactiveSelectionBackground)', padding: '4px 8px', borderRadius: '4px' }}>
+                                        <span style={{ fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }} title={name}>{name}</span>
+                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                            <button onClick={() => loadProfile(name)} style={{ background: 'none', border: 'none', color: 'var(--vscode-textLink-foreground)', cursor: 'pointer', fontSize: '11px' }}>Load</button>
+                                            <button onClick={() => deleteProfile(name)} style={{ background: 'none', border: 'none', color: 'var(--vscode-errorForeground)', cursor: 'pointer', fontSize: '11px' }}>Del</button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
 
