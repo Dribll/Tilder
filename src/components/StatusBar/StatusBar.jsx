@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { EDITOR_LANGUAGE_REGISTRY } from '../../../shared/editor/languageRegistry.js';
-
+import { isDesktopRuntime } from '../../core/runtime.js';
 const LANGUAGE_OPTIONS = [...EDITOR_LANGUAGE_REGISTRY]
   .map((entry) => ({
     id: entry.id,
@@ -189,6 +189,26 @@ export default function StatusBar({
     }
   }
 
+  async function installLspServer() {
+    if (!installCommand || !isDesktopRuntime()) return;
+    try {
+      const { desktopExecuteCommand } = await import('../../core/desktopFileApi.js');
+      // e.g. "npm install -g typescript-language-server"
+      const args = installCommand.split(' ');
+      const cmd = args[0];
+      const cmdArgs = args.slice(1);
+      
+      // We can run this in terminal instead of invisibly so the user sees progress
+      if (window.tilderExecuteTerminalCommand) {
+        window.tilderExecuteTerminalCommand(installCommand);
+      } else {
+        await desktopExecuteCommand(cmd, cmdArgs);
+      }
+    } catch (e) {
+      console.error('Failed to auto-install LSP server:', e);
+    }
+  }
+
   function renderMenu() {
     if (openMenu === 'notifications') {
       return (
@@ -291,6 +311,11 @@ export default function StatusBar({
             {installCommand ? (
               <>
                 <div className="statusbar-intellisense-command">{installCommand}</div>
+                {isDesktopRuntime() && (
+                  <button type="button" className="statusbar-menu-action" onClick={() => { setOpenMenu(null); installLspServer(); }}>
+                    Install Server
+                  </button>
+                )}
                 <button type="button" className="statusbar-menu-action" onClick={copyInstallCommand}>
                   Copy Install Command
                 </button>
@@ -382,6 +407,15 @@ export default function StatusBar({
       <div className="statusBarWrapper">
         <div className="statusbar-main">
           <div className="statusbar-left">
+            <button 
+              type="button" 
+              className="statusbar-item" 
+              style={{ background: 'var(--vscode-statusBarItem-remoteBackground, #16825D)', color: 'white', border: 'none', padding: '0 10px', height: '100%', cursor: 'pointer' }}
+              title="Open a Remote Window (SSH / WSL / Containers)"
+              onClick={() => { if (window.pushNotification) window.pushNotification('Remote Development connecting...', 'info'); }}
+            >
+              <i className="fa-solid fa-desktop" style={{ fontSize: '12px' }}></i>
+            </button>
             <span className="statusbar-badge">{runtimeBadgeLabel}</span>
             <span className="statusbar-item subtle">{rootLabel}</span>
             {isTrusted === false && (

@@ -25,7 +25,7 @@ const SECTION_ICONS = {
     'accessibility': { icon: 'fa-solid fa-eye', color: 'linear-gradient(135deg, #007AFF, #0051e5)' },
 };
 
-const SECTION_DEFINITIONS = [
+const BASE_SECTION_DEFINITIONS = [
     {
         id: 'text-editor',
         title: 'Text Editor',
@@ -1868,9 +1868,53 @@ function SettingControl({ item, value, onCommit, systemFonts = [] }) {
     );
 }
 
-export default function Settings({ modalType, settings, setSettings, systemFonts = [] }) {
+export default function Settings({ modalType, settings, setSettings, systemFonts = [], extensionCatalog = [] }) {
+    const allSections = useMemo(() => {
+        const extSections = [];
+        
+        if (Array.isArray(extensionCatalog)) {
+            extensionCatalog.forEach(ext => {
+                if (ext.contributes?.configuration) {
+                    const config = Array.isArray(ext.contributes.configuration) 
+                        ? ext.contributes.configuration 
+                        : [ext.contributes.configuration];
+                        
+                    config.forEach((cfg, idx) => {
+                        const title = cfg.title || ext.name || 'Extension';
+                        const sectionId = `ext-${ext.id}-${idx}`;
+                        
+                        const items = [];
+                        if (cfg.properties) {
+                            Object.entries(cfg.properties).forEach(([key, prop]) => {
+                                items.push({
+                                    id: key,
+                                    path: key,
+                                    label: prop.description || key,
+                                    type: prop.type === 'boolean' ? 'boolean' : (prop.type === 'number' || prop.type === 'integer' ? 'number' : (prop.enum ? 'select' : 'text')),
+                                    options: prop.enum ? prop.enum.map(e => ({ value: e, label: e })) : undefined,
+                                    description: prop.markdownDescription || prop.description || '',
+                                    keywords: [ext.name, title, key]
+                                });
+                            });
+                        }
+                        
+                        if (items.length > 0) {
+                            extSections.push({
+                                id: sectionId,
+                                title: title,
+                                description: `Settings contributed by ${ext.name}`,
+                                items: items
+                            });
+                        }
+                    });
+                }
+            });
+        }
+        return [...BASE_SECTION_DEFINITIONS, ...extSections];
+    }, [extensionCatalog]);
+
     const [searchQuery, setSearchQuery] = useState('');
-    const [activeSection, setActiveSection] = useState(SECTION_DEFINITIONS[0].id);
+    const [activeSection, setActiveSection] = useState(allSections[0]?.id);
     const [highlightedSettingId, setHighlightedSettingId] = useState(null);
     const [searchOpen, setSearchOpen] = useState(false);
     const [activeSearchIndex, setActiveSearchIndex] = useState(0);
@@ -1890,7 +1934,7 @@ export default function Settings({ modalType, settings, setSettings, systemFonts
     const preservedScrollTopRef = useRef(0);
 
     const searchIndex = useMemo(() => {
-        return SECTION_DEFINITIONS.flatMap((section) =>
+        return allSections.flatMap((section) =>
             section.items.map((item) => ({
                 ...item,
                 sectionId: section.id,
@@ -1911,10 +1955,10 @@ export default function Settings({ modalType, settings, setSettings, systemFonts
         const query = normalizeString(searchQuery);
 
         if (!query) {
-            return SECTION_DEFINITIONS;
+            return allSections;
         }
 
-        return SECTION_DEFINITIONS.map((section) => ({
+        return allSections.map((section) => ({
             ...section,
             items: section.items.filter((item) => {
                 const searchableEntry = searchIndex.find((entry) => entry.path === item.path);
@@ -2052,7 +2096,7 @@ export default function Settings({ modalType, settings, setSettings, systemFonts
 
     useEffect(() => {
         if (!filteredSections.find((section) => section.id === activeSection)) {
-            setActiveSection(filteredSections[0]?.id || SECTION_DEFINITIONS[0].id);
+            setActiveSection(filteredSections[0]?.id || allSections[0].id);
         }
     }, [activeSection, filteredSections]);
 
@@ -2142,7 +2186,7 @@ export default function Settings({ modalType, settings, setSettings, systemFonts
     }
 
     function resetSection(sectionId) {
-        const section = SECTION_DEFINITIONS.find((candidate) => candidate.id === sectionId);
+        const section = allSections.find((candidate) => candidate.id === sectionId);
         if (!section) {
             return;
         }
@@ -2270,7 +2314,7 @@ export default function Settings({ modalType, settings, setSettings, systemFonts
                 </div>
 
                 <div className="tilderSettingsSidebarList">
-                    {SECTION_DEFINITIONS.map((section) => {
+                    {allSections.map((section) => {
                         const visibleCount = filteredSections.find((entry) => entry.id === section.id)?.items.length || 0;
                         const isVisible = visibleSectionIds.has(section.id);
 

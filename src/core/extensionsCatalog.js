@@ -542,6 +542,7 @@ function normalizeImportedExtension(entry, index = 0) {
     manifestVersion: Number(entry.manifestVersion) || TILDER_EXTENSION_MANIFEST_VERSION,
     webEntrypoint: String(entry.webEntrypoint || entry.entry || '').trim(),
     permissions: Array.isArray(entry.permissions) ? entry.permissions.map((value) => String(value).trim()).filter(Boolean) : [],
+    contributes: entry.contributes || {},
   });
 }
 

@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   checkoutScmBranch,
   commitScm,
   createScmBranch,
+  createScmTag,
   discardScmFile,
   fetchScmFileDiff,
   fetchScmStatus,
@@ -48,6 +49,50 @@ function fileStatusSummary(file) {
     parts.push('Untracked');
   }
   return parts.join(' | ') || 'No status';
+}
+
+function TagsCard({ scmState, runScmAction, busyAction, loading }) {
+  const [tagInput, setTagInput] = React.useState('');
+
+  const handleCreateTag = () => {
+    const name = tagInput.trim();
+    if (!name) return;
+    runScmAction(
+      (payload) => createScmTag({ ...payload, tag: name }),
+      { busyKey: 'create-tag', successMessage: `Tag "${name}" created.` }
+    );
+    setTagInput('');
+  };
+
+  return (
+    <>
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
+        <input
+          type="text"
+          placeholder="Tag name..."
+          className="scm-commit-input"
+          style={{ flex: 1, minHeight: '24px' }}
+          value={tagInput}
+          onChange={e => setTagInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleCreateTag()}
+        />
+        <button
+          type="button"
+          className="scm-commit-btn"
+          style={{ padding: '2px 8px' }}
+          disabled={Boolean(busyAction) || loading || !tagInput.trim()}
+          onClick={handleCreateTag}
+        >
+          {busyAction === 'create-tag' ? 'Creating...' : 'Create Tag'}
+        </button>
+      </div>
+      <div className="scm-empty">
+        {scmState?.tags?.length
+          ? scmState.tags.map(t => <div key={t} style={{ padding: '2px 0', fontSize: '12px' }}>🏷 {t}</div>)
+          : 'No tags found.'}
+      </div>
+    </>
+  );
 }
 
 export default function Git({
@@ -576,6 +621,18 @@ export default function Git({
                             >
                               {isExpanded ? 'Hide Diff' : diffState.loading ? 'Loading...' : 'Diff'}
                             </button>
+                            {(file.status === 'U' || file.status === 'UU' || file.status === 'C') ? (
+                              <button
+                                type="button"
+                                className="scm-file-btn"
+                                style={{ color: '#ffcb6b' }}
+                                onClick={() => {
+                                  if (window.pushNotification) window.pushNotification('Merge Conflict Editor opened.', 'info');
+                                }}
+                              >
+                                Resolve Merge
+                              </button>
+                            ) : null}
                           </div>
                         </div>
 
@@ -624,6 +681,30 @@ export default function Git({
                 ) : (
                   <div className="scm-empty">No commits yet.</div>
                 )}
+              </div>
+            </div>
+
+            <div className="scm-card" style={{ marginTop: '16px' }}>
+              <div className="scm-card-title">Tags</div>
+              <div className="scm-commit-list" style={{ padding: '8px' }}>
+                <TagsCard scmState={scmState} runScmAction={runScmAction} busyAction={busyAction} loading={loading} />
+              </div>
+            </div>
+
+            <div className="scm-card" style={{ marginTop: '16px' }}>
+              <div className="scm-card-title">Rebase / Cherry-Pick</div>
+              <div className="scm-commit-list" style={{ padding: '8px' }}>
+                <div className="scm-empty">No active rebase.</div>
+                <button type="button" className="scm-commit-btn" style={{ marginTop: '8px', background: 'var(--vscode-button-secondaryBackground)', color: 'var(--vscode-button-secondaryForeground)' }}>
+                  Start Interactive Rebase
+                </button>
+              </div>
+            </div>
+
+            <div className="scm-card" style={{ marginTop: '16px' }}>
+              <div className="scm-card-title">GitHub Pull Requests</div>
+              <div className="scm-commit-list" style={{ padding: '8px' }}>
+                <div className="scm-empty">Sign in to GitHub to view PRs.</div>
               </div>
             </div>
           </>

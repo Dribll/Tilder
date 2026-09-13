@@ -1643,6 +1643,30 @@ export default function Terminal({
                 ) : null}
               </>
             ) : null}
+            {activeView === 'output' ? (
+              <>
+                <select
+                  className="terminal-profile-select"
+                  style={{ marginRight: '8px', padding: '2px 4px', fontSize: '11px', background: 'var(--vscode-input-background)', color: 'var(--vscode-input-foreground)', border: '1px solid var(--vscode-input-border)', borderRadius: '2px' }}
+                  title="Choose Output Channel"
+                  value="main"
+                  onChange={() => {}}
+                >
+                  <option value="main">Tilder Main</option>
+                  <option value="extensions">Extensions</option>
+                  <option value="debug">Debug Adapter</option>
+                  <option value="search">Search</option>
+                </select>
+                <button
+                  type="button"
+                  className="terminal-toolbar-btn"
+                  title="Clear Output"
+                  onClick={() => { if (window.pushNotification) window.pushNotification('Clear output not implemented in mock.', 'info'); }}
+                >
+                  <span><i className="fa-solid fa-ban"></i></span>
+                </button>
+              </>
+            ) : null}
             <button type="button" className="terminal-toolbar-btn" onClick={onClose} title="Hide Terminal">
               <span><i className="fa-solid fa-chevron-down"></i></span>
             </button>

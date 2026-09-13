@@ -20257,3 +20257,16 @@ body[data-theme="tilder-tahoe"] .menubar-icon-btn i {
     width: 1em;
     height: 1em;
 }
+.test-runner-glyph {
+  background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="%2389d185" d="M11.5 8l-6 4v-8l6 4z"/></svg>') no-repeat center center;
+  background-size: 12px;
+  cursor: pointer;
+}
+.coverage-covered {
+  background-color: rgba(48, 209, 88, 0.15);
+  border-left: 3px solid #30d158;
+}
+.coverage-uncovered {
+  background-color: rgba(255, 69, 58, 0.15);
+  border-left: 3px solid #ff453a;
+}

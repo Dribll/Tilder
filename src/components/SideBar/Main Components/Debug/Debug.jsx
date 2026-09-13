@@ -180,6 +180,34 @@ export default function Debug({
   const [selectedFrameIdx, setSelectedFrameIdx] = useState(0);
   const [tests, setTests] = useState([]);
   const [testStates, setTestStates] = useState({});
+  const [launchConfigs, setLaunchConfigs] = useState([]);
+  const [selectedLaunchConfig, setSelectedLaunchConfig] = useState(null);
+  const [exceptionFilters, setExceptionFilters] = useState({
+    uncaught: true,
+    all: false,
+  });
+
+  useEffect(() => {
+    // Attempt to load .tilder/launch.json
+    const loadLaunchJson = async () => {
+      try {
+        const rootPath = window.__tilderWorkspaceRoot;
+        if (!rootPath) return;
+        const configPath = `${rootPath}/.tilder/launch.json`;
+        const content = await window.__TAURI__.core.invoke('desktop_read_file', { path: configPath });
+        const parsed = JSON.parse(content);
+        if (parsed && Array.isArray(parsed.configurations)) {
+          setLaunchConfigs(parsed.configurations);
+          if (parsed.configurations.length > 0) {
+            setSelectedLaunchConfig(parsed.configurations[0].name);
+          }
+        }
+      } catch (err) {
+        setLaunchConfigs([]);
+      }
+    };
+    loadLaunchJson();
+  }, [window.__tilderWorkspaceRoot]);
 
   useEffect(() => {
     if (!activeTab) {
@@ -247,6 +275,17 @@ export default function Debug({
       }
 
       setTests(foundTests);
+
+      // Add inline decorations to Monaco gutter
+      const decorations = foundTests.map(test => ({
+        range: new monaco.Range(test.line, 1, test.line, 1),
+        options: {
+          isWholeLine: false,
+          glyphMarginClassName: 'test-runner-glyph',
+          glyphMarginHoverMessage: { value: `Run Test: ${test.name}` }
+        }
+      }));
+      window.__tilderTestDecorations = activeModel.deltaDecorations(window.__tilderTestDecorations || [], decorations);
     };
 
     scanTests();
@@ -327,7 +366,29 @@ export default function Debug({
         {/* Header */}
         <div className="debug-header">
           <p className="explorer-eyebrow">Run &amp; Debug</p>
-          <h6 className="explorer-title">Debug Center</h6>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h6 className="explorer-title" style={{ margin: 0 }}>Debug Center</h6>
+            {launchConfigs.length > 0 && (
+              <select 
+                className="debug-launch-select"
+                value={selectedLaunchConfig || ''}
+                onChange={e => setSelectedLaunchConfig(e.target.value)}
+                style={{ 
+                  flex: 1, 
+                  background: 'var(--vscode-input-background)', 
+                  color: 'var(--vscode-input-foreground)',
+                  border: '1px solid var(--vscode-input-border)',
+                  borderRadius: '2px',
+                  padding: '2px 4px',
+                  fontSize: '11px'
+                }}
+              >
+                {launchConfigs.map(c => (
+                  <option key={c.name} value={c.name}>{c.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
         </div>
 
         {/* Session Status Card */}
@@ -548,6 +609,21 @@ export default function Debug({
             </button>
           }
         >
+          <div style={{ padding: '0 8px 8px 8px', borderBottom: '1px solid var(--vscode-panel-border)', marginBottom: '8px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: 'pointer', marginBottom: '4px' }}>
+              <input type="checkbox" checked={exceptionFilters.uncaught} onChange={(e) => setExceptionFilters(f => ({ ...f, uncaught: e.target.checked }))} />
+              Uncaught Exceptions
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: 'pointer' }}>
+              <input type="checkbox" checked={exceptionFilters.all} onChange={(e) => setExceptionFilters(f => ({ ...f, all: e.target.checked }))} />
+              Caught Exceptions
+            </label>
+          </div>
+
+          <div style={{ padding: '0 8px', fontSize: '11px', color: 'var(--vscode-descriptionForeground)', textTransform: 'uppercase', marginBottom: '4px' }}>Data Breakpoints</div>
+          <div className="debug-empty-state" style={{ paddingBottom: '8px' }}>No data breakpoints set.</div>
+
+          <div style={{ padding: '0 8px', fontSize: '11px', color: 'var(--vscode-descriptionForeground)', textTransform: 'uppercase', marginBottom: '4px' }}>File Breakpoints</div>
           {breakpoints?.length ? (
             <div className="debug-list">
               {breakpoints.map((bp) => (

@@ -93,7 +93,7 @@ import { fetchExtensionMarketplace } from './core/extensionsMarketplaceApi.js';
 import { getEffectiveBinding, KEYBINDING_COMMANDS } from './core/keybindings.js';
 import { createLspBridge } from './core/lspBridge.js';
 import { disposeExtensionsRuntime, syncExtensionsRuntime } from './core/extensionsRuntime.js';
-import { openDesktopWindow, desktopUpdateJumpList } from './core/desktopFileApi.js';
+import { openDesktopWindow, desktopUpdateJumpList, desktopWatchDirectory } from './core/desktopFileApi.js';
 import {
   buildMatcher,
   collectSymbols,
@@ -516,6 +516,23 @@ function App() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let unwatch = () => {};
+    if (isDesktopRuntime() && workspace.rootSystemPath) {
+      desktopWatchDirectory(workspace.rootSystemPath, (eventPayload) => {
+        // Debounce or sync the workspace root when file changes occur
+        workspace.syncRoot().then(() => refresh());
+      }).then((cleanup) => {
+        unwatch = cleanup;
+      }).catch(err => {
+        console.warn('File watcher setup failed', err);
+      });
+    }
+    return () => {
+      unwatch();
+    };
+  }, [workspace.rootSystemPath]);
 
   useEffect(() => {
     getDetectedRuntimes().then((runtimes) => {
@@ -6741,7 +6758,7 @@ function App() {
       <AILensModal isOpen={!!aiLensTarget} onClose={() => setAiLensTarget(null)} targetFile={aiLensTarget} />
 
       <Modal isOpen={modalOpen} closeModal={closeCurrentModal} title={modalType}>
-          <Settings modalType={modalType} settings={settings} setSettings={setSettings} systemFonts={systemFonts} />
+          <Settings modalType={modalType} settings={settings} setSettings={setSettings} systemFonts={systemFonts} extensionCatalog={extensionCatalog} />
          <Extensions
           modalType={modalType}
           pushNotification={pushNotification}

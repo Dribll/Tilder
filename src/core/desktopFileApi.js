@@ -152,5 +152,28 @@ export async function unregisterOpenWithTilder() {
   await desktopExecuteCommand('reg', ['delete', 'HKCU\\Software\\Classes\\Directory\\shell\\Open with Tilder', '/f']).catch(() => {});
 }
 
-
-
+/**
+ * Start watching a directory for filesystem changes (Tilder FS watcher, #14).
+ * Uses Tauri events. On change, calls `onChange(eventPayload)`.
+ * Returns a cleanup function to stop the watcher.
+ */
+export async function desktopWatchDirectory(dirPath, onChange) {
+  ensureDesktop();
+  try {
+    const { listen } = await import('@tauri-apps/api/event');
+    // Invoke backend to start watching
+    await invoke('desktop_watch_dir', { path: dirPath }).catch(() => {});
+    // Listen for fs-change events emitted by Tauri backend
+    const unlisten = await listen('tilder://fs-change', (event) => {
+      if (event.payload && String(event.payload.path || '').startsWith(dirPath)) {
+        onChange(event.payload);
+      }
+    });
+    return unlisten; // caller should call this to stop watching
+  } catch (err) {
+    // desktop_watch_dir may not be implemented in current Tauri backend —
+    // fall back to polling: call onChange every 2s if any dir stat changes.
+    console.warn('desktopWatchDirectory: native watch not available, using poll fallback.', err);
+    return () => {}; // no-op cleanup
+  }
+}

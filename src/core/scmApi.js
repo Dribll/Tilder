@@ -109,3 +109,10 @@ export async function fetchScmBlame(filePath, workspaceRoot) {
   // Fallback to node backend if not on desktop or if it fails
   return post('/api/scm/blame-file', { path: filePath }).then(res => res.blame).catch(() => null);
 }
+export async function getScmLog(cwd, filePath) {
+  return post('/api/scm/log', { cwd, file: filePath });
+}
+
+export function createScmTag(payload) {
+  return post('/api/scm/create-tag', payload);
+}

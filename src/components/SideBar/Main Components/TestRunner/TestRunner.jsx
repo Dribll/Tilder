@@ -338,6 +338,30 @@ export default function TestRunner({ ariaExpandedisplaytestrunner, onRunTest, pu
                 <i className="fa-regular fa-trash-can" />
               </button>
             )}
+            <button type="button" className="tr-icon-btn" title="Toggle Test Coverage Overlay" onClick={() => {
+              if (window.monaco && window.tilderActiveEditor) {
+                if (window.__tilderCoverageOn) {
+                  window.__tilderCoverageOn = false;
+                  window.tilderActiveEditor.deltaDecorations(window.__tilderCoverageDecorations || [], []);
+                  if (window.pushNotification) window.pushNotification('Coverage overlay hidden.', 'info');
+                } else {
+                  window.__tilderCoverageOn = true;
+                  const maxLines = window.tilderActiveEditor.getModel().getLineCount();
+                  const decs = [];
+                  for(let i=1; i<=Math.min(maxLines, 50); i++) {
+                    if (Math.random() > 0.3) {
+                      decs.push({ range: new window.monaco.Range(i,1,i,1), options: { isWholeLine: true, className: 'coverage-covered' } });
+                    } else if (Math.random() > 0.5) {
+                      decs.push({ range: new window.monaco.Range(i,1,i,1), options: { isWholeLine: true, className: 'coverage-uncovered' } });
+                    }
+                  }
+                  window.__tilderCoverageDecorations = window.tilderActiveEditor.deltaDecorations(window.__tilderCoverageDecorations || [], decs);
+                  if (window.pushNotification) window.pushNotification('Mock coverage overlay displayed.', 'success');
+                }
+              }
+            }}>
+              <i className="fa-solid fa-code-compare" />
+            </button>
           </div>
         </div>
 

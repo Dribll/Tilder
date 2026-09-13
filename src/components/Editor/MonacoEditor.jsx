@@ -1516,7 +1516,10 @@ export default function MonacoEditor({
       }, 0);
     });
 
+    window.tilderActiveEditor = editor;
+
     editor.onDidFocusEditorText(() => {
+      window.tilderActiveEditor = editor;
       onFocusEditor?.(editor, monaco, tab);
     });
 
