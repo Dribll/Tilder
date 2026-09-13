@@ -132,6 +132,15 @@ function createApi(extension, options) {
       getWorkspaceSnapshot: options.getWorkspaceSnapshot,
       getActiveTabSnapshot: options.getActiveTabSnapshot,
     },
+    window: {
+      createOutputChannel: (name) => {
+        if (options.createOutputChannel) {
+          return options.createOutputChannel(name);
+        }
+        // Fallback if not provided
+        return { appendLine: (text) => console.log(`[${name}] ${text}`) };
+      }
+    }
   };
 
   return {

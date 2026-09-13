@@ -27,9 +27,9 @@ export async function desktopReadDir(path) {
   return invoke('desktop_read_dir', { path });
 }
 
-export async function desktopReadTree(rootPath) {
+export async function desktopReadTree(rootPath, recursive = false) {
   ensureDesktop();
-  return invoke('desktop_read_tree', { rootPath, recursive: true });
+  return invoke('desktop_read_tree', { rootPath, recursive: Boolean(recursive) });
 }
 
 export async function desktopReadFile(filePath) {

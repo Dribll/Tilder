@@ -32,7 +32,7 @@ const EOL_OPTIONS = [
   { id: 'CRLF', label: 'CRLF' },
 ];
 
-function Menu({ title, children, anchorRef, onClose }) {
+function Menu({ title, children, anchorRef, onClose, position }) {
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -57,8 +57,14 @@ function Menu({ title, children, anchorRef, onClose }) {
     };
   }, [anchorRef, onClose]);
 
+  const style = {};
+  if (position === 'bottom-left') {
+    style.left = '10px';
+    style.right = 'auto';
+  }
+
   return (
-    <div className="statusbar-menu" ref={menuRef}>
+    <div className="statusbar-menu" ref={menuRef} style={style}>
       <div className="statusbar-menu-title">{title}</div>
       <div className="statusbar-menu-items">{children}</div>
     </div>
@@ -88,6 +94,7 @@ export default function StatusBar({
   const [openMenu, setOpenMenu] = useState(null);
   const notificationButtonRef = useRef(null);
   const intelliSenseButtonRef = useRef(null);
+  const remoteButtonRef = useRef(null);
   const lineButtonRef = useRef(null);
   const indentButtonRef = useRef(null);
   const eolButtonRef = useRef(null);
@@ -210,6 +217,23 @@ export default function StatusBar({
   }
 
   function renderMenu() {
+    if (openMenu === 'remote') {
+      return (
+        <Menu title="Remote Development" anchorRef={remoteButtonRef} onClose={() => setOpenMenu(null)} position="bottom-left">
+          <div className="statusbar-menu-items">
+            <button className="statusbar-menu-item" onClick={() => { setOpenMenu(null); if (window.pushNotification) window.pushNotification('Connect to Host (SSH) is not installed.', 'warning'); }}>
+              <i className="fa-solid fa-network-wired" style={{ width: '16px', marginRight: '6px' }}></i> Connect to Host...
+            </button>
+            <button className="statusbar-menu-item" onClick={() => { setOpenMenu(null); if (window.pushNotification) window.pushNotification('WSL extension is not installed.', 'warning'); }}>
+              <i className="fa-brands fa-linux" style={{ width: '16px', marginRight: '6px' }}></i> Connect to WSL
+            </button>
+            <button className="statusbar-menu-item" onClick={() => { setOpenMenu(null); if (window.pushNotification) window.pushNotification('Dev Containers extension is not installed.', 'warning'); }}>
+              <i className="fa-brands fa-docker" style={{ width: '16px', marginRight: '6px' }}></i> Reopen in Container
+            </button>
+          </div>
+        </Menu>
+      );
+    }
     if (openMenu === 'notifications') {
       return (
         <Menu title="Notifications" anchorRef={notificationButtonRef} onClose={() => setOpenMenu(null)}>
@@ -410,9 +434,10 @@ export default function StatusBar({
             <button 
               type="button" 
               className="statusbar-item" 
-              style={{ background: 'var(--vscode-statusBarItem-remoteBackground, #16825D)', color: 'white', border: 'none', padding: '0 10px', height: '100%', cursor: 'pointer' }}
-              title="Open a Remote Window (SSH / WSL / Containers)"
-              onClick={() => { if (window.pushNotification) window.pushNotification('Remote Development connecting...', 'info'); }}
+              ref={remoteButtonRef}
+              style={{ background: 'var(--vscode-statusBarItem-remoteBackground, #16825D)', color: 'white', border: 'none', padding: '0 10px', height: '22px', display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+              title="Open a Remote Window"
+              onClick={() => setOpenMenu((current) => (current === 'remote' ? null : 'remote'))}
             >
               <i className="fa-solid fa-desktop" style={{ fontSize: '12px' }}></i>
             </button>

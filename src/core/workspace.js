@@ -829,7 +829,7 @@ const workspace = {
           // The visible workspace root is represented by the logical `root`
           // path. Keeping direct children under that same parent prevents
           // refreshes from treating nested nodes as root siblings.
-          children: children.map(c => this.mapDesktopTreeNode(c, 'root', rootConfig.systemPath)),
+          children: children.map(c => this.mapDesktopTreeNode(c, 'root', rootConfig.systemPath, false)),
           isDraft: false,
           isLoaded: true
         };
@@ -891,7 +891,7 @@ const workspace = {
           return nPath.startsWith(sys) || nNative.startsWith(sys) || sys.startsWith(nPath);
         });
         const rootSystemPath = rootConfig?.systemPath || this.rootSystemPath || '';
-        node.children = sortNodes(children.map(c => this.mapDesktopTreeNode(c, node.path, rootSystemPath, true)));
+        node.children = sortNodes(children.map(c => this.mapDesktopTreeNode(c, node.path, rootSystemPath, false)));
         node.isLoaded = true;
       } else if (node.handle && node.handle.kind === 'directory') {
         // Web FileSystem Access API — read entries from the directory handle

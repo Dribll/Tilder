@@ -180,21 +180,46 @@ function BottomPanelTabs({ activeView, onChangeView }) {
 }
 
 function LogEntries({ entries, emptyMessage }) {
-  if (!entries.length) {
-    return <div className="bottom-panel-empty">{emptyMessage}</div>;
-  }
+  const [selectedSource, setSelectedSource] = React.useState('All');
+  
+  const sources = React.useMemo(() => {
+    const s = new Set(entries.map(e => e.source).filter(Boolean));
+    return ['All', ...Array.from(s).sort()];
+  }, [entries]);
+
+  const filteredEntries = React.useMemo(() => {
+    if (selectedSource === 'All') return entries;
+    return entries.filter(e => e.source === selectedSource);
+  }, [entries, selectedSource]);
 
   return (
-    <div className="bottom-panel-log-list">
-      {entries.map((entry) => (
-        <div key={entry.id} className="bottom-panel-log-entry">
-          <div className="bottom-panel-log-meta">
-            <span>{entry.source}</span>
-            <span>{entry.time}</span>
-          </div>
-          <pre className="bottom-panel-log-output">{entry.lines.join('\n')}</pre>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '4px 8px', borderBottom: '1px solid var(--border-color)', background: 'var(--vscode-editor-background)' }}>
+        <select 
+          value={selectedSource} 
+          onChange={e => setSelectedSource(e.target.value)}
+          style={{ background: 'var(--vscode-dropdown-background)', color: 'var(--vscode-dropdown-foreground)', border: '1px solid var(--vscode-dropdown-border)', padding: '2px 4px', borderRadius: '2px' }}
+        >
+          {sources.map(src => (
+            <option key={src} value={src}>{src}</option>
+          ))}
+        </select>
+      </div>
+      {!filteredEntries.length ? (
+        <div className="bottom-panel-empty">{emptyMessage}</div>
+      ) : (
+        <div className="bottom-panel-log-list" style={{ flex: 1, overflowY: 'auto' }}>
+          {filteredEntries.map((entry) => (
+            <div key={entry.id} className="bottom-panel-log-entry">
+              <div className="bottom-panel-log-meta">
+                <span>{entry.source}</span>
+                <span>{entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : ''}</span>
+              </div>
+              <pre className="bottom-panel-log-output">{entry.message || (entry.lines ? entry.lines.join('\n') : '')}</pre>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }

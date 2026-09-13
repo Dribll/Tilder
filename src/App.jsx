@@ -600,6 +600,16 @@ function App() {
               content: workspace.getActiveTab().content,
             }
           : null,
+      createOutputChannel: (name) => {
+        return {
+          appendLine: (text) => {
+            setOutputEntries((prev) => [
+              ...prev,
+              { id: Date.now() + Math.random(), timestamp: new Date(), source: name, message: text }
+            ]);
+          }
+        };
+      },
     });
   }, [extensionCatalog, extensionState]);
 

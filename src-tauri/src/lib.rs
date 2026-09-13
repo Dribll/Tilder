@@ -549,11 +549,9 @@ fn desktop_read_dir(path: String) -> Result<Vec<DesktopTreeNode>, String> {
             is_dir,
             size,
             modified,
-            // Return the folder subtree with the entry so the desktop Explorer
-            // can render its contents immediately instead of depending on a
-            // second lazy-read request after the click.
+            // Return empty children list for folder so it does not block the UI on large directories
             children: if is_dir {
-                Some(read_tree_recursive(&entry.path(), true).unwrap_or_default())
+                Some(Vec::new())
             } else {
                 None
             },
