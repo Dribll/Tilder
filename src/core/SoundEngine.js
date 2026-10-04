@@ -29,19 +29,20 @@ class SoundEngine {
     const osc = this.audioCtx.createOscillator();
     const gain = this.audioCtx.createGain();
 
+    // A subtle, modern UI "tick" (no laser "pew" pitch drop)
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(800, t);
-    osc.frequency.exponentialRampToValueAtTime(300, t + 0.05);
+    osc.frequency.setValueAtTime(1200, t);
+    osc.frequency.exponentialRampToValueAtTime(800, t + 0.01);
 
     gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(0.015, t + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+    gain.gain.linearRampToValueAtTime(0.02, t + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.015);
 
     osc.connect(gain);
     gain.connect(this.audioCtx.destination);
 
     osc.start(t);
-    osc.stop(t + 0.05);
+    osc.stop(t + 0.02);
   }
 
   playPop() {
@@ -53,19 +54,20 @@ class SoundEngine {
     const osc = this.audioCtx.createOscillator();
     const gain = this.audioCtx.createGain();
 
+    // A soft, low-frequency organic tap
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(400, t);
-    osc.frequency.exponentialRampToValueAtTime(600, t + 0.1);
+    osc.frequency.setValueAtTime(450, t);
+    osc.frequency.exponentialRampToValueAtTime(350, t + 0.03);
 
     gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(0.02, t + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    gain.gain.linearRampToValueAtTime(0.015, t + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
 
     osc.connect(gain);
     gain.connect(this.audioCtx.destination);
 
     osc.start(t);
-    osc.stop(t + 0.1);
+    osc.stop(t + 0.04);
   }
 
   playSuccess() {

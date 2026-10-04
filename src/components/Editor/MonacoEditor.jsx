@@ -204,6 +204,7 @@ function buildEditorOptions(settings, tab, wordBasedSuggestions) {
   return {
     ...settings,
     dragAndDrop: true,
+    mouseWheelZoom: settings?.mouseWheelZoom !== false,
     multiCursorModifier: 'alt',
     formatOnPaste: true,
     formatOnType: true,

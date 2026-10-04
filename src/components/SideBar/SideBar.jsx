@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 
 const SIDEBAR_ORDER_KEY = 'tilder-sidebar-order';
-const DEFAULT_ORDER = ['explorer', 'search', 'codesearch', 'extensions', 'debug', 'tests', 'git', 'github', 'backpack', 'hardware'];
+const DEFAULT_ORDER = ['explorer', 'search', 'codesearch', 'extensions', 'debug', 'tests', 'git', 'github', 'backpack', 'hardware', 'trashview'];
 
 function normalizeSidebarOrder(savedOrder) {
   if (!Array.isArray(savedOrder)) {

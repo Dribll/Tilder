@@ -403,6 +403,7 @@ export default function HardwareManager({ ariaExpandedisplayhardware, pushNotifi
   const [compiling, setCompiling] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [outputLines, setOutputLines] = useState([]);
+  const [sketchLayoutIssue, setSketchLayoutIssue] = useState(null);
 
   const [activeTab, setActiveTab] = useState('sketch'); // sketch | libraries | boards | serial
 
@@ -478,21 +479,59 @@ export default function HardwareManager({ ariaExpandedisplayhardware, pushNotifi
     setOutputLines(prev => [...prev, line]);
   }
 
-  function getSketchPath() {
+  function getSketchInfo() {
     const tab = workspace.getActiveTab?.() || workspace.tabs?.find(t => t.id === workspace.activeTabId);
     if (!tab) return null;
-    if (!tab.name?.endsWith('.ino') && !tab.name?.endsWith('.cpp')) return null;
+    const isIno = /\.ino$/i.test(tab.name || '');
+    if (!isIno && !/\.cpp$/i.test(tab.name || '')) return null;
+    let sketchPath = null;
     if (tab.nativePath) {
       const idx = Math.max(tab.nativePath.lastIndexOf('/'), tab.nativePath.lastIndexOf('\\'));
-      return idx !== -1 ? tab.nativePath.slice(0, idx) : tab.nativePath;
-    }
-    if (workspace.rootSystemPath && tab.path) {
+      sketchPath = idx !== -1 ? tab.nativePath.slice(0, idx) : tab.nativePath;
+    } else if (workspace.rootSystemPath && tab.path) {
       const rel = tab.path.replace(/^root\/?/, '');
       const full = workspace.rootSystemPath + '/' + rel;
       const idx = Math.max(full.lastIndexOf('/'), full.lastIndexOf('\\'));
-      return (idx !== -1 ? full.slice(0, idx) : full).replace(/\//g, '\\');
+      sketchPath = (idx !== -1 ? full.slice(0, idx) : full).replace(/\//g, '\\');
     }
-    return null;
+
+    if (!sketchPath) return null;
+    const expectedFolder = isIno ? tab.name.replace(/\.ino$/i, '') : '';
+    const parentPath = workspace.findParentPath?.(tab.path) || 'root';
+    const parentNode = parentPath === 'root' ? workspace.getRootNode?.() : workspace.findNode?.(parentPath);
+    const folderFromPath = sketchPath.split(/[\\/]/).filter(Boolean).pop() || '';
+    const actualFolder = parentNode?.name || folderFromPath;
+    const requiresSketchFolder = isIno && actualFolder.toLowerCase() !== expectedFolder.toLowerCase();
+
+    return { tab, sketchPath, isIno, expectedFolder, actualFolder, parentPath, requiresSketchFolder };
+  }
+
+  function showSketchLayoutIssue(sketch) {
+    const issue = {
+      ...sketch,
+      canFix: Boolean(sketch.tab?.path && workspace.findNode?.(sketch.tab.path)),
+    };
+    setSketchLayoutIssue(issue);
+    setActiveTab('sketch');
+    setOutputLines([{ type: 'error', data: `Arduino sketch layout required: put ${sketch.tab.name} inside a folder named ${sketch.expectedFolder}.` }]);
+    pushNotification?.(`Arduino needs ${sketch.expectedFolder}/${sketch.tab.name}. Tilder can fix this for you.`, 'warning');
+  }
+
+  async function fixSketchLayout() {
+    if (!sketchLayoutIssue?.canFix) return;
+    const { tab, expectedFolder, parentPath } = sketchLayoutIssue;
+    try {
+      const targetPath = parentPath === 'root' ? expectedFolder : `${parentPath}/${expectedFolder}`;
+      let folder = workspace.findNode?.(targetPath);
+      if (!folder) folder = await workspace.createFolder(parentPath, expectedFolder);
+      if (!folder || folder.type !== 'folder') throw new Error('Could not create the sketch folder.');
+      await workspace.moveNode(tab.path, folder.path);
+      setSketchLayoutIssue(null);
+      setOutputLines([{ type: 'success', data: `Moved ${tab.name} into ${expectedFolder}/. You can now Verify or Upload.` }]);
+      pushNotification?.(`Sketch layout fixed: ${expectedFolder}/${tab.name}`, 'success');
+    } catch (error) {
+      pushNotification?.(error instanceof Error ? error.message : 'Could not fix the sketch layout.', 'error');
+    }
   }
 
   useEffect(() => {
@@ -509,9 +548,13 @@ export default function HardwareManager({ ariaExpandedisplayhardware, pushNotifi
   }, [selectedBoard, selectedPort, ports]);
 
   async function handleVerify() {
-    const sketchPath = getSketchPath();
-    if (!sketchPath) {
+    const sketch = getSketchInfo();
+    if (!sketch?.sketchPath) {
       pushNotification?.('Open an .ino file first', 'warning');
+      return;
+    }
+    if (sketch.requiresSketchFolder) {
+      showSketchLayoutIssue(sketch);
       return;
     }
     if (!selectedBoard) {
@@ -521,7 +564,7 @@ export default function HardwareManager({ ariaExpandedisplayhardware, pushNotifi
     setCompiling(true);
     setOutputLines([{ type: 'info', data: `Compiling for ${selectedBoard}...` }]);
     try {
-      const code = await compileSketch(sketchPath, selectedBoard, addOutput);
+      const code = await compileSketch(sketch.sketchPath, selectedBoard, addOutput);
       if (code === 0) {
         addOutput({ type: 'success', data: 'Compilation complete.' });
         pushNotification?.('✓ Compilation successful!', 'success');
@@ -538,15 +581,16 @@ export default function HardwareManager({ ariaExpandedisplayhardware, pushNotifi
   }
 
   async function handleUpload() {
-    const sketchPath = getSketchPath();
-    if (!sketchPath) { pushNotification?.('Open an .ino file first', 'warning'); return; }
+    const sketch = getSketchInfo();
+    if (!sketch?.sketchPath) { pushNotification?.('Open an .ino file first', 'warning'); return; }
+    if (sketch.requiresSketchFolder) { showSketchLayoutIssue(sketch); return; }
     if (!selectedBoard) { pushNotification?.('Select a board first', 'warning'); return; }
     if (!selectedPort) { pushNotification?.('Select a port (COM) first', 'warning'); return; }
 
     setUploading(true);
     setOutputLines([{ type: 'info', data: `Uploading to ${selectedPort} using ${selectedBoard}...` }]);
     try {
-      const code = await uploadSketch(sketchPath, selectedBoard, selectedPort, addOutput);
+      const code = await uploadSketch(sketch.sketchPath, selectedBoard, selectedPort, addOutput);
       if (code === 0) {
         addOutput({ type: 'success', data: 'Upload complete.' });
         pushNotification?.('✓ Upload successful!', 'success');
@@ -700,7 +744,18 @@ export default function HardwareManager({ ariaExpandedisplayhardware, pushNotifi
           {/* Tab Content */}
           <div className="hw-tab-area">
             {activeTab === 'sketch' && (
-              <OutputConsole lines={outputLines} onClear={() => setOutputLines([])} />
+              <>
+                {sketchLayoutIssue && (
+                  <div className="hw-sketch-layout-notice" role="alert">
+                    <div>
+                      <strong>Arduino sketch folder required</strong>
+                      <span><code>{sketchLayoutIssue.tab.name}</code> must be inside <code>{sketchLayoutIssue.expectedFolder}/</code>.</span>
+                    </div>
+                    {sketchLayoutIssue.canFix ? <button type="button" onClick={fixSketchLayout}>Fix sketch layout</button> : null}
+                  </div>
+                )}
+                <OutputConsole lines={outputLines} onClear={() => setOutputLines([])} />
+              </>
             )}
             {activeTab === 'serial' && (
               <SerialMonitor ports={ports} />

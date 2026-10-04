@@ -1,3 +1,19 @@
+/* ── Bundled terminal monospace font ── */
+@font-face {
+    font-family: 'TilderMono';
+    src: url('/fonts/Consolas-Regular.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+@font-face {
+    font-family: 'TilderMono';
+    src: url('/fonts/Consolas-Bold.ttf') format('truetype');
+    font-weight: 700;
+    font-style: normal;
+    font-display: block;
+}
+
 * {
 
     color: #fff;
@@ -19,6 +35,12 @@
 }
 
 
+
+html, body, #root {
+    overflow: hidden !important;
+    width: 100vw !important;
+    height: 100vh !important;
+}
 
 /* ─── Premium Scrollbars ─────────────────────────────────── */
 
@@ -182,7 +204,8 @@ nav {
     display: flex;
     justify-content: space-between;
     width: 100%;
-    height: 40px;
+    min-height: 44px;
+    height: auto;
     min-height: 40px;
     max-height: 40px;
     flex-direction: row;
@@ -2012,7 +2035,7 @@ input[type="checkbox"]:checked::after {
 
     flex-direction: column;
 
-    background: #1c1b33;
+    background: transparent !important;
 
     border: 1px solid var(--modal-box-color);
 
@@ -2666,7 +2689,8 @@ select.settingsInput {
 
     /* Adjusted from 10% for testing, use your preference */
 
-    height: 40px;
+    min-height: 44px;
+    height: auto;
 
     border-radius: 6px;
 
@@ -3220,7 +3244,7 @@ select.settingsInput {
 
     min-height: 0;
 
-    overflow: hidden;
+    overflow: visible;
 
     display: flex;
 
@@ -3579,45 +3603,27 @@ select.settingsInput {
 
 
 .tilderSettingsCard {
-
     display: flex;
-
     flex-direction: column;
-
     gap: 10px;
-
     padding: 12px;
-
     border: 1px solid rgba(255, 255, 255, 0.08);
-
     border-radius: 12px;
-
     background: rgba(255, 255, 255, 0.03);
-
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease;
+    transform-origin: center;
 }
 
-
-
-.tilderSettingsCard:hover {
-
-    border-color: rgba(141, 156, 255, 0.18);
-
-    background: rgba(255, 255, 255, 0.045);
-
+/* macOS spring press — triggered by .pressed class on the card */
+.tilderSettingsCard.pressed {
+    transform: scale(0.97);
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25);
 }
-
-
 
 .tilderSettingsCard.highlighted {
-
     border-color: rgba(130, 149, 255, 0.52);
-
     box-shadow: 0 0 0 1px rgba(130, 149, 255, 0.22), 0 18px 36px rgba(39, 44, 92, 0.22);
-
     background: rgba(81, 90, 173, 0.12);
-
 }
 
 
@@ -4192,7 +4198,8 @@ input[type="range"].tilderSettingsControl:active::-webkit-slider-thumb {
 
     gap: 2px;
 
-    height: 40px;
+    min-height: 44px;
+    height: auto;
 
     padding: 2px 5px 0;
 
@@ -5934,69 +5941,7 @@ input[type="range"].tilderSettingsControl:active::-webkit-slider-thumb {
 
 
 
-.debug-section {
-
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-
-}
-
-
-
-.debug-section-header {
-
-    display: flex;
-
-    align-items: center;
-
-    justify-content: space-between;
-
-    padding: 8px 12px;
-
-    background: rgba(255, 255, 255, 0.02);
-
-    user-select: none;
-
-}
-
-
-
-.debug-section-title {
-
-    font-size: 11px;
-
-    font-weight: 700;
-
-    text-transform: uppercase;
-
-    letter-spacing: 0.5px;
-
-    display: flex;
-
-    align-items: center;
-
-    gap: 6px;
-
-    color: rgba(255, 255, 255, 0.5);
-
-}
-
-
-
-.debug-section-chevron {
-
-    width: 12px;
-
-    font-size: 10px;
-
-}
-
-
-
-.debug-section-body {
-
-    padding: 4px 0;
-
-}
+/* Duplicate debug-section styling removed */
 
 
 
@@ -6785,59 +6730,41 @@ input[type="range"].tilderSettingsControl:active::-webkit-slider-thumb {
 
 
 .debug-section {
-
-    margin: 12px 14px 0;
-
-    border-radius: 14px;
-
-    border: 1px solid rgba(111, 110, 191, 0.14);
-
-    background:
-
-        linear-gradient(180deg, rgba(22, 23, 40, 0.94), rgba(13, 14, 24, 0.96));
-
+    margin: 0;
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    background: transparent;
 }
-
-
 
 .debug-section-header {
-
     display: flex;
-
     align-items: center;
-
     justify-content: space-between;
-
-    gap: 10px;
-
+    padding: 6px 12px;
+    background: transparent;
+    cursor: pointer;
+    user-select: none;
 }
-
-
+.debug-section-header:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
 
 .debug-section-title {
-
     font-size: 11px;
-
-    letter-spacing: 0.08em;
-
+    font-weight: 600;
     text-transform: uppercase;
-
-    color: rgba(255, 255, 255, 0.56);
-
+    color: rgba(255, 255, 255, 0.7);
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
-
-
 .debug-section-body {
-
     display: flex;
-
     flex-direction: column;
-
-    gap: 10px;
-
-    padding: 12px 14px 14px;
-
+    gap: 6px;
+    padding: 8px 12px 14px;
+    background: transparent;
 }
 
 
@@ -7219,14 +7146,90 @@ input[type="range"].tilderSettingsControl:active::-webkit-slider-thumb {
 
 
 .debug-empty-state {
-
     font-size: 12px;
-
     line-height: 1.6;
-
     color: rgba(224, 230, 255, 0.68);
-
 }
+
+/* ── Debug Exception Filter Toggles (macOS-style) ── */
+.debug-exception-filters {
+    padding: 6px 0 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    margin-bottom: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.debug-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.debug-toggle-label {
+    font-size: 12px;
+    color: rgba(230, 235, 255, 0.85);
+    font-weight: 400;
+    letter-spacing: 0.01em;
+}
+
+/* Track */
+.debug-toggle-switch {
+    position: relative;
+    width: 32px;
+    height: 18px;
+    border-radius: 999px;
+    border: none;
+    background: rgba(255, 255, 255, 0.12);
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+    transition: background 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    outline: none;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.debug-toggle-switch:focus-visible {
+    box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.35);
+}
+
+/* Active (ON) state — macOS blue */
+.debug-toggle-switch.on {
+    background: #0a84ff;
+    box-shadow: inset 0 0 0 1px rgba(10, 132, 255, 0.5), 0 0 8px rgba(10, 132, 255, 0.25);
+}
+
+/* Knob */
+.debug-toggle-knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 0.5px 1px rgba(0, 0, 0, 0.3);
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
+}
+
+.debug-toggle-switch.on .debug-toggle-knob {
+    transform: translateX(14px);
+}
+
+.debug-toggle-switch:active .debug-toggle-knob {
+    width: 17px; /* stretch on press like macOS */
+}
+
+.debug-toggle-switch.on:active .debug-toggle-knob {
+    transform: translateX(11px);
+    width: 17px;
+}
+
 
 
 
@@ -8156,9 +8159,9 @@ input[type="range"].tilderSettingsControl:active::-webkit-slider-thumb {
 
     background: var(--tilder-panel-bg, rgba(18, 19, 29, 0.65));
 
-    backdrop-filter: var(--tilder-panel-blur, blur(16px) saturate(180%));
+    backdrop-filter: var(--tilder-panel-blur, blur(16px) saturate(140%));
 
-    -webkit-backdrop-filter: var(--tilder-panel-blur, blur(16px) saturate(180%));
+    -webkit-backdrop-filter: var(--tilder-panel-blur, blur(16px) saturate(140%));
 
     border: 1px solid rgba(167, 157, 255, 0.16);
 
@@ -8636,7 +8639,8 @@ input[type="range"].tilderSettingsControl:active::-webkit-slider-thumb {
 
     width: 44px;
 
-    height: 44px;
+    min-height: 44px;
+    height: auto;
 
     border-radius: 50%;
 
@@ -8654,7 +8658,8 @@ input[type="range"].tilderSettingsControl:active::-webkit-slider-thumb {
 
     width: 44px;
 
-    height: 44px;
+    min-height: 44px;
+    height: auto;
 
     border-radius: 50%;
 
@@ -9980,9 +9985,7 @@ nav {
 
     max-height: calc(100vh - 48px);
 
-    background:
-
-        linear-gradient(180deg, rgba(20, 21, 37, 0.98), rgba(12, 13, 23, 0.98));
+    background: transparent !important;
 
     border: 1px solid rgba(117, 116, 198, 0.2);
 
@@ -10156,34 +10159,25 @@ nav {
 
     gap: 8px;
 
-    padding-bottom: 2px;
+    padding-bottom: 8px;
 
-    scrollbar-width: thin;
-    scrollbar-color: transparent transparent;
     scroll-behavior: smooth;
 
 }
 
 .tabs-list:hover {
-    scrollbar-color: rgba(255,255,255,0.18) transparent;
 }
 
-.tabs-list::-webkit-scrollbar {
-    height: 3px;
-}
 
-.tabs-list::-webkit-scrollbar-track {
-    background: transparent;
-}
 
-.tabs-list::-webkit-scrollbar-thumb {
-    background: transparent;
-    border-radius: 3px;
-}
 
-.tabs-list:hover::-webkit-scrollbar-thumb {
-    background: rgba(255,255,255,0.18);
-}
+
+
+
+
+
+
+
 
 
 
@@ -16411,17 +16405,7 @@ nav {
 
 
 
-/* Force terminal font to prevent spacing glitches */
-
-.xterm-rows, .xterm-rows span {
-
-    font-family: 'Cascadia Code', 'Cascadia Mono', Consolas, monospace !important;
-
-    letter-spacing: 0px !important;
-
-}
-
-
+/* Let xterm manage its own row font - CSS override causes glyph overlap */
 
 .terminal-profile-select {
 
@@ -16769,77 +16753,7 @@ nav {
 
 
 
-/* Sections */
-
-.debug-section {
-
-    border-top: 1px solid rgba(255,255,255,0.05);
-
-}
-
-
-
-.debug-section-header {
-
-    display: flex;
-
-    justify-content: space-between;
-
-    align-items: center;
-
-    padding: 4px 8px;
-
-    background: rgba(0,0,0,0.15);
-
-    border-bottom: 1px solid rgba(255,255,255,0.02);
-
-    user-select: none;
-
-    height: 22px;
-
-}
-
-
-
-.debug-section-title {
-
-    font-size: 10px;
-
-    font-weight: 700;
-
-    color: #aaa;
-
-    text-transform: uppercase;
-
-    letter-spacing: 0.05em;
-
-    display: flex;
-
-    align-items: center;
-
-    gap: 4px;
-
-}
-
-
-
-.debug-section-chevron {
-
-    width: 10px;
-
-    display: inline-block;
-
-    font-size: 8px;
-
-}
-
-
-
-.debug-section-body {
-
-    padding: 0;
-
-}
+/* Sections (Removed duplicate debug-section styling) */
 
 
 
@@ -18645,7 +18559,7 @@ nav                    { background: var(--tilder-panel-bg) !important; backdrop
 
 .modalContainer        { 
 
-    background: var(--content-box-bg-color) !important; 
+    background: transparent !important; 
 
     border-color: rgba(255,255,255,0.15) !important; 
 
@@ -18708,25 +18622,13 @@ nav                    { background: var(--tilder-panel-bg) !important; backdrop
 
 
 .menubar-center-search {
-
     display: flex;
-
     justify-content: center;
-
     align-items: center;
-
-    position: absolute;
-
-    left: 50%;
-
-    transform: translateX(-50%);
-
-    -webkit-app-region: drag;  /* only the center empty area drags */
-
+    flex: 1 1 auto;
+    min-width: 0;
+    -webkit-app-region: drag;
     cursor: default;
-
-    z-index: 1;
-
 }
 
 
@@ -19063,9 +18965,9 @@ body[data-theme="tilder-tahoe"] nav {
 
     background: linear-gradient(180deg, rgba(18, 18, 22, 0.22) 0%, rgba(12, 12, 16, 0.25) 100%) !important;
 
-    backdrop-filter: blur(8px) saturate(130%) brightness(0.95) !important;
+    backdrop-filter: blur(5px) saturate(120%) !important;
 
-    -webkit-backdrop-filter: blur(8px) saturate(130%) brightness(0.95) !important;
+    -webkit-backdrop-filter: blur(5px) saturate(120%) !important;
 
     border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
 
@@ -19192,8 +19094,8 @@ body[data-theme="tilder-tahoe"] .tab.active {
 body[data-theme="tilder-tahoe"] .dropdown-content,
 body[data-theme="tilder-tahoe"] .subdropdown-content {
     background: linear-gradient(165deg, rgba(35, 33, 50, 0.94) 0%, rgba(22, 20, 36, 0.96) 100%) !important;
-    backdrop-filter: blur(24px) saturate(180%) brightness(1.02) !important;
-    -webkit-backdrop-filter: blur(24px) saturate(180%) brightness(1.02) !important;
+    backdrop-filter: blur(12px) saturate(150%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(150%) !important;
     border: 1px solid rgba(255, 255, 255, 0.1) !important;
     border-radius: 5px !important;
     padding: 3px 0 !important;
@@ -19204,29 +19106,7 @@ body[data-theme="tilder-tahoe"] .subdropdown-content {
 
 
 
-body[data-theme="tilder-tahoe"] .modalContainer {
 
-    background: linear-gradient(165deg, rgba(50, 50, 56, 0.85) 0%, rgba(36, 36, 40, 0.9) 100%) !important;
-
-    backdrop-filter: blur(60px) saturate(220%) brightness(1.05) !important;
-
-    -webkit-backdrop-filter: blur(60px) saturate(220%) brightness(1.05) !important;
-
-    border: none !important;
-
-    border-radius: 16px !important;
-
-    box-shadow:
-
-        0 32px 80px rgba(0, 0, 0, 0.6),
-
-        0 12px 32px rgba(0, 0, 0, 0.35),
-
-        inset 0 1px 0 rgba(255, 255, 255, 0.15),
-
-        inset 0 0 0 0.5px rgba(255, 255, 255, 0.06) !important;
-
-}
 
 
 
@@ -19248,9 +19128,9 @@ body[data-theme="tilder-tahoe"] .tilderSettingsRoot {
 
     background: linear-gradient(165deg, rgba(46, 46, 52, 0.45) 0%, rgba(32, 32, 36, 0.5) 100%) !important;
 
-    backdrop-filter: blur(60px) saturate(220%) brightness(1.05) !important;
+    backdrop-filter: blur(20px) saturate(160%) !important;
 
-    -webkit-backdrop-filter: blur(60px) saturate(220%) brightness(1.05) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(160%) !important;
 
     border: 1px solid rgba(255, 255, 255, 0.08) !important;
 
@@ -19434,7 +19314,7 @@ body[data-theme="tilder-tahoe"] .fp-empty-card {
 
 
 
-/* ── Primary buttons – Apple blue with glass ── */
+/* ── Primary buttons – Ocean blue with glass ── */
 
 body[data-theme="tilder-tahoe"] .fp-empty-btn--primary {
 
@@ -19573,13 +19453,9 @@ body[data-theme="tilder-tahoe"] .explorer-header {
 /* ── Smooth transitions for all Tahoe elements ── */
 
 body[data-theme="tilder-tahoe"] * {
-
     transition-property: background, background-color, box-shadow, border-color, transform;
-
-    transition-duration: 0.3s;
-
+    transition-duration: 0.18s;
     transition-timing-function: cubic-bezier(0.25, 0.8, 0.25, 1);
-
 }
 
 body[data-theme="tilder-tahoe"] *:focus,
@@ -19816,7 +19692,14 @@ body[data-theme="tilder-tahoe"] .tilderSettingsToggle input:checked + .tilderSet
 
 
 
-/* ── macOS Tahoe Fluid UI Animations (50+ Interactions) ── */
+/* ── Glass Theme Fluid UI Animations ── */
+
+
+@keyframes goldenGateModalReveal {
+    0% { transform: scale(0.85) translateY(12px); opacity: 0; filter: blur(12px); }
+    50% { transform: scale(1.01) translateY(-2px); opacity: 1; filter: blur(0px); }
+    100% { transform: scale(1) translateY(0); opacity: 1; filter: blur(0px); }
+}
 
 @keyframes macOsPopupSpring {
 
@@ -19892,7 +19775,7 @@ body[data-theme="tilder-tahoe"] {
 
     .modalContainer, .go-popup, .command-palette-wrapper, .context-menu {
 
-        animation: macOsPopupSpring 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards !important;
+        animation: goldenGateModalReveal 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.1) forwards !important;
 
         transform-origin: center center;
 
@@ -19970,7 +19853,7 @@ body[data-theme="tilder-tahoe"] {
 
     .tilderSettingsCard {
 
-        animation: macOsPopupSpring 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards !important;
+        animation: goldenGateModalReveal 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.1) forwards !important;
 
     }
 
@@ -19982,15 +19865,7 @@ body[data-theme="tilder-tahoe"] {
 
 
 
-    /* 7. Hover lifts */
-
-    .tilderSettingsCard:hover {
-
-        transform: translateY(-1px) scale(1.005) !important;
-
-        box-shadow: 0 8px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1) !important;
-
-    }
+    /* hover lift removed */
 
 
 
@@ -20117,7 +19992,18 @@ body[data-theme="tilder-tahoe"] {
         transition: box-shadow 0.3s ease, background-color 0.3s ease !important;
 
     }
+}
 
+
+/* ── GPU compositing: promote glass panels to own layer for smoother blur ── */
+body[data-theme="tilder-tahoe"] .sidebar,
+body[data-theme="tilder-tahoe"] .sidebarscontent,
+body[data-theme="tilder-tahoe"] nav,
+body[data-theme="tilder-tahoe"] .modalContainer,
+body[data-theme="tilder-tahoe"] .dropdown-content,
+body[data-theme="tilder-tahoe"] .subdropdown-content {
+    will-change: backdrop-filter;
+    transform: translateZ(0);
 }
 
 
@@ -20269,4 +20155,1726 @@ body[data-theme="tilder-tahoe"] .menubar-icon-btn i {
 .coverage-uncovered {
   background-color: rgba(255, 69, 58, 0.15);
   border-left: 3px solid #ff453a;
+}
+/* ================================================== */
+/*                 TEST RUNNER (TESTING)              */
+/* ================================================== */
+
+.tr-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    color: var(--vscode-foreground, #cccccc);
+    background: var(--vscode-sideBar-background, transparent);
+    font-family: var(--vscode-font-family, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif);
+}
+
+.tr-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    background: rgba(0, 0, 0, 0.1);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.tr-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tr-header-icon {
+    font-size: 14px;
+    color: var(--vscode-symbolIcon-testForeground, #8e8e93);
+}
+
+.tr-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--vscode-sideBarTitle-foreground, #e8ecff);
+}
+
+.tr-header-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.tr-icon-btn {
+    background: transparent;
+    border: none;
+    color: var(--vscode-icon-foreground, #8e8e93);
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.15s ease;
+}
+
+.tr-icon-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--vscode-foreground, #ffffff);
+}
+
+.tr-icon-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.tr-icon-btn--run {
+    color: var(--vscode-testing-iconPassed, #34c759);
+}
+
+.tr-icon-btn--stop {
+    color: var(--vscode-testing-iconFailed, #ff3b30);
+}
+
+.tr-search-bar {
+    padding: 8px 12px;
+    position: relative;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.tr-search-icon {
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #8e8e93;
+    font-size: 12px;
+}
+
+.tr-search-input {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
+    padding: 6px 8px 6px 26px;
+    border-radius: 4px;
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+.tr-search-input:focus {
+    border-color: var(--vscode-focusBorder, #007fd4);
+}
+
+.tr-summary {
+    display: flex;
+    padding: 8px 14px;
+    gap: 12px;
+    font-size: 11px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.tr-summary-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tr-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px 0;
+}
+
+.tr-empty {
+    padding: 24px 16px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    color: #8e8e93;
+}
+
+.tr-empty i {
+    font-size: 32px;
+    opacity: 0.5;
+}
+
+.tr-empty span {
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.tr-empty small {
+    font-size: 11px;
+    line-height: 1.5;
+    opacity: 0.8;
+}
+
+.tr-empty button {
+    margin-top: 12px;
+    background: var(--vscode-button-background, #007fd4);
+    color: var(--vscode-button-foreground, #ffffff);
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.tr-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.tr-item-row {
+    display: flex;
+    align-items: center;
+    padding: 4px 8px 4px 12px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.tr-item-row:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.tr-dot-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
+.tr-item-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    overflow: hidden;
+}
+
+.tr-item-name {
+    font-size: 12.5px;
+    color: #f5f7ff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+}
+
+.tr-item-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.tr-item-tag {
+    font-size: 9px;
+    padding: 1px 4px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.tr-item-time {
+    font-size: 10px;
+    color: #8e8e93;
+}
+
+.tr-run-btn, .tr-expand-btn {
+    background: transparent;
+    border: none;
+    color: #8e8e93;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 4px;
+    opacity: 0;
+    transition: all 0.2s ease;
+}
+
+.tr-item-row:hover .tr-run-btn,
+.tr-item-row:hover .tr-expand-btn {
+    opacity: 1;
+}
+
+.tr-run-btn:hover, .tr-expand-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.tr-item-output {
+    background: rgba(0, 0, 0, 0.2);
+    border-left: 2px solid var(--vscode-testing-iconFailed, #ff3b30);
+    padding: 8px 12px;
+    margin: 4px 12px 12px 38px;
+    border-radius: 0 4px 4px 0;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 11px;
+    color: #cccccc;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 200px;
+    overflow-y: auto;
+}
+.tr-empty-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--vscode-foreground, #e8ecff);
+    margin-bottom: 4px;
+}
+.tr-empty-sub {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.6);
+    line-height: 1.5;
+    text-align: center;
+    margin-bottom: 16px;
+}
+.tr-cta-btn {
+    background: var(--vscode-button-background, #007fd4);
+    color: var(--vscode-button-foreground, #ffffff);
+    border: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.tr-cta-btn:hover {
+    background: var(--vscode-button-hoverBackground, #0069b0);
+    transform: translateY(-1px);
+}
+
+.tr-coverage {
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(0, 0, 0, 0.1);
+}
+.tr-coverage-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: none;
+    color: var(--vscode-foreground, #cccccc);
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    transition: background 0.2s;
+}
+.tr-coverage-header:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+.tr-coverage-chevron {
+    font-size: 10px;
+    color: #8e8e93;
+}
+.tr-coverage-body {
+    padding: 12px 14px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+    line-height: 1.5;
+    background: rgba(0, 0, 0, 0.2);
+}
+/* MODERN UI REFINEMENTS FOR TESTING AND SETTINGS */
+
+.tr-shell {
+    background: transparent !important; /* let the sidebar background show through */
+}
+
+.tr-header {
+    background: transparent !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 14px 16px;
+}
+
+.tr-search-bar {
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.tr-search-input {
+    background: rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 8px 12px 8px 30px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #fff;
+    backdrop-filter: blur(10px);
+    transition: all 0.2s ease;
+}
+
+.tr-search-input:focus {
+    background: rgba(0, 0, 0, 0.25);
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.05);
+}
+
+/* ── Liquid Glass & Spring Animations for Testing UI ── */
+.tr-icon-btn,
+.tr-pill,
+.tr-dot-btn,
+.tr-run-btn,
+.tr-expand-btn,
+.tr-search-clear,
+.tr-cta-btn {
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, opacity 0.2s ease, border-color 0.2s ease !important;
+    transform-origin: center;
+}
+
+/* Elastic compress on press */
+.tr-icon-btn:active:not(:disabled),
+.tr-pill:active:not(:disabled),
+.tr-dot-btn:active:not(:disabled),
+.tr-run-btn:active:not(:disabled),
+.tr-expand-btn:active:not(:disabled),
+.tr-search-clear:active:not(:disabled),
+.tr-cta-btn:active:not(:disabled) {
+    transform: scale(0.85) !important;
+    transition: transform 0.1s cubic-bezier(0, 0, 0.2, 1) !important;
+}
+
+/* Gentle press for rows */
+.tr-item-row {
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, border-color 0.2s ease !important;
+    border-radius: 8px;
+    margin: 2px 6px;
+}
+.tr-item-row:active {
+    transform: scale(0.97) !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    transition: transform 0.1s cubic-bezier(0, 0, 0.2, 1), background 0.1s ease !important;
+}
+
+/* Liquid Glass Pills */
+.tr-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.85);
+    cursor: pointer;
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.tr-pill:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+.tr-pill--active {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+.tr-pill--dim {
+    opacity: 0.4;
+}
+.tr-pill-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+
+.tr-search-icon {
+    left: 26px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.5);
+}
+.tr-search-clear {
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255,255,255,0.1);
+    border: none;
+    color: #fff;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 10px;
+}
+.tr-search-clear:hover {
+    background: rgba(255,255,255,0.2);
+}
+.tr-search-clear:active {
+    transform: translateY(-50%) scale(0.85) !important;
+}
+
+.tr-cta-btn {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-weight: 500;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.tr-cta-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-1px) scale(1.02);
+}
+
+.tilderSettingsSidebar {
+    padding: 16px 12px !important;
+    gap: 12px !important;
+}
+
+.tilderSettingsSidebarHeader {
+    gap: 12px !important;
+    padding: 0 8px;
+}
+
+.tilderSettingsProfileManager {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 12px;
+    padding: 12px !important;
+    margin: 4px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.tilderSettingsSearchInput {
+    border-radius: 6px !important;
+    background: rgba(0, 0, 0, 0.2) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.tilderSettingsButton {
+    border-radius: 6px !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #fff !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    font-weight: 500;
+}
+
+.tilderSettingsButton:hover {
+    background: rgba(255, 255, 255, 0.15) !important;
+}
+
+.tilderSettingsSidebarActions {
+    padding: 0 8px !important;
+}
+
+.resetBulk {
+    border-radius: 8px !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: #fff !important;
+    font-weight: 500 !important;
+    padding: 8px !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.resetBulk:hover {
+    background: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* MODERN STYLE GROUPED LIST FOR TEST RUNNER */
+.tr-list {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+}
+
+.tr-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.tr-item-row {
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    padding: 8px 12px;
+    transition: background 0.2s ease;
+}
+
+.tr-item:first-child .tr-item-row {
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+}
+
+.tr-item:last-child .tr-item-row {
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
+    border-bottom: none;
+}
+
+.tr-item-row:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.tr-item-name {
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.tr-coverage {
+    border-top: none;
+    background: transparent;
+    padding: 0 12px 12px;
+}
+
+.tr-coverage-header {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 10px;
+    padding: 10px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.tr-coverage-header:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.tr-coverage-body {
+    background: transparent;
+    padding: 12px 4px;
+    font-size: 11px;
+}
+
+/* ========================================= */
+/*  FINAL FIXES FOR SETTINGS AND TESTING UI  */
+/* ========================================= */
+
+.tilderSettingsSidebarList {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    min-height: 0 !important;
+}
+
+.tilderSettingsSidebar {
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    height: 100% !important;
+}
+
+.tr-search-bar {
+    position: relative !important;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.tr-search-icon {
+    position: absolute !important;
+    left: 26px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.5);
+    pointer-events: none;
+}
+
+.tr-search-input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.tr-cta-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    background: rgba(255,255,255,0.15) !important;
+    padding: 10px 20px !important;
+    border-radius: 8px !important;
+    font-size: 13px !important;
+}
+* {
+    box-sizing: border-box;
+}
+
+.tilderSettingsProfileManager input {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    margin-bottom: 8px !important;
+}
+
+.tilderSettingsSidebarActions button {
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+/* ================================================= */
+/* PERFECT OVERFLOW FIX FOR SETTINGS AND TESTING    */
+/* ================================================= */
+
+.sidebarscontent.d-flex {
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 0 !important; /* Remove padding so it matches Explorer perfectly */
+    overflow: hidden !important;
+}
+
+.tr-shell {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+}
+
+.tr-list {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    min-height: 0 !important;
+}
+
+.tr-header {
+    flex-shrink: 0 !important;
+}
+
+.tr-search-bar {
+    flex-shrink: 0 !important;
+}
+
+.tr-coverage {
+    flex-shrink: 0 !important;
+}
+
+/* SETTINGS OVERFLOW FIX */
+.content {
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important;
+}
+
+.tilderSettingsRoot {
+    flex: 1 !important;
+    min-height: 0 !important;
+    height: auto !important;
+}
+
+.tilderSettingsSidebar {
+    flex-shrink: 0 !important; 
+    max-height: 100% !important;
+}
+/* ================================================== */
+/*          ULTIMATE MODERN UI & UX OVERHAUL           */
+/* ================================================== */
+
+/* 1. Reset Modal constraints perfectly */
+.modalContainer {
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+}
+
+.content {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important;
+    height: auto !important;
+    overflow: hidden !important;
+}
+
+/* 2. Settings Root & Sidebar Fix */
+.tilderSettingsRoot {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: row !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    overflow: hidden !important;
+    background: transparent !important;
+}
+
+.tilderSettingsSidebar {
+    width: 250px !important;
+    min-width: 250px !important;
+    max-width: 250px !important;
+    flex-shrink: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+    padding: 16px 12px 12px 12px !important;
+    box-sizing: border-box !important;
+}
+
+/* Let the categories list shrink and scroll! */
+.tilderSettingsSidebarList {
+    flex: 1 !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    margin-bottom: 8px !important;
+}
+
+/* Profile Manager fits nicely at the bottom */
+.tilderSettingsProfileManager {
+    flex-shrink: 0 !important;
+    background: rgba(0, 0, 0, 0.15) !important;
+    border-radius: 12px !important;
+    padding: 12px !important;
+    margin-bottom: 8px !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    max-height: 140px !important;
+    overflow-y: auto !important;
+}
+
+.tilderSettingsSidebarActions {
+    flex-shrink: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+}
+
+/* 3. Settings Content Area */
+.tilderSettingsContent {
+    flex: 1 !important;
+    min-width: 0 !important;
+    height: 100% !important;
+    overflow: visible !important;
+    padding: 16px 24px !important;
+    box-sizing: border-box !important;
+}
+
+/* 4. Testing Sidebar UI Fix */
+.sidebarscontent.d-flex {
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 0 !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+}
+
+.tr-shell {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    background: transparent !important;
+}
+
+.tr-header {
+    flex-shrink: 0 !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    padding: 12px 16px !important;
+    background: rgba(0,0,0,0.1) !important;
+    border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+}
+
+.tr-search-bar {
+    flex-shrink: 0 !important;
+    position: relative !important;
+    padding: 12px 16px !important;
+    border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+}
+
+/* Center the search icon perfectly in the input */
+.tr-search-icon {
+    position: absolute !important;
+    left: 28px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    font-size: 12px !important;
+    color: rgba(255,255,255,0.5) !important;
+    pointer-events: none !important;
+    z-index: 2 !important;
+}
+
+.tr-search-input {
+    width: 100% !important;
+    background: rgba(0,0,0,0.2) !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    padding: 8px 12px 8px 32px !important;
+    border-radius: 8px !important;
+    color: #fff !important;
+    font-size: 13px !important;
+    box-sizing: border-box !important;
+    outline: none !important;
+}
+
+.tr-list {
+    flex: 1 !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    padding: 12px !important;
+}
+
+.tr-coverage {
+    flex-shrink: 0 !important;
+    padding: 12px !important;
+    border-top: 1px solid rgba(255,255,255,0.05) !important;
+    background: rgba(0,0,0,0.1) !important;
+}
+.tilderSettingsProfileManager {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+}
+
+.tilderSettingsProfileTitle {
+    font-size: 11px !important;
+    text-transform: uppercase !important;
+    color: rgba(255, 255, 255, 0.5) !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.05em !important;
+}
+
+.tilderSettingsProfileInputRow {
+    display: flex !important;
+    gap: 6px !important;
+}
+
+.tilderSettingsProfileInput {
+    flex: 1 !important;
+    padding: 6px 8px !important;
+    background: rgba(0, 0, 0, 0.2) !important;
+    color: #fff !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 6px !important;
+    outline: none !important;
+    font-size: 12px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.tilderSettingsProfileList {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+    margin-top: 4px !important;
+}
+
+.tilderSettingsProfileItem {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    padding: 6px 8px !important;
+    border-radius: 6px !important;
+}
+
+.tilderSettingsProfileName {
+    font-size: 12px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    flex: 1 !important;
+}
+
+.tilderSettingsProfileActions {
+    display: flex !important;
+    gap: 8px !important;
+}
+
+.tilderSettingsProfileBtn {
+    background: none !important;
+    border: none !important;
+    color: rgba(255, 255, 255, 0.7) !important;
+    cursor: pointer !important;
+    font-size: 11px !important;
+    font-weight: 500 !important;
+    padding: 0 !important;
+}
+
+.tilderSettingsProfileBtn:hover {
+    color: #fff !important;
+}
+
+.tilderSettingsProfileBtn--danger:hover {
+    color: #ff453a !important;
+}
+
+/* =========================================================
+   SETTINGS + TESTING / COMPACT EDITOR SURFACES
+   Keep these surfaces integrated with the host chrome: one
+   hierarchy, quiet dividers, and no nested floating cards.
+   ========================================================= */
+
+.tilderSettingsRoot {
+    gap: 0 !important;
+    padding: 0 !important;
+    background: #171722 !important;
+    border: 1px solid rgba(255,255,255,.10) !important;
+    border-radius: 12px !important;
+}
+
+.tilderSettingsSidebar {
+    width: 252px !important;
+    min-width: 252px !important;
+    max-width: 252px !important;
+    gap: 0 !important;
+    padding: 22px 12px 12px !important;
+    background: #1b1b29 !important;
+    border: 0 !important;
+    border-right: 1px solid rgba(255,255,255,.085) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+
+.tilderSettingsSidebarHeader {
+    gap: 7px !important;
+    padding: 0 10px 18px !important;
+}
+
+.tilderSettingsSidebarHeader h4 { font-size: 18px !important; letter-spacing: -.02em; }
+.tilderSettingsSidebarEyebrow { color: #a9a1ff !important; font-size: 10px !important; letter-spacing: .12em !important; }
+.tilderSettingsViewSwitch { padding: 3px !important; border-radius: 7px !important; background: rgba(255,255,255,.045) !important; }
+.tilderSettingsViewButton { padding: 5px 11px !important; border-radius: 5px !important; font-size: 11px !important; }
+.tilderSettingsViewButton.active { background: #57518f !important; }
+
+.tilderSettingsSidebarList {
+    gap: 2px !important;
+    padding: 0 4px 10px !important;
+    margin: 0 !important;
+    border-top: 1px solid rgba(255,255,255,.07) !important;
+    padding-top: 10px !important;
+}
+.tilderSettingsSidebarItem {
+    min-height: 48px !important;
+    gap: 9px !important;
+    padding: 8px 9px !important;
+    border: 1px solid transparent !important;
+    border-radius: 7px !important;
+    background: transparent !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+.tilderSettingsSidebarItem:hover { background: rgba(255,255,255,.055) !important; border-color: transparent !important; }
+.tilderSettingsSidebarItem.active { background: #3b3858 !important; border-color: rgba(169,161,255,.30) !important; box-shadow: inset 3px 0 0 #aaa2ff !important; }
+.tilderSettingsSidebarItemIcon { width: 25px !important; height: 25px !important; min-width: 25px !important; border-radius: 6px !important; }
+.tilderSettingsSidebarItemText { gap: 2px !important; }
+.tilderSettingsSidebarItemText span { font-size: 12px !important; }
+.tilderSettingsSidebarItemText small { font-size: 10px !important; line-height: 1.25 !important; }
+.tilderSettingsSidebarCount { min-width: 22px !important; padding: 3px 6px !important; border-radius: 5px !important; background: rgba(255,255,255,.07) !important; font-size: 10px !important; }
+
+.tilderSettingsProfileManager {
+    margin: 8px 4px !important;
+    padding: 10px !important;
+    border: 1px solid rgba(255,255,255,.08) !important;
+    border-radius: 8px !important;
+    background: rgba(0,0,0,.14) !important;
+}
+.tilderSettingsProfileTitle { font-size: 10px !important; letter-spacing: .1em !important; }
+.tilderSettingsProfileInputRow { gap: 5px !important; }
+.tilderSettingsProfileInput { padding: 7px 8px !important; font-size: 11px !important; }
+.tilderSettingsButton, .resetBulk { border-radius: 6px !important; font-size: 11px !important; }
+.tilderSettingsSidebarActions { gap: 5px !important; padding: 0 4px !important; }
+.resetBulk { padding: 8px !important; background: rgba(255,255,255,.06) !important; }
+
+.tilderSettingsContent {
+    padding: 22px 28px 26px !important;
+    background: #202035 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+}
+.tilderSettingsSearchBar { padding-bottom: 9px !important; }
+.tilderSettingsSearchBar #settingsSearchBar { padding: 10px 13px !important; border-radius: 7px !important; background: rgba(0,0,0,.16) !important; }
+.tilderSettingsSearchSummary { margin-bottom: 20px !important; font-size: 11px !important; color: rgba(222,227,255,.60) !important; }
+.tilderSettingsSections { gap: 26px !important; }
+.tilderSettingsSection { gap: 9px !important; }
+.tilderSettingsSectionHeader { padding: 0 !important; }
+.tilderSettingsSectionHeader h5 { font-size: 15px !important; }
+.tilderSettingsSectionHeader p { font-size: 11px !important; }
+.tilderSettingsResetSection { padding: 6px 10px !important; border-radius: 6px !important; font-size: 10px !important; }
+.tilderSettingsCards { gap: 5px !important; }
+.tilderSettingsCard {
+    gap: 8px !important;
+    padding: 12px 14px !important;
+    border: 1px solid rgba(255,255,255,.075) !important;
+    border-radius: 7px !important;
+    background: rgba(255,255,255,.028) !important;
+    box-shadow: none !important;
+}
+.tilderSettingsCard:hover { /* hover removed */ }
+.tilderSettingsCardTitleRow h6 { font-size: 13px !important; }
+.tilderSettingsCardHeader p { font-size: 11px !important; line-height: 1.4 !important; }
+.tilderSettingsSettingPath { padding: 2px 6px !important; font-size: 10px !important; }
+.tilderSettingsCardFooter { gap: 8px !important; }
+.tilderSettingsControlWrap { max-width: 620px !important; }
+
+.tr-shell { background: #1b1b22 !important; }
+.tr-header { padding: 12px 14px !important; background: #202029 !important; border-bottom: 1px solid rgba(255,255,255,.09) !important; }
+.tr-title { font-size: 10px !important; letter-spacing: .10em !important; }
+.tr-header-actions { gap: 2px !important; }
+.tr-icon-btn { width: 25px !important; height: 25px !important; border-radius: 5px !important; }
+.tr-summary { padding: 8px 14px !important; gap: 6px !important; background: rgba(255,255,255,.025) !important; }
+/* removed tr-pill override for Liquid Glass style */
+.tr-search-bar { padding: 10px 14px !important; background: #1b1b22 !important; }
+.tr-search-input { padding: 8px 10px 8px 29px !important; border-radius: 6px !important; background: #15151b !important; border-color: rgba(255,255,255,.10) !important; font-size: 12px !important; }
+.tr-search-icon { left: 25px !important; }
+.tr-list { padding: 8px 10px !important; }
+.tr-item-row, .tr-item:first-child .tr-item-row, .tr-item:last-child .tr-item-row { border-radius: 5px !important; border: 1px solid transparent !important; border-bottom-color: rgba(255,255,255,.07) !important; background: transparent !important; padding: 7px 8px !important; }
+.tr-item-row:hover { background: rgba(255,255,255,.055) !important; border-color: rgba(255,255,255,.08) !important; }
+.tr-item-name { font-size: 12px !important; }
+.tr-item-meta { margin-top: 3px !important; }
+.tr-item-tag { border-radius: 4px !important; }
+.tr-run-btn, .tr-expand-btn { opacity: .55 !important; width: 23px !important; height: 23px !important; }
+.tr-item-row:hover .tr-run-btn, .tr-item-row:hover .tr-expand-btn { opacity: 1 !important; }
+.tr-item-output { margin: 2px 8px 8px 34px !important; border-radius: 0 5px 5px 0 !important; }
+.tr-empty { padding: 52px 18px !important; gap: 9px !important; }
+.tr-empty-glyph { width: 42px !important; height: 42px !important; display: grid; place-items: center; border-radius: 12px; background: rgba(169,161,255,.10); color: #aaa2ff; }
+.tr-empty-glyph i { font-size: 20px !important; opacity: 1 !important; }
+.tr-empty-title { font-size: 13px !important; }
+.tr-empty-sub { margin-bottom: 10px !important; font-size: 10px !important; }
+.tr-cta-btn { padding: 7px 12px !important; border-radius: 6px !important; font-size: 11px !important; background: #5b5594 !important; }
+.tr-coverage { padding: 8px 10px !important; background: #202029 !important; border-top-color: rgba(255,255,255,.09) !important; }
+.tr-coverage-header { padding: 8px 4px !important; }
+
+
+/* ── Unified modal sizing and sidebar polish ─────────────────────────── */
+.modal {
+    z-index: 5000 !important;
+    padding: 24px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: rgba(0, 0, 0, 0.45) !important;
+}
+
+.modalContainer {
+    width: min(95vw, 1600px) !important;
+    height: min(92vh, 1000px) !important;
+    min-width: min(1024px, calc(100vw - 32px)) !important;
+    min-height: min(720px, calc(100vh - 32px)) !important;
+    max-width: calc(100vw - 32px) !important;
+    max-height: calc(100vh - 32px) !important;
+    
+    background: rgba(18, 15, 28, 0.35) !important;
+    backdrop-filter: blur(48px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(48px) saturate(180%) !important;
+    
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.22) !important;
+    border-radius: 14px !important;
+    
+    box-shadow: 
+        0 40px 100px -10px rgba(0, 0, 0, 0.8), 
+        inset 0 1px 1px rgba(255, 255, 255, 0.08) !important;
+    
+    overflow: hidden !important;
+    will-change: transform, opacity, filter !important;
+}
+
+.modalContainer--extensions { width: min(95vw, 1600px) !important; height: min(92vh, 1000px) !important; }
+.modalContainer--settings { width: min(95vw, 1600px) !important; height: min(92vh, 1000px) !important; }
+
+.modalContainer .topbar { 
+    flex: 0 0 54px !important; 
+    padding: 0 24px !important; 
+    background: rgba(255, 255, 255, 0.03) !important; 
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important; 
+}
+.modalContainer .content { 
+    width: 100% !important; 
+    overflow: hidden !important; 
+    background: transparent !important; 
+}
+
+
+/* Settings needs breathing room: a spacious sidebar and wider controls. */
+.modalContainer--settings .tilderSettingsRoot { border: 0 !important; border-radius: 0 !important; background: transparent !important; }
+.modalContainer--settings .tilderSettingsSidebar { width: 286px !important; min-width: 286px !important; max-width: 286px !important; padding: 24px 14px 14px !important; background: rgba(25, 24, 44, .76) !important; }
+.modalContainer--settings .tilderSettingsSidebarHeader { padding: 0 12px 20px !important; }
+.modalContainer--settings .tilderSettingsSidebarList { gap: 4px !important; padding: 12px 5px 12px !important; }
+.modalContainer--settings .tilderSettingsSidebarItem { min-height: 58px !important; padding: 10px 11px !important; border-radius: 9px !important; }
+.modalContainer--settings .tilderSettingsSidebarItemText span { font-size: 13px !important; }
+.modalContainer--settings .tilderSettingsSidebarItemText small { font-size: 11px !important; }
+.modalContainer--settings .tilderSettingsContent { padding: 26px 30px 30px !important; background: rgba(31, 30, 53, .62) !important; overflow: visible !important; }
+.modalContainer--settings .tilderSettingsSections { gap: 30px !important; }
+.modalContainer--settings .tilderSettingsCards { gap: 9px !important; }
+.modalContainer--settings .tilderSettingsCard { padding: 16px 18px !important; border-radius: 10px !important; background: rgba(255,255,255,.045) !important; }
+.modalContainer--settings .tilderSettingsCardTitleRow h6 { font-size: 14px !important; }
+.modalContainer--settings .tilderSettingsCardHeader p { font-size: 12px !important; }
+.modalContainer--settings .tilderSettingsControlWrap { max-width: 680px !important; }
+
+/* Testing: translucent glass, correct search selector, and a calmer empty state. */
+.tr-shell {
+    background: linear-gradient(180deg, rgba(41, 40, 53, .76), rgba(20, 20, 29, .88)) !important;
+    backdrop-filter: blur(24px) saturate(125%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(125%) !important;
+    border-left: 1px solid rgba(255,255,255,.10) !important;
+}
+.tr-header { background: rgba(255,255,255,.045) !important; }
+.tr-search-bar { background: rgba(9, 10, 18, .18) !important; }
+.tr-search-bar input,
+.tr-search-input {
+    width: 100% !important;
+    color: #f4f2ff !important;
+    background: rgba(8, 9, 17, .58) !important;
+    border: 1px solid rgba(202,197,255,.18) !important;
+    border-radius: 7px !important;
+    padding: 9px 32px 9px 30px !important;
+    outline: none !important;
+}
+.tr-search-bar input:focus { border-color: rgba(174,166,255,.70) !important; box-shadow: 0 0 0 3px rgba(132,119,246,.18) !important; }
+.tr-list { background: transparent !important; }
+.tr-empty { padding: 60px 18px !important; }
+.tr-coverage { background: rgba(255,255,255,.045) !important; }
+
+/* Search sidebar: one scrollable glass sheet instead of a stack of dense rows. */
+.search-shell { background: linear-gradient(180deg, rgba(39,38,50,.74), rgba(20,20,29,.90)) !important; backdrop-filter: blur(24px) saturate(125%) !important; -webkit-backdrop-filter: blur(24px) saturate(125%) !important; }
+.search-header { padding: 18px 16px 13px !important; background: rgba(255,255,255,.035) !important; }
+.search-mode-row { padding: 12px 14px 4px !important; }
+.search-input-group, .search-scope-block, .search-go-block, .search-history-block, .search-replace-block { gap: 7px !important; padding: 10px 14px 0 !important; }
+.search-filters { display: grid !important; grid-template-columns: 1fr !important; gap: 7px !important; padding: 10px 14px 0 !important; }
+.search-input { min-height: 36px !important; padding: 8px 10px !important; border-radius: 7px !important; background: rgba(8,9,17,.62) !important; }
+.search-input.secondary { margin: 0 !important; }
+.search-mode-btn, .search-toggle-btn, .search-scope-chip, .search-history-chip, .search-go-chip { border-radius: 6px !important; }
+.search-mode-btn { padding: 7px 10px !important; font-size: 11px !important; }
+.search-toggle-btn { min-width: 31px !important; height: 31px !important; }
+.search-scope-chip, .search-history-chip, .search-go-chip { padding: 6px 8px !important; font-size: 11px !important; }
+.search-summary { margin-top: 12px !important; padding: 11px 14px !important; background: rgba(255,255,255,.025) !important; }
+.search-results { gap: 7px !important; padding: 10px 14px 16px !important; }
+.search-result-card, .search-empty-state { border-radius: 8px !important; background: rgba(255,255,255,.045) !important; }
+
+@media (max-width: 980px) {
+    .modal { padding: 14px !important; }
+    .modalContainer, .modalContainer--extensions, .modalContainer--settings { width: calc(100vw - 28px) !important; height: calc(100vh - 28px) !important; min-width: 0 !important; min-height: 0 !important; }
+    .modalContainer--settings .tilderSettingsSidebar { width: 240px !important; min-width: 240px !important; }
+}
+
+/* ── Settings navigation: remove visual crowding, not usable space. ────── */
+.modalContainer--settings .tilderSettingsSidebar {
+    width: 272px !important;
+    min-width: 272px !important;
+    max-width: 272px !important;
+    padding: 22px 12px 12px !important;
+}
+.modalContainer--settings .tilderSettingsSidebarHeader {
+    gap: 6px !important;
+    padding: 0 10px 16px !important;
+}
+.modalContainer--settings .tilderSettingsSidebarHeader h4 { font-size: 17px !important; }
+.modalContainer--settings .tilderSettingsSidebarList {
+    gap: 5px !important;
+    padding: 12px 3px !important;
+}
+.modalContainer--settings .tilderSettingsSidebarItem {
+    min-height: 42px !important;
+    padding: 7px 9px !important;
+    gap: 9px !important;
+}
+.modalContainer--settings .tilderSettingsSidebarItemIcon {
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    border-radius: 6px !important;
+}
+.modalContainer--settings .tilderSettingsSidebarItemText { justify-content: center !important; }
+.modalContainer--settings .tilderSettingsSidebarItemText span { font-size: 12px !important; line-height: 1.25 !important; }
+/* Descriptions belong in the main section header, not in every navigation row. */
+.modalContainer--settings .tilderSettingsSidebarItemText small { display: none !important; }
+.modalContainer--settings .tilderSettingsSidebarCount { min-width: 20px !important; padding: 2px 5px !important; font-size: 10px !important; }
+.modalContainer--settings .tilderSettingsProfileManager { margin: 8px 3px !important; padding: 9px !important; border-radius: 8px !important; }
+.modalContainer--settings .tilderSettingsSidebarActions { gap: 4px !important; padding: 0 3px !important; }
+.modalContainer--settings .resetBulk { padding: 7px !important; font-size: 10px !important; }
+
+/* ── Testing: deliberately compact controls with a composed empty state. ─ */
+.tr-shell {
+    background: linear-gradient(155deg, rgba(57,55,74,.78), rgba(23,23,33,.92)) !important;
+    box-shadow: inset 1px 0 rgba(255,255,255,.06) !important;
+}
+.tr-header { min-height: 48px !important; padding: 10px 14px !important; }
+.tr-icon-btn { width: 23px !important; height: 23px !important; font-size: 11px !important; }
+.tr-search-bar { padding: 9px 14px !important; }
+.tr-search-bar input, .tr-search-input { min-height: 34px !important; padding: 7px 30px 7px 29px !important; font-size: 12px !important; }
+.tr-search-icon { left: 24px !important; font-size: 11px !important; }
+.tr-empty {
+    min-height: 230px !important;
+    padding: 36px 18px !important;
+    justify-content: center !important;
+    background: radial-gradient(circle at center, rgba(136,125,235,.10), transparent 58%) !important;
+}
+.tr-empty-glyph { width: 36px !important; height: 36px !important; border-radius: 10px !important; }
+.tr-empty-glyph i { font-size: 16px !important; }
+.tr-empty-title { margin-top: 2px !important; font-size: 12px !important; }
+.tr-empty-sub { max-width: 190px !important; margin-bottom: 6px !important; line-height: 1.45 !important; }
+.tr-cta-btn { min-height: 30px !important; padding: 6px 10px !important; border-radius: 5px !important; font-size: 10px !important; }
+
+/* ── Settings: descriptive navigation + compact, readable setting rows. ─ */
+.modalContainer--settings .tilderSettingsSidebar {
+    width: 302px !important;
+    min-width: 302px !important;
+    max-width: 302px !important;
+}
+.modalContainer--settings .tilderSettingsSidebarList { gap: 4px !important; }
+.modalContainer--settings .tilderSettingsSidebarItem {
+    min-height: 56px !important;
+    align-items: center !important;
+    padding: 8px 10px !important;
+}
+.modalContainer--settings .tilderSettingsSidebarItemText { gap: 2px !important; }
+.modalContainer--settings .tilderSettingsSidebarItemText span { font-size: 12px !important; }
+.modalContainer--settings .tilderSettingsSidebarItemText small {
+    display: -webkit-box !important;
+    overflow: hidden !important;
+    -webkit-box-orient: vertical !important;
+    -webkit-line-clamp: 2 !important;
+    color: rgba(221,226,255,.62) !important;
+    font-size: 10px !important;
+    line-height: 1.28 !important;
+}
+.modalContainer--settings .tilderSettingsCard {
+    gap: 6px !important;
+    padding: 11px 14px !important;
+    border-radius: 8px !important;
+}
+.modalContainer--settings .tilderSettingsCardHeader { gap: 3px !important; }
+.modalContainer--settings .tilderSettingsCardHeader p { font-size: 11px !important; line-height: 1.32 !important; }
+.modalContainer--settings .tilderSettingsCardFooter { gap: 7px !important; }
+.modalContainer--settings .tilderSettingsCard .settingsInput { min-height: 34px !important; padding-top: 6px !important; padding-bottom: 6px !important; }
+.modalContainer--settings .tilderSettingsCard .resetBtn { min-height: 32px !important; padding: 6px 11px !important; }
+
+/* ── Extensions: use the whole modal as a calm, full-height workspace. ── */
+.modalContainer--extensions .content { display: flex !important; min-height: 0 !important; }
+.modalContainer--extensions .extensions-modal-content {
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 18px !important;
+    gap: 14px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: linear-gradient(145deg, rgba(23,23,42,.74), rgba(14,15,27,.88)) !important;
+    box-shadow: none !important;
+}
+.modalContainer--extensions .extensions-surface-switch {
+    padding-bottom: 2px !important;
+    border-bottom: 1px solid rgba(255,255,255,.08) !important;
+}
+.modalContainer--extensions .extensions-surface-tab { padding: 7px 12px !important; border-radius: 7px !important; font-size: 12px !important; }
+.modalContainer--extensions .extensions-layout.extensions-layout-modal {
+    grid-template-columns: minmax(0, 1fr) minmax(400px, .82fr) !important;
+    gap: 14px !important;
+}
+.modalContainer--extensions .extensions-detail,
+.modalContainer--extensions .extensions-list {
+    border-radius: 10px !important;
+    border-color: rgba(255,255,255,.09) !important;
+    background: rgba(255,255,255,.042) !important;
+    box-shadow: inset 0 1px rgba(255,255,255,.035) !important;
+}
+.modalContainer--extensions .extensions-detail { padding: 16px !important; }
+.modalContainer--extensions .extensions-list { padding: 16px !important; gap: 12px !important; }
+.modalContainer--extensions .extensions-browser-pane { gap: 10px !important; padding: 0 !important; }
+.modalContainer--extensions .extensions-toolbar-inline { padding: 10px !important; border-radius: 8px !important; background: rgba(8,9,17,.32) !important; }
+.modalContainer--extensions .extensions-search-input { height: 36px !important; border-radius: 6px !important; }
+.modalContainer--extensions .extensions-filter-row { gap: 7px !important; margin-top: 8px !important; }
+.modalContainer--extensions .extensions-list-copy { gap: 8px !important; padding-top: 0 !important; }
+.modalContainer--extensions .extensions-list-item,
+.modalContainer--extensions .extensions-list-item-compact {
+    min-height: 116px !important;
+    padding: 12px !important;
+    gap: 8px !important;
+    border-radius: 8px !important;
+    background: rgba(8,10,19,.48) !important;
+}
+.modalContainer--extensions .extensions-list-item:hover,
+.modalContainer--extensions .extensions-list-item.active { transform: none !important; box-shadow: none !important; background: rgba(111,101,207,.14) !important; }
+.modalContainer--extensions .extensions-list-row { gap: 10px !important; }
+.modalContainer--extensions .extensions-list-item-compact .extensions-list-row {
+    grid-template-columns: 42px minmax(0, 1fr) !important;
+    min-height: 90px !important;
+}
+.modalContainer--extensions .extensions-list-row-copy { min-height: 90px !important; }
+.modalContainer--extensions .extensions-icon-tile { width: 42px !important; height: 42px !important; flex-basis: 42px !important; border-radius: 10px !important; font-size: 18px !important; }
+.modalContainer--extensions .extensions-list-title { font-size: 13px !important; }
+.modalContainer--extensions .extensions-list-publisher { font-size: 10px !important; }
+.modalContainer--extensions .extensions-list-summary { min-height: 0 !important; -webkit-line-clamp: 2 !important; font-size: 11px !important; line-height: 1.35 !important; }
+.modalContainer--extensions .extensions-list-card-footer { margin-top: 3px !important; }
+.modalContainer--extensions .extensions-list-card-footer { padding-top: 5px !important; }
+.modalContainer--extensions .extensions-list-stats span { padding: 4px 7px !important; }
+.modalContainer--extensions .extensions-list-state { min-width: 62px !important; padding: 4px 7px !important; font-size: 9px !important; }
+
+/* Modal chrome: a quiet workbench header, shared across every dialog. */
+.modalContainer .topbar {
+    flex: 0 0 42px !important;
+    min-height: 42px !important;
+    padding: 0 16px !important;
+    background: linear-gradient(180deg, rgba(34,34,45,.96), rgba(26,26,35,.96)) !important;
+    border-bottom: 1px solid rgba(255,255,255,.075) !important;
+}
+.modalContainer .topbar .title { font-size: 13px !important; font-weight: 600 !important; color: rgba(245,246,255,.92) !important; }
+.scm-loading-state {
+    display: grid;
+    place-items: center;
+    height: 100%;
+    color: rgba(225,230,255,.65);
+    font-size: 12px;
+}
+
+/* Tab label picker — previously rendered as unstyled browser buttons. */
+.tab-color-menu {
+    position: fixed;
+    z-index: 10020;
+    width: 188px;
+    padding: 8px;
+    border: 1px solid rgba(151, 143, 232, .32);
+    border-radius: 9px;
+    background: linear-gradient(155deg, rgba(38, 37, 55, .98), rgba(22, 22, 32, .98));
+    color: #edf0ff;
+    box-shadow: 0 16px 42px rgba(0, 0, 0, .48), inset 0 1px 0 rgba(255,255,255,.06);
+    backdrop-filter: blur(18px) saturate(125%);
+    -webkit-backdrop-filter: blur(18px) saturate(125%);
+    animation: tab-color-menu-in 100ms cubic-bezier(.2,.8,.2,1);
+}
+
+@keyframes tab-color-menu-in {
+    from { opacity: 0; transform: translateY(-3px) scale(.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.tab-color-menu-title {
+    padding: 2px 3px 8px;
+    color: rgba(225,229,249,.68);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.tab-color-swatches {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+}
+
+.tab-color-swatch {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 2px solid rgba(255,255,255,.10);
+    border-radius: 7px;
+    cursor: pointer;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 2px 5px rgba(0,0,0,.22);
+    transition: transform 100ms ease, border-color 100ms ease, box-shadow 100ms ease;
+}
+
+.tab-color-swatch:hover,
+.tab-color-swatch:focus-visible {
+    transform: scale(1.10);
+    border-color: rgba(255,255,255,.75);
+    box-shadow: 0 0 0 2px rgba(132,119,246,.34), inset 0 1px 0 rgba(255,255,255,.22);
+    outline: none;
+}
+
+.tab-color-swatch-none {
+    display: grid;
+    place-items: center;
+    background: rgba(255,255,255,.06);
+    color: rgba(233,236,255,.78);
+    font-size: 12px;
+}
+.modalContainer .modalControlButtons { width: 25px !important; height: 25px !important; border-radius: 5px !important; color: rgba(235,237,255,.75) !important; }
+
+/* Extensions workbench controls. */
+.modalContainer--extensions .extensions-workbench-nav {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 34px;
+    padding: 0 1px 10px;
+    border-bottom: 1px solid rgba(255,255,255,.07);
+}
+.extensions-view-tabs { display: inline-flex; gap: 3px; padding: 3px; border-radius: 7px; background: rgba(0,0,0,.16); border: 1px solid rgba(255,255,255,.07); }
+.extensions-view-tab { border: 0; border-radius: 5px; padding: 5px 9px; background: transparent; color: rgba(225,229,249,.62); font-size: 11px; cursor: pointer; }
+.extensions-view-tab:hover { color: #fff; background: rgba(255,255,255,.055); }
+.extensions-view-tab.active { background: rgba(111,101,207,.62); color: #fff; }
+.extensions-view-tab span { margin-left: 4px; opacity: .72; }
+.extensions-sort-control { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: rgba(220,224,246,.52); font-size: 10px; }
+.extensions-sort-control select { height: 28px; min-width: 116px; padding: 0 24px 0 8px; border: 1px solid rgba(255,255,255,.10); border-radius: 6px; background: rgba(6,7,13,.42); color: #e7e9ff; font-size: 11px; outline: none; }
+.extensions-workbench-count { color: rgba(220,224,246,.50); font-size: 10px; white-space: nowrap; }
+.modalContainer--extensions .extensions-layout.extensions-layout-modal { min-height: 0 !important; }
+.modalContainer--extensions .extensions-detail-pane { padding-right: 2px !important; }
+.modalContainer--extensions .extensions-pane-heading { font-size: 14px !important; }
+.modalContainer--extensions .extensions-pane-subtitle { font-size: 11px !important; }
+@media (max-width: 800px) {
+    .modalContainer--extensions .extensions-workbench-nav { flex-wrap: wrap; }
+    .extensions-sort-control { margin-left: 0; }
+}
+.modalContainer--extensions .extensions-recommendation-grid.hero { gap: 10px !important; }
+.modalContainer--extensions .extensions-recommendation-card { min-height: 0 !important; padding: 14px !important; border-radius: 9px !important; }
+.modalContainer--extensions .extensions-recommendation-header { gap: 10px !important; }
+.modalContainer--extensions .extensions-icon-tile-large { width: 46px !important; height: 46px !important; flex-basis: 46px !important; border-radius: 11px !important; }
+.modalContainer--extensions .extensions-recommendation-title { font-size: 14px !important; }
+.modalContainer--extensions .extensions-recommendation-summary { font-size: 11px !important; line-height: 1.4 !important; }
+
+/* ============================================================== */
+/* TILDER SIDEBAR GLASSMORPHISM — Search, TestRunner             */
+/* Clean, minimal, high-fidelity panel backgrounds               */
+/* ============================================================== */
+
+/* Search, TestRunner, and Debug inner shells should be transparent so parent glassmorphism shows */
+.search-shell,
+.tr-shell,
+.hardware-shell,
+.fp-shell,
+.debug-shell {
+    display: flex;
+    flex-direction: column !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    background: transparent !important;
+    border-left: 1px solid rgba(255,255,255,.08) !important;
+}
+
+/* --- Panel headers --- */
+.search-header,
+.tr-header {
+    flex-shrink: 0 !important;
+    padding: 14px 16px 12px !important;
+    background: rgba(255,255,255,.04) !important;
+    border-bottom: 1px solid rgba(255,255,255,.07) !important;
+}
+
+/* --- Search panel inputs --- */
+.search-input {
+    background: rgba(0,0,0,.28) !important;
+    border: 1px solid rgba(255,255,255,.10) !important;
+    border-radius: 7px !important;
+    color: #e8ecff !important;
+    padding: 8px 10px !important;
+    outline: none !important;
+    transition: border-color .15s !important;
+}
+.search-input:focus {
+    border-color: rgba(160,130,255,.45) !important;
+    background: rgba(0,0,0,.35) !important;
+}
+
+/* --- TestRunner search bar --- */
+.tr-search-bar {
+    flex-shrink: 0 !important;
+    padding: 10px 14px !important;
+    border-bottom: 1px solid rgba(255,255,255,.06) !important;
+    position: relative !important;
+}
+.tr-search-input {
+    width: 100% !important;
+    background: rgba(0,0,0,.28) !important;
+    border: 1px solid rgba(255,255,255,.10) !important;
+    padding: 7px 10px 7px 30px !important;
+    border-radius: 7px !important;
+    color: #e8ecff !important;
+    font-size: 12.5px !important;
+    box-sizing: border-box !important;
+    outline: none !important;
+    transition: border-color .15s !important;
+}
+.tr-search-input:focus {
+    border-color: rgba(160,130,255,.45) !important;
+}
+.tr-search-icon {
+    position: absolute !important;
+    left: 24px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    font-size: 11px !important;
+    color: rgba(255,255,255,.40) !important;
+    pointer-events: none !important;
+}
+
+/* --- TestRunner list scrollable area --- */
+.tr-list {
+    flex: 1 !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    padding: 10px 12px !important;
+}
+
+/* --- TestRunner coverage footer --- */
+.tr-coverage {
+    flex-shrink: 0 !important;
+    border-top: 1px solid rgba(255,255,255,.07) !important;
+    background: rgba(255,255,255,.025) !important;
+    padding: 10px 14px !important;
+}
+
+/* --- Arduino compile/upload buttons in tab bar --- */
+.arduino-actions-group {
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+}
+
+.arduino-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    padding: 4px 10px !important;
+    height: 26px !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    border-radius: 6px !important;
+    border: 1px solid rgba(255,255,255,.12) !important;
+    background: rgba(100,80,220,.28) !important;
+    color: #d4c8ff !important;
+    cursor: pointer !important;
+    transition: background .15s, transform .1s !important;
+    white-space: nowrap !important;
+}
+
+.arduino-btn:hover {
+    background: rgba(110,90,230,.45) !important;
+    color: #fff !important;
+    transform: translateY(-1px) !important;
+}
+
+.arduino-btn:active {
+    transform: translateY(0) !important;
+}
+
+/* =========================================================================
+   GLOBAL LIQUID GLASS & SPRING UI
+   ========================================================================= */
+
+/* Generic Buttons */
+.resetBtn,
+.resetBulk,
+.tilderSettingsButton,
+.tilderSettingsResetSection,
+.tilderSettingsViewButton,
+.modalControlButtons,
+.sidebarIconBar button,
+.explorer-toolbar-btn,
+.tab-close-btn,
+.dropdown-trigger-btn,
+.subdropdown-trigger-btn,
+.statusbar-item,
+.statusbar-notification-button,
+.statusbar-compiler-button,
+.statusbar-intellisense-button,
+.statusbar-menu-action,
+.btn-normal,
+#file_wrapper_submit_button,
+.arduino-btn,
+.update-btn {
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, opacity 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
+    transform-origin: center;
+}
+
+.resetBtn:active:not(:disabled),
+.resetBulk:active:not(:disabled),
+.tilderSettingsButton:active:not(:disabled),
+.tilderSettingsResetSection:active:not(:disabled),
+.tilderSettingsViewButton:active:not(:disabled),
+.modalControlButtons:active:not(:disabled),
+.sidebarIconBar button:active:not(:disabled),
+.explorer-toolbar-btn:active:not(:disabled),
+.tab-close-btn:active:not(:disabled),
+.dropdown-trigger-btn:active:not(:disabled),
+.subdropdown-trigger-btn:active:not(:disabled),
+.statusbar-item:active:not(:disabled),
+.statusbar-notification-button:active:not(:disabled),
+.statusbar-compiler-button:active:not(:disabled),
+.statusbar-intellisense-button:active:not(:disabled),
+.statusbar-menu-action:active:not(:disabled),
+.btn-normal:active:not(:disabled),
+#file_wrapper_submit_button:active:not(:disabled),
+.arduino-btn:active:not(:disabled),
+.update-btn:active:not(:disabled) {
+    transform: scale(0.88) !important;
+    transition: transform 0.1s cubic-bezier(0, 0, 0.2, 1) !important;
+}
+
+/* Rows and Cards */
+.filePioneer-item,
+.search-result-card,
+.tilderSettingsSidebarItem,
+.dropdown-item,
+.subdropdown-item {
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease !important;
+    transform-origin: center;
+}
+
+.filePioneer-item:active,
+.search-result-card:active,
+.tilderSettingsSidebarItem:active,
+.dropdown-item:active,
+.subdropdown-item:active {
+    transform: scale(0.97) !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    transition: transform 0.1s cubic-bezier(0, 0, 0.2, 1), background 0.1s ease !important;
+}
+
+
+/* Wrap Tabs */
+.tabs-list.wrap-tabs {
+    flex-wrap: wrap;
+    overflow-x: hidden;
+    overflow-y: auto;
+    align-items: flex-start;
+    padding-bottom: 4px;
+    align-content: flex-start;
+}
+.tabs:has(.wrap-tabs) {
+    height: auto !important;
+    min-height: 40px;
+    max-height: 120px;
+}
+
+.tabs-list::-webkit-scrollbar {
+    height: 4.5px;
+    width: 4.5px;
+}
+.tabs-list::-webkit-scrollbar-track {
+    background: rgba(0,0,0,0.1);
+}
+.tabs-list::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.25);
+    border-radius: 4px;
+}
+.tabs-list:hover::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.4);
+}
+
+/* Force tabs to overflow instead of shrinking indefinitely */
+.tabs-list .tab {
+    min-width: 120px !important;
+    flex-shrink: 0 !important;
+}
+
+/* Ensure the wrapper respects the wrapping */
+.tabs-list.wrap-tabs {
+    flex-wrap: wrap !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    padding-bottom: 4px;
 }

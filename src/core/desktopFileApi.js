@@ -82,9 +82,18 @@ export async function revealInExplorer(path) {
   return invoke('reveal_in_explorer', { path });
 }
 
-export async function openDesktopWindow() {
+export async function openDesktopWindow(folderPath = null) {
   ensureDesktop();
-  return invoke('open_new_window');
+  return invoke('open_new_window', { folderPath: folderPath || null });
+}
+
+export async function desktopSetZoom(scaleFactor) {
+  if (!isDesktopRuntime()) return;
+  try {
+    return await invoke('set_window_zoom', { scale: scaleFactor });
+  } catch (err) {
+    console.error('Failed to set window zoom:', err);
+  }
 }
 
 export async function desktopDetectRuntimes() {

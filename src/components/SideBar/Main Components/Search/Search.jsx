@@ -379,7 +379,7 @@ export default function Search({
     };
   }, [ariaExpandedisplaysearch, caseSensitive, excludeFilter, includeFilter, mode, query, scope, useRegex, wholeWord, workspace, workspaceVersion]);
 
-    return (
+  return (
     <div id="searcharea" className={`sidebarscontent d-${ariaExpandedisplaysearch}`}>
       <div className="search-shell">
         <div className="search-header">

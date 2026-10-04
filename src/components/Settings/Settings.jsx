@@ -1789,6 +1789,37 @@ function ResetButton({ disabled, onClick }) {
     );
 }
 
+function SettingCard({ item, resolvedValue, isDefault, highlighted, onCommit, onReset, systemFonts }) {
+    const [pressed, setPressed] = React.useState(false);
+    const handleReset = () => {
+        setPressed(true);
+        setTimeout(() => setPressed(false), 200);
+        onReset();
+    };
+    return (
+        <article
+            id={`setting-${item.path.replace(/\./g, '-')}`}
+            className={`tilderSettingsCard${highlighted ? ' highlighted' : ''}${pressed ? ' pressed' : ''}`}
+        >
+            <div className="tilderSettingsCardHeader">
+                <div>
+                    <div className="tilderSettingsCardTitleRow">
+                        <h6>{item.label}</h6>
+                        <span className="tilderSettingsSettingPath">{item.path}</span>
+                    </div>
+                    <p>{item.description}</p>
+                </div>
+            </div>
+            <div className="tilderSettingsCardFooter">
+                <div className="tilderSettingsControlWrap">
+                    <SettingControl item={item} value={resolvedValue} onCommit={onCommit} systemFonts={systemFonts} />
+                </div>
+                <ResetButton disabled={isDefault} onClick={handleReset} />
+            </div>
+        </article>
+    );
+}
+
 function SettingControl({ item, value, onCommit, systemFonts = [] }) {
     if (item.type === 'boolean') {
         return (
@@ -2485,33 +2516,16 @@ export default function Settings({ modalType, settings, setSettings, systemFonts
                                     const isDefault = getComparableValue(currentValue) === getComparableValue(defaultValue);
 
                                     return (
-                                        <article
+                                        <SettingCard
                                             key={item.path}
-                                            id={pathToDomId(item.path)}
-                                            className={`tilderSettingsCard ${highlightedSettingId === item.path ? 'highlighted' : ''}`}
-                                        >
-                                            <div className="tilderSettingsCardHeader">
-                                                <div>
-                                                    <div className="tilderSettingsCardTitleRow">
-                                                        <h6>{item.label}</h6>
-                                                        <span className="tilderSettingsSettingPath">{formatPath(item.path)}</span>
-                                                    </div>
-                                                    <p>{item.description}</p>
-                                                </div>
-                                            </div>
-
-                                            <div className="tilderSettingsCardFooter">
-                                                <div className="tilderSettingsControlWrap">
-                                                    <SettingControl
-                                                        item={item}
-                                                        value={resolvedValue}
-                                                        onCommit={(value) => updateSetting(item.path, value)}
-                                                        systemFonts={systemFonts}
-                                                    />
-                                                </div>
-                                                <ResetButton disabled={isDefault} onClick={() => resetSetting(item.path)} />
-                                            </div>
-                                        </article>
+                                            item={item}
+                                            resolvedValue={resolvedValue}
+                                            isDefault={isDefault}
+                                            highlighted={highlightedSettingId === item.path}
+                                            onCommit={(value) => updateSetting(item.path, value)}
+                                            onReset={() => resetSetting(item.path)}
+                                            systemFonts={systemFonts}
+                                        />
                                     );
                                 })}
                             </div>

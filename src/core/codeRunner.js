@@ -157,31 +157,31 @@ export function getRunCommandForTab(tab, runtimes, cwd) {
       break;
     case 'java':
       if (availableRuntimes.javac || availableRuntimes.java) {
-        runCommand = `${getRuntimeExecutable(availableRuntimes.javac, 'javac')} "${fileName}" && ${getRuntimeExecutable(availableRuntimes.java, 'java')} "${fileNoExt}"`;
+        runCommand = `${getRuntimeExecutable(availableRuntimes.javac, 'javac')} "${fileName}" ; if ($?) { ${getRuntimeExecutable(availableRuntimes.java, 'java')} "${fileNoExt}" }`;
       } else {
-        runCommand = `javac "${fileName}" && java "${fileNoExt}"`;
+        runCommand = `javac "${fileName}" ; if ($?) { java "${fileNoExt}" }`;
       }
       break;
     case 'rust':
       runCommand = availableRuntimes.rust
-        ? `${getRuntimeExecutable(availableRuntimes.rust, 'rustc')} "${fileName}" -o "${fileNoExt}${exeExt}" && .\\"${fileNoExt}${exeExt}"`
-        : `rustc "${fileName}" -o "${fileNoExt}${exeExt}" && .\\"${fileNoExt}${exeExt}"`;
+        ? `${getRuntimeExecutable(availableRuntimes.rust, 'rustc')} "${fileName}" -o "${fileNoExt}${exeExt}" ; if ($?) { & ".\\${fileNoExt}${exeExt}" }`
+        : `rustc "${fileName}" -o "${fileNoExt}${exeExt}" ; if ($?) { & ".\\${fileNoExt}${exeExt}" }`;
       break;
     case 'c':
       runCommand = availableRuntimes.gcc
-        ? `${getRuntimeExecutable(availableRuntimes.gcc, 'gcc')} "${fileName}" -o "${fileNoExt}${exeExt}" && .\\"${fileNoExt}${exeExt}"`
-        : `gcc "${fileName}" -o "${fileNoExt}${exeExt}" && .\\"${fileNoExt}${exeExt}"`;
+        ? `${getRuntimeExecutable(availableRuntimes.gcc, 'gcc')} "${fileName}" -o "${fileNoExt}${exeExt}" ; if ($?) { & ".\\${fileNoExt}${exeExt}" }`
+        : `gcc "${fileName}" -o "${fileNoExt}${exeExt}" ; if ($?) { & ".\\${fileNoExt}${exeExt}" }`;
       break;
     case 'cpp':
       runCommand = availableRuntimes['g++']
-        ? `${getRuntimeExecutable(availableRuntimes['g++'], 'g++')} "${fileName}" -o "${fileNoExt}${exeExt}" && .\\"${fileNoExt}${exeExt}"`
-        : `g++ "${fileName}" -o "${fileNoExt}${exeExt}" && .\\"${fileNoExt}${exeExt}"`;
+        ? `${getRuntimeExecutable(availableRuntimes['g++'], 'g++')} "${fileName}" -o "${fileNoExt}${exeExt}" ; if ($?) { & ".\\${fileNoExt}${exeExt}" }`
+        : `g++ "${fileName}" -o "${fileNoExt}${exeExt}" ; if ($?) { & ".\\${fileNoExt}${exeExt}" }`;
       break;
     case 'go':
       runCommand = `${getRuntimeExecutable(availableRuntimes.go, 'go')} run "${fileName}"`;
       break;
     case 'exe':
-      runCommand = `.\\"${fileName}\\"`;
+      runCommand = `& ".\\${fileName}"`;
       break;
   }
 

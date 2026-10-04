@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import OutlineView from '../OutlineView/OutlineView.jsx';
 import TimelineView from '../TimelineView/TimelineView.jsx';
 import { resolveFileIcon, resolveFolderIcon } from '../../../../core/iconTheme.js';
-import { revealInExplorer, desktopCopyPath } from '../../../../core/desktopFileApi.js';
+import { revealInExplorer, desktopCopyPath, openDesktopWindow } from '../../../../core/desktopFileApi.js';
 import { isDesktopRuntime } from '../../../../core/runtime.js';
 import { soundEngine } from '../../../../core/SoundEngine.js';
 import ContextMenu from '../../../ContextMenu/ContextMenu.jsx';
@@ -355,6 +355,37 @@ function TreeNode({ index, style, ariaAttributes, flatNodes, selectedPath, activ
       </div>
   );
 }
+
+const MemoizedTreeNode = React.memo(TreeNode, (prev, next) => {
+  if (prev.index !== next.index) return false;
+  if (prev.flatNodes[prev.index] !== next.flatNodes[next.index]) return false;
+  if (prev.pendingAction !== next.pendingAction) return false;
+  if (prev.dragState !== next.dragState) return false;
+  if (prev.showMeta !== next.showMeta) return false;
+  if (prev.enableCheckboxes !== next.enableCheckboxes) return false;
+  if (prev.callbacks !== next.callbacks) return false;
+
+  const nodePath = next.flatNodes[next.index]?.node?.path;
+  if (!nodePath) return true;
+
+  const wasSelected = prev.selectedPath === nodePath;
+  const isSelected = next.selectedPath === nodePath;
+  if (wasSelected !== isSelected) return false;
+
+  const wasActive = prev.activeTabPath === nodePath;
+  const isActive = next.activeTabPath === nodePath;
+  if (wasActive !== isActive) return false;
+
+  const wasMultiSelected = !!prev.multiSelected?.has(nodePath);
+  const isMultiSelected = !!next.multiSelected?.has(nodePath);
+  if (wasMultiSelected !== isMultiSelected) return false;
+
+  const prevMarkers = prev.markers?.[nodePath];
+  const nextMarkers = next.markers?.[nodePath];
+  if (prevMarkers !== nextMarkers) return false;
+
+  return true;
+});
 
 function formatSize(bytes) {
   if (bytes < 1024) return bytes + ' B';
@@ -714,7 +745,7 @@ export default function FilePioneer({
       });
     }
 
-    const compactFolders = settings?.explorer?.compactFolders !== false;
+    const compactFolders = settings?.explorer?.compactFolders === true;
 
     // Compact single-child folder chains into one merged node
     function compact(node) {
@@ -1247,6 +1278,21 @@ export default function FilePioneer({
       case 'open-folder':
         triggerOpenFolder?.();
         return;
+      case 'open-in-new-window': {
+        const rootSys = workspace.rootSystemPath;
+        let targetPath = n?.nativePath;
+        if (!targetPath && rootSys && n?.path && n.path !== 'root') {
+          targetPath = `${rootSys}/${n.path}`;
+        } else if (!targetPath && rootSys) {
+          targetPath = rootSys;
+        }
+        if (targetPath) {
+          openDesktopWindow(targetPath);
+        } else {
+          openDesktopWindow();
+        }
+        return;
+      }
       case 'add-folder':
         workspace.addFolderToWorkspace?.().then(refresh);
         return;
@@ -1729,7 +1775,7 @@ export default function FilePioneer({
                       );
                     }
                     return (
-                      <TreeNode
+                      <MemoizedTreeNode
                         key={key}
                         index={index}
                         style={{}}
@@ -1868,8 +1914,11 @@ export default function FilePioneer({
         if (contextMenu.node?.type === 'file') {
           items.push({ label: 'Open to the Side', icon: 'fa-solid fa-columns', onClick: () => handleContextAction('open-to-side') });
         }
-        if (contextMenu.node?.type === 'folder') {
+        if (contextMenu.node?.type === 'folder' || contextMenu.node?.path === 'root') {
           items.push({ label: 'Find in Folder...', icon: 'fa-solid fa-magnifying-glass', onClick: () => handleContextAction('find-in-folder') });
+          if (isDesktopRuntime()) {
+            items.push({ label: 'Open in New Window', icon: 'fa-solid fa-window-restore', onClick: () => handleContextAction('open-in-new-window') });
+          }
         }
         if (contextMenu.node?.path && contextMenu.node?.path !== 'root') {
           if (favorites.includes(contextMenu.node.path)) {

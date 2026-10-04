@@ -609,16 +609,33 @@ export default function Debug({
             </button>
           }
         >
-          <div style={{ padding: '0 8px 8px 8px', borderBottom: '1px solid var(--vscode-panel-border)', marginBottom: '8px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: 'pointer', marginBottom: '4px' }}>
-              <input type="checkbox" checked={exceptionFilters.uncaught} onChange={(e) => setExceptionFilters(f => ({ ...f, uncaught: e.target.checked }))} />
-              Uncaught Exceptions
+          <div className="debug-exception-filters">
+            <label className="debug-toggle-row">
+              <span className="debug-toggle-label">Uncaught Exceptions</span>
+              <button
+                type="button"
+                className={`debug-toggle-switch ${exceptionFilters.uncaught ? 'on' : ''}`}
+                onClick={() => setExceptionFilters(f => ({ ...f, uncaught: !f.uncaught }))}
+                aria-checked={exceptionFilters.uncaught}
+                role="switch"
+              >
+                <span className="debug-toggle-knob" />
+              </button>
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: 'pointer' }}>
-              <input type="checkbox" checked={exceptionFilters.all} onChange={(e) => setExceptionFilters(f => ({ ...f, all: e.target.checked }))} />
-              Caught Exceptions
+            <label className="debug-toggle-row">
+              <span className="debug-toggle-label">Caught Exceptions</span>
+              <button
+                type="button"
+                className={`debug-toggle-switch ${exceptionFilters.all ? 'on' : ''}`}
+                onClick={() => setExceptionFilters(f => ({ ...f, all: !f.all }))}
+                aria-checked={exceptionFilters.all}
+                role="switch"
+              >
+                <span className="debug-toggle-knob" />
+              </button>
             </label>
           </div>
+
 
           <div style={{ padding: '0 8px', fontSize: '11px', color: 'var(--vscode-descriptionForeground)', textTransform: 'uppercase', marginBottom: '4px' }}>Data Breakpoints</div>
           <div className="debug-empty-state" style={{ paddingBottom: '8px' }}>No data breakpoints set.</div>

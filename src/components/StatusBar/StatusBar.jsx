@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { EDITOR_LANGUAGE_REGISTRY } from '../../../shared/editor/languageRegistry.js';
 import { isDesktopRuntime } from '../../core/runtime.js';
+import remoteManager, { getActiveRemote } from '../../core/remoteManager.js';
 const LANGUAGE_OPTIONS = [...EDITOR_LANGUAGE_REGISTRY]
   .map((entry) => ({
     id: entry.id,
@@ -58,7 +59,7 @@ function Menu({ title, children, anchorRef, onClose, position }) {
   }, [anchorRef, onClose]);
 
   const style = {};
-  if (position === 'bottom-left') {
+  if (position === 'top-left') {
     style.left = '10px';
     style.right = 'auto';
   }
@@ -72,6 +73,7 @@ function Menu({ title, children, anchorRef, onClose, position }) {
 }
 
 export default function StatusBar({
+  pushNotification,
   activeTab,
   intelliSense,
   currentLanguageCapability,
@@ -90,11 +92,17 @@ export default function StatusBar({
   detectedRuntimes,
   customRuntimes,
   onSelectCompiler,
+  onOpenRemoteWindow,
 }) {
   const [openMenu, setOpenMenu] = useState(null);
   const notificationButtonRef = useRef(null);
   const intelliSenseButtonRef = useRef(null);
   const remoteButtonRef = useRef(null);
+  const [activeRemote, setActiveRemote] = useState(getActiveRemote());
+
+  useEffect(() => {
+    return remoteManager.subscribeRemoteState(setActiveRemote);
+  }, []);
   const lineButtonRef = useRef(null);
   const indentButtonRef = useRef(null);
   const eolButtonRef = useRef(null);
@@ -219,16 +227,28 @@ export default function StatusBar({
   function renderMenu() {
     if (openMenu === 'remote') {
       return (
-        <Menu title="Remote Development" anchorRef={remoteButtonRef} onClose={() => setOpenMenu(null)} position="bottom-left">
+        <Menu title="Remote Connections" anchorRef={remoteButtonRef} onClose={() => setOpenMenu(null)} position="top-left">
           <div className="statusbar-menu-items">
-            <button className="statusbar-menu-item" onClick={() => { setOpenMenu(null); if (window.pushNotification) window.pushNotification('Connect to Host (SSH) is not installed.', 'warning'); }}>
-              <i className="fa-solid fa-network-wired" style={{ width: '16px', marginRight: '6px' }}></i> Connect to Host...
+            <div className="statusbar-menu-section-label" style={{ padding: '6px 12px 4px', fontSize: '10px', textTransform: 'uppercase', opacity: 0.6, letterSpacing: '0.05em' }}>Native Workspaces</div>
+            <button className="statusbar-menu-item" onClick={() => {
+              setOpenMenu(null);
+              if (pushNotification) pushNotification('To open a WSL project, use File > Open Folder and navigate to \\wsl.localhost\ or Network > WSL.', 'info', 6000);
+            }}>
+              <i className="fa-brands fa-linux" style={{ width: '16px', marginRight: '6px' }}></i> Open WSL Project
             </button>
-            <button className="statusbar-menu-item" onClick={() => { setOpenMenu(null); if (window.pushNotification) window.pushNotification('WSL extension is not installed.', 'warning'); }}>
-              <i className="fa-brands fa-linux" style={{ width: '16px', marginRight: '6px' }}></i> Connect to WSL
+            <button className="statusbar-menu-item" onClick={() => {
+              setOpenMenu(null);
+              if (pushNotification) pushNotification('To open an SSH remote, please map it as a local network drive first using Windows File Explorer or SSHFS.', 'info', 6000);
+            }}>
+              <i className="fa-solid fa-network-wired" style={{ width: '16px', marginRight: '6px' }}></i> Open SSH Remote
             </button>
-            <button className="statusbar-menu-item" onClick={() => { setOpenMenu(null); if (window.pushNotification) window.pushNotification('Dev Containers extension is not installed.', 'warning'); }}>
-              <i className="fa-brands fa-docker" style={{ width: '16px', marginRight: '6px' }}></i> Reopen in Container
+            <div className="statusbar-menu-separator" style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 8px' }} />
+            <div className="statusbar-menu-section-label" style={{ padding: '4px 12px', fontSize: '10px', textTransform: 'uppercase', opacity: 0.6, letterSpacing: '0.05em' }}>Extensions</div>
+            <button className="statusbar-menu-item" onClick={() => {
+              setOpenMenu(null);
+              if (pushNotification) pushNotification('Tilder does not support VS Code Dev Containers natively yet.', 'warning');
+            }}>
+              <i className="fa-brands fa-docker" style={{ width: '16px', marginRight: '6px' }}></i> Reopen in Container...
             </button>
           </div>
         </Menu>
@@ -433,13 +453,44 @@ export default function StatusBar({
           <div className="statusbar-left">
             <button 
               type="button" 
-              className="statusbar-item" 
+              className={`statusbar-item statusbar-remote-btn ${activeRemote.type !== 'local' ? 'active-remote' : ''}`}
               ref={remoteButtonRef}
-              style={{ background: 'var(--vscode-statusBarItem-remoteBackground, #16825D)', color: 'white', border: 'none', padding: '0 10px', height: '22px', display: 'flex', alignItems: 'center', cursor: 'pointer' }}
-              title="Open a Remote Window"
-              onClick={() => setOpenMenu((current) => (current === 'remote' ? null : 'remote'))}
+              style={{
+                background: activeRemote.type !== 'local' ? '#6b55e0' : 'transparent',
+                color: activeRemote.type !== 'local' ? '#ffffff' : '#8e89ff',
+                border: 'none',
+                padding: activeRemote.type !== 'local' ? '0 10px' : '0 8px',
+                height: '22px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: 'pointer',
+                fontWeight: activeRemote.type !== 'local' ? 600 : 400,
+                borderRadius: '3px',
+              }}
+              title={activeRemote.type !== 'local' ? `${activeRemote.detail} (Click to open Remote Window)` : 'Open a Remote Window'}
+              onClick={() => {
+                if (onOpenRemoteWindow) {
+                  onOpenRemoteWindow();
+                } else {
+                  setOpenMenu((current) => (current === 'remote' ? null : 'remote'));
+                }
+              }}
             >
-              <i className="fa-solid fa-desktop" style={{ fontSize: '12px' }}></i>
+              <i className={
+                activeRemote.type === 'wsl' ? 'fa-brands fa-linux' :
+                activeRemote.type === 'tunnel' ? 'fa-solid fa-cloud' :
+                activeRemote.type === 'ssh' ? 'fa-solid fa-terminal' :
+                activeRemote.type === 'collab' || activeRemote.type === 'live-share' ? 'fa-solid fa-users' :
+                activeRemote.type === 'container' ? 'fa-brands fa-docker' :
+                activeRemote.type === 'repo' ? 'fa-brands fa-github' :
+                'fa-solid fa-server'
+              } style={{ fontSize: '11px' }}></i>
+              {activeRemote.type !== 'local' ? (
+                <span style={{ fontSize: '11px', letterSpacing: '0.02em' }}>
+                  {activeRemote.type.toUpperCase()}: {activeRemote.name}
+                </span>
+              ) : null}
             </button>
             <span className="statusbar-badge">{runtimeBadgeLabel}</span>
             <span className="statusbar-item subtle">{rootLabel}</span>
@@ -560,3 +611,5 @@ export default function StatusBar({
     </div>
   );
 }
+
+

@@ -1,9 +1,10 @@
 import React from 'react';
 
 function Modal({ isOpen, closeModal, children, title }) {
+  const modalKind = String(title || 'default').toLowerCase().replace(/[^a-z0-9]+/g, '-');
   return (
     <div className={`modal overlay d-${isOpen ? 'flex' : 'none'}`}>
-      <div className="modalContainer">
+      <div className={`modalContainer modalContainer--${modalKind}`}>
         <div className="topbar">
           <div className="title">{title}</div>
           <div className="modalControls">

@@ -3071,10 +3071,15 @@ function createSecureProxy(targetPort, username, password, targetHost = '127.0.0
       port: targetPort,
       path: req.url,
       method: req.method,
-      headers: req.headers
+      headers: { ...req.headers, host: 'localhost:' + targetPort }
     };
 
     delete options.headers['authorization'];
+    delete options.headers['cf-ray'];
+    delete options.headers['cf-connecting-ip'];
+    delete options.headers['cf-ipcountry'];
+    delete options.headers['cf-visitor'];
+    delete options.headers['x-forwarded-proto'];
 
     const proxyReq = http.request(options, (proxyRes) => {
       res.writeHead(proxyRes.statusCode, proxyRes.headers);
@@ -3392,15 +3397,26 @@ app.post('/api/ports', async (request, response) => {
     let targetHost = activeHost;
 
     if (visibility === 'private') {
-      // Proxy binds to 127.0.0.1 by default
       const { server, port: proxyPort } = await createSecureProxy(port, 'tilder', 'tilder', activeHost);
       tunnelInfo.proxyServer = server;
       targetPort = proxyPort;
       targetHost = '127.0.0.1';
-      // Append credentials notice to description if not already there, to help user log in
       if (!description.includes('User: tilder')) {
         tunnelInfo.description = `${description} (User: tilder, Pass: tilder)`;
       }
+    } else {
+      // Public: route through host-rewriting proxy so Vite/Next/Express host checks pass
+      const pubProxy = http.createServer((req, res) => {
+        const fwdH = { ...req.headers, host: 'localhost:' + port };
+        ['cf-ray','cf-connecting-ip','cf-ipcountry','cf-visitor','x-forwarded-proto'].forEach(h => delete fwdH[h]);
+        const pr = http.request({ hostname: activeHost, port, path: req.url, method: req.method, headers: fwdH }, (pres) => { res.writeHead(pres.statusCode, pres.headers); pres.pipe(res); });
+        pr.on('error', (e) => { res.writeHead(502); res.end('Proxy error: ' + e.message); });
+        req.pipe(pr);
+      });
+      const pubProxyPort = await new Promise((resolve) => { pubProxy.listen(0, '127.0.0.1', () => resolve(pubProxy.address().port)); });
+      tunnelInfo.proxyServer = pubProxy;
+      targetPort = pubProxyPort;
+      targetHost = '127.0.0.1';
     }
 
     // Format IPv6 address with brackets for URL
@@ -3853,7 +3869,8 @@ app.get('/pulse-lens.js', (req, res) => {
 
 // Live Server Watch Endpoint
 app.get('/live/watch', (req, res) => {
-  const targetPath = String(req.query.file || req.query.path || '').trim();
+  let targetPath = String(req.query.file || req.query.path || '').trim();
+    if (!targetPath && req.params[0]) { targetPath = decodeURIComponent(req.params[0]).trim(); if (!targetPath.includes(':') && !targetPath.startsWith('/')) { targetPath = '/' + targetPath; } }
   if (!targetPath) {
     return res.status(400).send('Missing file parameter.');
   }
@@ -3881,8 +3898,9 @@ app.get('/live/watch', (req, res) => {
 });
 
 // Live Server: instruments HTML with exact line numbers and serves to Chrome/Edge
-app.get('/live', async (req, res) => {
-  const targetPath = String(req.query.file || req.query.path || '').trim();
+app.get(/^\/live(?:\/(.*))?$/, async (req, res) => {
+  let targetPath = String(req.query.file || req.query.path || '').trim();
+    if (!targetPath && req.params[0]) { targetPath = decodeURIComponent(req.params[0]).trim(); if (!targetPath.includes(':') && !targetPath.startsWith('/')) { targetPath = '/' + targetPath; } }
   if (!targetPath) {
     return res.status(400).send('Missing file parameter. Use /live?file=<absolute_or_relative_path>');
   }
@@ -3950,6 +3968,9 @@ server.on('error', (e) => {
 server.listen(port, () => {
   console.log(`Tilder server running on http://localhost:${port}`);
 });
+
+
+
 
 
 

@@ -22,7 +22,7 @@ pub mod search;
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 #[derive(Default)]
 struct BackendState {
@@ -210,7 +210,7 @@ fn open_external_url(app: AppHandle, url: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn open_new_window(app: AppHandle) -> Result<(), String> {
+fn open_new_window(app: AppHandle, folder_path: Option<String>) -> Result<(), String> {
     let runtime_state = app.state::<DesktopRuntimeState>();
     let api_base_url = runtime_state
         .api_base_url
@@ -222,11 +222,23 @@ fn open_new_window(app: AppHandle) -> Result<(), String> {
     let counter = WINDOW_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let label = format!("tilder-{counter}");
 
-    let init_script = if !api_base_url.is_empty() {
-        Some(format!(
+    let mut init_script_parts = Vec::new();
+    if !api_base_url.is_empty() {
+        init_script_parts.push(format!(
             "window.__TILDER_API_BASE_URL__ = '{}'; window.__TILDER_RUNTIME_MODE__ = 'desktop-local';",
             api_base_url
-        ))
+        ));
+    }
+    if let Some(ref path) = folder_path {
+        let normalized = path.replace('\\', "/").replace('\'', "\\'");
+        init_script_parts.push(format!(
+            "window.__TILDER_INITIAL_FOLDER_PATH__ = '{}';",
+            normalized
+        ));
+    }
+
+    let init_script = if !init_script_parts.is_empty() {
+        Some(init_script_parts.join("\n"))
     } else {
         None
     };
@@ -238,6 +250,11 @@ fn open_new_window(app: AppHandle) -> Result<(), String> {
         init_script,
     )
     .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_window_zoom(window: WebviewWindow, scale: f64) -> Result<(), String> {
+    window.set_zoom(scale).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -964,6 +981,7 @@ pub fn run() {
             electronics_cmd::electronics_init,
             electronics_cmd::serial_monitor_start,
             open_new_window,
+            set_window_zoom,
             list_system_fonts,
             desktop_pick_folder,
             desktop_pick_file,

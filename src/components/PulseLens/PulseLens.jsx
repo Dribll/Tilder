@@ -1,3 +1,4 @@
+import { io } from 'socket.io-client';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './PulseLens.css';
 
@@ -112,7 +113,7 @@ export default function PulseLens({ editorRef, monacoRef, currentFilePath, socke
         ? `${window.location.protocol}//${window.location.hostname}:33210`
         : 'http://localhost:33210');
 
-    import('socket.io-client').then(({ io }) => {
+    try {
       sock = io(targetUrl, { transports: ['websocket', 'polling'] });
       socketRef.current = sock;
 
@@ -121,9 +122,9 @@ export default function PulseLens({ editorRef, monacoRef, currentFilePath, socke
         const logType = data.isError ? 'error' : (data.method || 'log');
         pushLog(data.path, data.line, logType, data.msg);
       });
-    }).catch(err => {
+    } catch (err) {
       console.warn('[PulseLens] Could not connect to socket:', err);
-    });
+    }
 
     return () => {
       sock?.disconnect();
@@ -229,3 +230,6 @@ export default function PulseLens({ editorRef, monacoRef, currentFilePath, socke
   // Headless component, no floating UI
   return null;
 }
+
+
+

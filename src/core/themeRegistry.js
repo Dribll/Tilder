@@ -227,7 +227,7 @@ const BUILT_IN_THEMES = [
   },
   {
     id: 'tilder-tahoe',
-    label: 'Tilder Tahoe (Glass)',
+    label: 'Tilder Glass',
     category: 'Dark',
     colors: {
       '--main-bg-color': 'transparent',
@@ -305,10 +305,10 @@ export function applyTheme(themeId, aesthetics = {}) {
   }
   
   // Apply glassmorphism panel background
-  // Tahoe is full-glass; all other dark themes get subtle semi-transparent glass (8px blur)
+  // Glass is full-glass; all other dark themes get subtle semi-transparent glass
   if (themeId === 'tilder-tahoe') {
     root.style.setProperty('--tilder-panel-bg', 'rgba(18, 18, 22, 0.55)');
-    root.style.setProperty('--tilder-panel-blur', 'blur(8px) saturate(140%)');
+    root.style.setProperty('--tilder-panel-blur', 'blur(5px) saturate(130%)');
     root.style.setProperty('--tilder-border-highlight', '1px solid rgba(255,255,255,0.10)');
   } else if (aesthetics.glassmorphism) {
     let bgRgb = root.style.getPropertyValue('--main-bg-color-rgb');

@@ -144,7 +144,7 @@
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 8px;
-  padding: 4px 6px;
+  padding: 6px 8px;
   transition: all 0.2s;
 }
 
@@ -164,9 +164,20 @@
   margin-right: 8px;
 }
 
+/* The Port control is wrapped in an inline flex row. Without a shrinking
+   width it could force the native select beyond the sidebar and draw over
+   the action buttons beneath it. */
+.hw-device-row > div {
+  flex: 1;
+  min-width: 0;
+}
+
 .hw-device-row select {
   flex: 1;
-  padding: 4px 6px;
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 4px 26px 4px 8px;
   background: transparent;
   border: none;
   color: #dde2f5;
@@ -176,7 +187,7 @@
   appearance: none;
   background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23dde2f5%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
   background-repeat: no-repeat;
-  background-position: right 6px center;
+  background-position: right 9px center;
   background-size: 8px auto;
   padding-right: 20px;
 }
@@ -192,7 +203,10 @@
   color: rgba(255, 255, 255, 0.4);
   border-radius: 6px;
   cursor: pointer;
-  padding: 4px 8px;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
   font-size: 11px;
   transition: all 0.2s;
 }
@@ -300,6 +314,41 @@
   flex-direction: column;
   height: 100%;
 }
+
+.hw-sketch-layout-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex: 0 0 auto;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(250, 184, 76, 0.24);
+  background: rgba(116, 75, 26, 0.24);
+  color: rgba(255, 231, 187, 0.92);
+  font-size: 11px;
+}
+
+.hw-sketch-layout-notice > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.hw-sketch-layout-notice strong { font-size: 11px; }
+.hw-sketch-layout-notice code { color: #ffe0a0; font-family: Consolas, monospace; }
+.hw-sketch-layout-notice button {
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 203, 108, 0.34);
+  border-radius: 5px;
+  padding: 6px 8px;
+  background: rgba(255, 203, 108, 0.12);
+  color: #fff0ca;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+}
+.hw-sketch-layout-notice button:hover { background: rgba(255, 203, 108, 0.22); }
 
 .hw-console-header {
   display: flex;

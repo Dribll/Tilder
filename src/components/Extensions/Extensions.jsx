@@ -163,6 +163,8 @@ export default function Extensions({
   authSession = null,
 }) {
   const [surfaceMode, setSurfaceMode] = useState('marketplace');
+  const [marketView, setMarketView] = useState('discover');
+  const [sortMode, setSortMode] = useState('popular');
   const [searchValue, setSearchValue] = useState('');
   const [category, setCategory] = useState('All');
   const [selectedExtensionId, setSelectedExtensionId] = useState('');
@@ -205,9 +207,13 @@ export default function Extensions({
     () => catalog.filter((extension) => extension.featured).slice(0, 6),
     [catalog]
   );
+  const marketplacePool = useMemo(
+    () => marketView === 'installed' ? installedExtensions : catalog,
+    [catalog, installedExtensions, marketView]
+  );
   const filteredExtensions = useMemo(() => {
     const query = trimmedSearchValue.toLowerCase();
-    return catalog.filter((extension) => {
+    return marketplacePool.filter((extension) => {
       if (!extension || typeof extension !== 'object') return false;
       if (category !== 'All' && extension.category !== category) return false;
       if (!query) return true;
@@ -221,7 +227,12 @@ export default function Extensions({
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(query));
     });
-  }, [catalog, category, trimmedSearchValue]);
+  }, [marketplacePool, category, trimmedSearchValue]);
+  const orderedExtensions = useMemo(() => [...filteredExtensions].sort((left, right) => {
+    if (sortMode === 'name') return String(left.name || '').localeCompare(String(right.name || ''));
+    if (sortMode === 'rating') return Number(right.rating || 0) - Number(left.rating || 0);
+    return String(right.downloads || '').localeCompare(String(left.downloads || ''), undefined, { numeric: true });
+  }), [filteredExtensions, sortMode]);
 
   const selectedExtension = useMemo(() => {
     if (!selectedExtensionId) {
@@ -364,6 +375,8 @@ export default function Extensions({
     setSearchValue('');
     setCategory('All');
     setSelectedExtensionId('');
+    setMarketView('discover');
+    setSortMode('popular');
   }
 
   if (modalType !== 'Extensions') return null;
@@ -379,9 +392,9 @@ export default function Extensions({
       : isFiltering
         ? (selectedFilteredExtension || topFilteredExtension)
         : selectedExtension;
-  const showRecommendations = surfaceMode === 'marketplace' && !activeSelectedExtension;
+  const showRecommendations = surfaceMode === 'marketplace' && marketView === 'discover' && !activeSelectedExtension && !isFiltering;
   const rightPaneExtensions = surfaceMode === 'marketplace'
-    ? (isFiltering ? filteredExtensions : catalog)
+    ? orderedExtensions
     : installedExtensions;
 
   return (
@@ -395,6 +408,23 @@ export default function Extensions({
             Publisher Dashboard
           </button>
         </div>
+
+        {surfaceMode === 'marketplace' ? (
+          <div className="extensions-workbench-nav">
+            <div className="extensions-view-tabs" role="tablist" aria-label="Extension views">
+              <button type="button" className={`extensions-view-tab ${marketView === 'discover' ? 'active' : ''}`} onClick={() => { setMarketView('discover'); setSelectedExtensionId(''); }}>Discover</button>
+              <button type="button" className={`extensions-view-tab ${marketView === 'installed' ? 'active' : ''}`} onClick={() => { setMarketView('installed'); setSelectedExtensionId(''); }}>Installed <span>{installedExtensions.length}</span></button>
+            </div>
+            <label className="extensions-sort-control">Sort
+              <select value={sortMode} onChange={(event) => setSortMode(event.target.value)}>
+                <option value="popular">Most popular</option>
+                <option value="rating">Highest rated</option>
+                <option value="name">Name</option>
+              </select>
+            </label>
+            <div className="extensions-workbench-count">{orderedExtensions.length} extension{orderedExtensions.length === 1 ? '' : 's'}</div>
+          </div>
+        ) : null}
 
         {surfaceMode === 'marketplace' ? (
           <div className="extensions-layout extensions-layout-modal">

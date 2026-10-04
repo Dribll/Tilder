@@ -106,7 +106,7 @@ class ShortcutManager {
     this.pendingTimer = null;
     this.isSuspended = false;
 
-    window.addEventListener('keydown', this.handleKeyDown.bind(this));
+    window.addEventListener('keydown', this.handleKeyDown.bind(this), true);
   }
 
   setBindings(shortcuts) {
@@ -169,6 +169,11 @@ class ShortcutManager {
     const chord = eventToChord(event);
     if (!chord) {
       return;
+    }
+
+    // DEBUG: log zoom-related keys
+    if (event.ctrlKey && (event.code === 'Equal' || event.code === 'Minus' || event.code === 'Digit0')) {
+      console.log('[ShortcutManager] zoom key:', { key: event.key, code: event.code, shift: event.shiftKey, chord, registered: this.shortcuts.has(chord), allKeys: [...this.shortcuts.keys()].filter(k => k.includes('=') || k.includes('-') || k.includes('0')) });
     }
 
     if (this.pendingChord) {

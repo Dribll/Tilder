@@ -306,7 +306,7 @@ export default function TestRunner({ ariaExpandedisplaytestrunner, onRunTest, pu
   const hasResults = Object.keys(results).length > 0;
 
   return (
-    <div className={'sidebarscontent d-' + ariaExpandedisplaytestrunner}>
+    <div id="testrunnerarea" className={`sidebarscontent d-${ariaExpandedisplaytestrunner}`}>
       <div className="tr-shell">
 
         {/* ── Top header bar ── */}
@@ -408,7 +408,7 @@ export default function TestRunner({ ariaExpandedisplaytestrunner, onRunTest, pu
 
         {/* ── Search ── */}
         <div className="tr-search-wrap">
-          <div className="tr-search">
+          <div className="tr-search-bar">
             <i className="fa-solid fa-magnifying-glass tr-search-icon" />
             <input
               ref={searchRef}
@@ -537,7 +537,6 @@ export default function TestRunner({ ariaExpandedisplaytestrunner, onRunTest, pu
             </div>
           )}
         </div>
-
       </div>
     </div>
   );

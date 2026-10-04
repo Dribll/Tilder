@@ -676,7 +676,7 @@ const workspace = {
         open: this.expandedPaths.has(nodePath) || nodePath === 'root',
         parentPath,
         children: mappedChildren,
-        isLoaded: isLoaded || Array.isArray(entry.children),
+        isLoaded: isLoaded || hasRealChildren,
       };
     }
 
@@ -758,6 +758,23 @@ const workspace = {
     return true;
   },
 
+  async openFolderFromPath(folderPath, folderName = null) {
+    if (!folderPath) return false;
+    const normalizedPath = folderPath.replace(/\\/g, '/');
+    const name = folderName || normalizedPath.split('/').filter(Boolean).pop() || 'Workspace';
+    const previousTabs = this.tabs.filter((tab) => tab.external || tab.isUntitled);
+    this.roots = [{
+      id: normalizedPath,
+      handle: { kind: 'desktop-root', name },
+      systemPath: normalizedPath,
+      name
+    }];
+    this.tabs = previousTabs;
+    this.resetWorkspaceView({ keepTabs: true, selectedPath: 'root' });
+    await this.reloadTree();
+    return true;
+  },
+
   async addFolderToWorkspace() {
     if (this.adapter === 'tauri') {
       const selection = await desktopPickFolder();
@@ -1679,13 +1696,7 @@ const workspace = {
       if (nativePath) {
         // If it's a binary media file, we don't need to read its content to memory.
         // We will just serve it via the asset:// protocol.
-        if (isBinaryFileName(node?.name || nativePath)) {
-          return {
-            content: '',
-            isBinary: true,
-            mimeType: inferBinaryMimeType(node?.name || nativePath),
-          };
-        }
+        // binary files will be read by desktopReadFile directly
 
         const result = await desktopReadFile(nativePath);
         if (typeof result === 'string' && result.startsWith('data:application/octet-stream;base64,')) {

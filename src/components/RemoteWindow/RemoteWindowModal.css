@@ -1,0 +1,319 @@
+/* ─── Remote Window QuickPick Modal (Glassmorphic Tahoe style) ─── */
+.remote-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 999999;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 50px;
+  animation: remoteFadeIn 0.15s ease-out;
+}
+
+@keyframes remoteFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.remote-modal-box {
+  width: 620px;
+  max-width: 92vw;
+  max-height: 82vh;
+  background: rgba(18, 18, 28, 0.92);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: remoteScaleIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes remoteScaleIn {
+  from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Header & Search */
+.remote-modal-header {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.remote-modal-back-btn {
+  background: transparent;
+  border: none;
+  color: #a0a0b8;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 6px 9px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.remote-modal-back-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.remote-modal-search {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #f0f0f8;
+  font-size: 13.5px;
+  font-family: inherit;
+  caret-color: #a87ffb;
+}
+
+.remote-modal-search::placeholder {
+  color: rgba(255, 255, 255, 0.38);
+}
+
+/* Items List */
+.remote-modal-list {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 6px;
+  max-height: 480px;
+}
+
+.remote-modal-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.remote-modal-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+.remote-modal-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: #e2e2ec;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease, color 0.12s ease;
+  width: 100%;
+}
+
+.remote-modal-item:hover,
+.remote-modal-item.is-selected {
+  background: rgba(141, 90, 255, 0.22);
+  color: #ffffff;
+}
+
+.remote-modal-item.disconnect {
+  color: #ff7b7b;
+}
+
+.remote-modal-item.disconnect:hover,
+.remote-modal-item.disconnect.is-selected {
+  background: rgba(255, 80, 80, 0.2);
+  color: #ff9999;
+}
+
+.remote-modal-item-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.remote-modal-item-icon {
+  font-size: 14px;
+  width: 20px;
+  text-align: center;
+  color: #b095ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remote-modal-item.disconnect .remote-modal-item-icon {
+  color: #ff7b7b;
+}
+
+.remote-modal-item-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 450;
+}
+
+.remote-modal-item-badge {
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 7px;
+  border-radius: 12px;
+  color: #aaaabf;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.remote-modal-empty {
+  padding: 24px;
+  text-align: center;
+  color: #8a8aa0;
+  font-size: 13px;
+}
+
+/* Sub-panel Views */
+.remote-modal-content-panel {
+  padding: 16px 20px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.remote-modal-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #f5f5fa;
+}
+
+.remote-modal-panel-desc {
+  font-size: 12.5px;
+  color: #9898b0;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.remote-modal-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.remote-modal-input-label {
+  font-size: 11px;
+  color: #9f9fb8;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 600;
+}
+
+/* ── Modernized Sleek Input Text Boxes ── */
+.remote-modal-text-input {
+  background: rgba(10, 10, 18, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #ffffff;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.remote-modal-text-input::placeholder {
+  color: rgba(255, 255, 255, 0.32);
+  font-size: 12.5px;
+}
+
+.remote-modal-text-input:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(12, 12, 22, 0.7);
+}
+
+.remote-modal-text-input:focus {
+  border-color: #8d5aff;
+  background: rgba(14, 14, 25, 0.85);
+  box-shadow: 0 0 0 3px rgba(141, 90, 255, 0.22), inset 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* Button Controls */
+.remote-modal-btn-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.remote-modal-btn {
+  padding: 8px 16px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e5e5f0;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  transition: all 0.18s ease;
+}
+
+.remote-modal-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.remote-modal-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.remote-modal-btn.primary {
+  background: #733ce6;
+  border-color: #8c57fc;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(115, 60, 230, 0.35);
+}
+
+.remote-modal-btn.primary:hover:not(:disabled) {
+  background: #844df5;
+  border-color: #9d6fff;
+  box-shadow: 0 6px 18px rgba(115, 60, 230, 0.5);
+}
+
+.remote-modal-btn.secondary {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.remote-modal-btn.secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.remote-modal-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  background: rgba(72, 199, 116, 0.16);
+  border: 1px solid rgba(72, 199, 116, 0.3);
+  color: #55e683;
+  font-size: 12px;
+  font-weight: 500;
+  align-self: flex-start;
+}

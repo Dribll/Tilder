@@ -1,5 +1,7 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -10,6 +12,7 @@ const srcTauriDir = path.join(projectRoot, 'src-tauri');
 const binariesDir = path.join(srcTauriDir, 'binaries');
 const stagedAppDir = path.join(srcTauriDir, 'resources', 'app');
 const releaseAppDir = path.join(srcTauriDir, 'target', 'release', 'app');
+const debugAppDir = path.join(srcTauriDir, 'target', 'debug', 'app');
 const distDir = path.join(projectRoot, 'dist');
 const nodeModulesDir = path.join(projectRoot, 'node_modules');
 
@@ -25,7 +28,7 @@ function resolveTargetTriple() {
       return triple;
     }
   } catch {
-    // Fall back to `rustc -vV` for older toolchains.
+    // Fall back to `rustc -vV`
   }
 
   const rustInfo = execFileSync('rustc', ['-vV'], {
@@ -42,37 +45,51 @@ function resolveTargetTriple() {
   return match[1].trim();
 }
 
-async function copyFileWithRetry(src, dest, retries = 6) {
-  for (let attempt = 0; attempt <= retries; attempt += 1) {
-    try {
-      await fs.copyFile(src, dest);
-      return;
-    } catch (err) {
-      if ((err.code === 'EBUSY' || err.code === 'EPERM' || err.code === 'EACCES') && attempt < retries) {
-        await delay(200 * (attempt + 1));
-        continue;
-      }
-      try {
-        const [srcStat, destStat] = await Promise.all([fs.stat(src), fs.stat(dest)]);
-        if (srcStat.size === destStat.size && srcStat.size > 0) {
-          return;
-        }
-      } catch {}
-      throw err;
+async function copyFileIfChanged(src, dest) {
+  try {
+    const [srcStat, destStat] = await Promise.all([
+      fs.stat(src),
+      fs.stat(dest).catch(() => null)
+    ]);
+    if (destStat && srcStat.size === destStat.size && Math.abs(srcStat.mtimeMs - destStat.mtimeMs) < 1000) {
+      return false; // already identical
     }
+    await fs.mkdir(path.dirname(dest), { recursive: true });
+    await fs.copyFile(src, dest);
+    return true;
+  } catch (err) {
+    await fs.mkdir(path.dirname(dest), { recursive: true });
+    await fs.copyFile(src, dest);
+    return true;
   }
 }
 
-async function copyDir(src, dest) {
+async function syncDirIncremental(src, dest) {
   await fs.mkdir(dest, { recursive: true });
-  const entries = await fs.readdir(src, { withFileTypes: true });
-  for (const entry of entries) {
-    const srcPath = path.join(src, entry.name);
-    const destPath = path.join(dest, entry.name);
-    if (entry.isDirectory()) {
-      await copyDir(srcPath, destPath);
+  const [srcEntries, destEntries] = await Promise.all([
+    fs.readdir(src, { withFileTypes: true }),
+    fs.readdir(dest, { withFileTypes: true }).catch(() => [])
+  ]);
+
+  const srcNames = new Set(srcEntries.map((e) => e.name));
+
+  // Remove files/dirs in dest that no longer exist in src
+  for (const destEntry of destEntries) {
+    if (!srcNames.has(destEntry.name)) {
+      const destPath = path.join(dest, destEntry.name);
+      await fs.rm(destPath, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+
+  // Copy updated/new files or recurse
+  for (const srcEntry of srcEntries) {
+    const srcPath = path.join(src, srcEntry.name);
+    const destPath = path.join(dest, srcEntry.name);
+
+    if (srcEntry.isDirectory()) {
+      await syncDirIncremental(srcPath, destPath);
     } else {
-      await copyFileWithRetry(srcPath, destPath);
+      await copyFileIfChanged(srcPath, destPath);
     }
   }
 }
@@ -86,61 +103,36 @@ async function copyIntoStage(sourceRelativePath) {
     throw new Error(`Required runtime asset is missing: ${sourceRelativePath}`);
   }
 
-  await fs.mkdir(path.dirname(targetPath), { recursive: true });
   if (stats.isDirectory()) {
-    await withRetry(() => copyDir(sourcePath, targetPath));
+    await syncDirIncremental(sourcePath, targetPath);
   } else {
-    await withRetry(() => fs.copyFile(sourcePath, targetPath));
+    await copyFileIfChanged(sourcePath, targetPath);
   }
 }
 
-async function delay(ms) {
-  await new Promise((resolve) => setTimeout(resolve, ms));
+function computeFileHash(filePath) {
+  try {
+    const content = fsSync.readFileSync(filePath);
+    return crypto.createHash('md5').update(content).digest('hex');
+  } catch {
+    return '';
+  }
 }
 
-async function withRetry(task, retries = 6) {
-  let lastError = null;
+function ensureTargetJunction(target, linkPath) {
+  const parent = path.dirname(linkPath);
+  if (!fsSync.existsSync(parent)) {
+    return;
+  }
 
-  for (let attempt = 0; attempt <= retries; attempt += 1) {
+  if (!fsSync.existsSync(linkPath)) {
     try {
-      return await task();
-    } catch (error) {
-      lastError = error;
-      if (attempt === retries) {
-        break;
-      }
-
-      await delay(350 * (attempt + 1));
+      fsSync.symlinkSync(target, linkPath, 'junction');
+      console.log(`[prepare-runtime] Linked ${linkPath} -> ${target} (junction)`);
+    } catch (err) {
+      console.warn(`[prepare-runtime] Could not create junction for ${linkPath}:`, err.message);
     }
   }
-
-  throw lastError;
-}
-
-async function syncStageToReleaseRuntime() {
-  const releaseDirExists = await fs.stat(path.dirname(releaseAppDir)).then(() => true).catch(() => false);
-  if (!releaseDirExists) {
-    return;
-  }
-
-  await withRetry(() => fs.rm(releaseAppDir, { recursive: true, force: true }));
-  await fs.mkdir(path.dirname(releaseAppDir), { recursive: true });
-  await withRetry(() => copyDir(stagedAppDir, releaseAppDir));
-  await withRetry(() => fs.copyFile(path.join(projectRoot, 'localRunner.js'), path.join(releaseAppDir, 'localRunner.js')));
-}
-
-async function syncStageToDebugRuntime() {
-  const debugAppDir = path.join(srcTauriDir, 'target', 'debug', 'app');
-  const debugDirExists = await fs.stat(path.dirname(debugAppDir)).then(() => true).catch(() => false);
-  if (!debugDirExists) {
-    return;
-  }
-
-  await withRetry(() => fs.rm(debugAppDir, { recursive: true, force: true }));
-  await fs.mkdir(path.dirname(debugAppDir), { recursive: true });
-  await withRetry(() => copyDir(stagedAppDir, debugAppDir));
-  await withRetry(() => fs.copyFile(path.join(projectRoot, 'localRunner.js'), path.join(debugAppDir, 'localRunner.js')));
-  console.log(`Mirrored runtime assets into ${debugAppDir}`);
 }
 
 async function main() {
@@ -153,11 +145,11 @@ async function main() {
   await fs.access(nodeModulesDir);
 
   await fs.mkdir(binariesDir, { recursive: true });
-  await fs.copyFile(nodeBinaryPath, bundledBinaryPath);
+  await copyFileIfChanged(nodeBinaryPath, bundledBinaryPath);
 
-  await withRetry(() => fs.rm(stagedAppDir, { recursive: true, force: true }));
   await fs.mkdir(stagedAppDir, { recursive: true });
 
+  // Sync essential files incrementally (only changed files copied)
   await copyIntoStage('server.js');
   await copyIntoStage('server');
   await copyIntoStage('shared');
@@ -166,49 +158,90 @@ async function main() {
   await copyIntoStage('package.json');
   await copyIntoStage('package-lock.json');
   await copyIntoStage('tilder_monitor_service.ps1');
+
   const rootEnvPath = path.join(projectRoot, '.env');
-  const envExists = await fs.stat(rootEnvPath).then(() => true).catch(() => false);
+  const envExists = fsSync.existsSync(rootEnvPath);
   if (envExists) {
     await copyIntoStage('.env');
   } else {
     await fs.writeFile(path.join(stagedAppDir, '.env'), 'NODE_ENV=production\nPORT=33210\n');
   }
+
+  // Sync dist
   await copyIntoStage('dist');
 
   const isDev = process.argv.includes('--dev');
-  if (isDev) {
-    console.log('Running in development mode: skipping node_modules copy to save time and prevent watch loops.');
-    const devNodeModulesDir = path.join(stagedAppDir, 'node_modules');
-    await fs.mkdir(devNodeModulesDir, { recursive: true });
-    await fs.writeFile(path.join(devNodeModulesDir, '.placeholder'), 'placeholder for tauri resources check in dev mode');
-  } else {
-    await copyIntoStage('node_modules');
+  const stagedNodeModulesDir = path.join(stagedAppDir, 'node_modules');
+  const hashFile = path.join(stagedAppDir, '.node_modules_synced_hash');
+  const lockHash = computeFileHash(path.join(projectRoot, 'package-lock.json'));
 
-    // Remove packages with deeply nested paths that exceed Windows MAX_PATH (260 chars)
-    // and break the NSIS/MSI installer bundler.
-    const deepNestedPackages = [
-      path.join(stagedAppDir, 'node_modules', '@vscjava'),
-    ];
-    for (const pkg of deepNestedPackages) {
-      const exists = await fs.stat(pkg).then(() => true).catch(() => false);
-      if (exists) {
-        await withRetry(() => fs.rm(pkg, { recursive: true, force: true }));
-        console.log(`Removed deeply nested package from bundle: ${pkg}`);
+  if (isDev) {
+    console.log('[prepare-runtime] DEV mode: Fast-linking node_modules...');
+    if (!fsSync.existsSync(stagedNodeModulesDir)) {
+      try {
+        fsSync.symlinkSync(nodeModulesDir, stagedNodeModulesDir, 'junction');
+        console.log('[prepare-runtime] Created instant junction for node_modules.');
+      } catch {
+        await fs.mkdir(stagedNodeModulesDir, { recursive: true });
+        await fs.writeFile(path.join(stagedNodeModulesDir, '.placeholder'), 'dev');
       }
+    } else {
+      console.log('[prepare-runtime] Staged node_modules already ready.');
+    }
+  } else {
+    // Production build mode
+    let isJunction = false;
+    try {
+      isJunction = fsSync.lstatSync(stagedNodeModulesDir).isSymbolicLink();
+    } catch {}
+
+    if (isJunction) {
+      fsSync.unlinkSync(stagedNodeModulesDir);
+    }
+
+    const currentHash = fsSync.existsSync(hashFile) ? fsSync.readFileSync(hashFile, 'utf8').trim() : '';
+
+    if (currentHash === lockHash && fsSync.existsSync(stagedNodeModulesDir)) {
+      console.log('[prepare-runtime] Production node_modules are already up to date (hash match). Skipping copy.');
+    } else {
+      console.log('[prepare-runtime] Staging production node_modules via multi-threaded robocopy...');
+      if (process.platform === 'win32') {
+        try {
+          execSync(
+            `robocopy "${nodeModulesDir}" "${stagedNodeModulesDir}" /MIR /MT:16 /NFL /NDO /NJH /NJS /R:1 /W:1 /XD @vscjava`,
+            { stdio: 'ignore' }
+          );
+        } catch (err) {
+          // Robocopy returns codes 0-7 for successful sync
+          if (err.status && err.status > 7) {
+            console.warn('[prepare-runtime] Robocopy non-critical code:', err.status);
+          }
+        }
+      } else {
+        await syncDirIncremental(nodeModulesDir, stagedNodeModulesDir);
+      }
+
+      // Remove @vscjava if present (exceeds Windows MAX_PATH for NSIS)
+      const vscJavaPath = path.join(stagedNodeModulesDir, '@vscjava');
+      if (fsSync.existsSync(vscJavaPath)) {
+        await fs.rm(vscJavaPath, { recursive: true, force: true }).catch(() => {});
+      }
+
+      if (lockHash) {
+        fsSync.writeFileSync(hashFile, lockHash, 'utf8');
+      }
+      console.log('[prepare-runtime] Production node_modules staged.');
     }
   }
 
+  // Link target/release/app and target/debug/app directly to stagedAppDir (instant zero-copy)
+  ensureTargetJunction(stagedAppDir, releaseAppDir);
+  ensureTargetJunction(stagedAppDir, debugAppDir);
 
-
-  await syncStageToReleaseRuntime();
-  await syncStageToDebugRuntime();
-
-  console.log(`Prepared Tauri runtime assets in ${stagedAppDir}`);
-  console.log(`Mirrored runtime assets into ${releaseAppDir}`);
-  console.log(`Copied Node runtime to ${bundledBinaryPath}`);
+  console.log(`[prepare-runtime] Tauri runtime assets staged in ${stagedAppDir}`);
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
+  console.error('[prepare-runtime] Error:', error instanceof Error ? error.message : String(error));
   process.exit(1);
 });

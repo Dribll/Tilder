@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function LivePreview({ isOpen, htmlDocument, width, onRefresh, onOpenExternal, onOpenInBrowser, onClose }) {
+export default function LivePreview({ isOpen, htmlDocument, url, width, onRefresh, onOpenExternal, onOpenInBrowser, onClose }) {
   if (!isOpen) {
     return null;
   }
@@ -35,12 +35,12 @@ export default function LivePreview({ isOpen, htmlDocument, width, onRefresh, on
         </div>
       </div>
       <div className="live-preview-body">
-        {htmlDocument ? (
+        {url || htmlDocument ? (
           <iframe
             className="live-preview-frame"
             title="Tilder Live Preview"
-            srcDoc={htmlDocument}
-            sandbox="allow-scripts allow-same-origin"
+            src={url || undefined} srcDoc={url ? undefined : htmlDocument}
+            sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox"
           />
         ) : (
           <div className="live-preview-empty">Preview is preparing...</div>

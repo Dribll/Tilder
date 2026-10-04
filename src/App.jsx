@@ -13,7 +13,6 @@ import Terminal from './components/SideBar/Main Components/Terminal/Terminal.jsx
 import Debug from './components/SideBar/Main Components/Debug/Debug.jsx';
 import TestRunner from './components/SideBar/Main Components/TestRunner/TestRunner.jsx';
 import CodeBlocks from './components/SideBar/Main Components/Code Blocks/CodeBlocks.jsx';
-import Git from './components/SideBar/Main Components/Git/Git.jsx';
 import TrashView from './components/SideBar/Main Components/TrashView/TrashView.jsx';
 import HardwareManager from './components/SideBar/Main Components/HardwareManager/HardwareManager.jsx';
 import DefaultPage from './components/DefaultPage/DefaultPage.jsx';
@@ -24,6 +23,7 @@ import ConfirmDialog from './components/ConfirmDialog/ConfirmDialog.jsx';
 import PromptDialog from './components/PromptDialog/PromptDialog.jsx';
 import UpdateModal from './components/UpdateModal/UpdateModal.jsx';
 import CommandPalette from './components/CommandPalette/CommandPalette.jsx';
+import RemoteWindowModal from './components/RemoteWindow/RemoteWindowModal.jsx';
 import ThemePicker from './components/ThemePicker/ThemePicker.jsx';
 import Settings from './components/Settings/Settings.jsx';
 import WorkspaceTrustModal from './components/WorkspaceTrustModal/WorkspaceTrustModal.jsx';
@@ -75,6 +75,7 @@ function MediaViewer({ tab }) {
 }
 
 import LivePreview from './components/LivePreview/LivePreview.jsx';
+import PulseLens from './components/PulseLens/PulseLens.jsx';
 import Backpack from './components/Backpack/Backpack.jsx';
 import { soundManager } from './core/SoundManager.js';
 import shortcutManager, { formatBindingLabel, normalizeBindingString } from './components/ShortcutManager.js';
@@ -93,7 +94,12 @@ import { fetchExtensionMarketplace } from './core/extensionsMarketplaceApi.js';
 import { getEffectiveBinding, KEYBINDING_COMMANDS } from './core/keybindings.js';
 import { createLspBridge } from './core/lspBridge.js';
 import { disposeExtensionsRuntime, syncExtensionsRuntime } from './core/extensionsRuntime.js';
-import { openDesktopWindow, desktopUpdateJumpList, desktopWatchDirectory } from './core/desktopFileApi.js';
+import { openDesktopWindow, desktopUpdateJumpList, desktopWatchDirectory, desktopSetZoom } from './core/desktopFileApi.js';
+import {
+  broadcastZoom,
+  subscribeWindowSync,
+  broadcastWindowPing,
+} from './core/windowSync.js';
 import {
   buildMatcher,
   collectSymbols,
@@ -104,6 +110,11 @@ import {
 import { fetchRunnerLanguages, formatLocalRunResult, formatRunResult, resolveRunnerLanguage, runCode, getRunCommandForTab, syncTerminalWorkspaceRoot } from './core/codeRunner.js';
 import { getDetectedRuntimes } from './core/runtimeScanner.js';
 import { isDesktopRuntime } from './core/runtime.js';
+
+// Source Control is a non-critical, on-demand workbench. Loading it lazily
+// keeps an isolated SCM/UI module failure from preventing the editor shell
+// from starting at all.
+const SourceControlPanel = React.lazy(() => import('./components/SideBar/Main Components/Git/Git.jsx'));
 
 const LIVE_PREVIEW_CHANNEL = 'tilder-live-preview';
 const LIVE_PREVIEW_ID = 'primary';
@@ -290,9 +301,20 @@ function App() {
   const [modalType, setModalType] = useState('');
   const [showMenuBar, setShowMenuBar] = useState(true);
   const [showStatusBar, setShowStatusBar] = useState(true);
+  const [wrapTabs, setWrapTabs] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(() => {
+    const saved = localStorage.getItem('window.zoomLevel');
+    if (saved !== null && !isNaN(Number(saved))) {
+      return Number(saved);
+    }
+    return 0;
+  });
+  // Ref that always mirrors zoomLevel — lets zoom handlers avoid stale closures
+  const zoomLevelRef = React.useRef(zoomLevel);
   const [centeredLayout, setCenteredLayout] = useState(false);
   const [zenMode, setZenMode] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [remoteWindowOpen, setRemoteWindowOpen] = useState(false);
   const [themePickerOpen, setThemePickerOpen] = useState(false);
   const [goOverlay, setGoOverlay] = useState({
     open: false,
@@ -357,6 +379,8 @@ function App() {
   const [livePreviewOpen, setLivePreviewOpen] = useState(false);
   const [livePreviewMode, setLivePreviewMode] = useState('split');
   const [livePreviewDocument, setLivePreviewDocument] = useState('');
+  const [livePreviewUrl, setLivePreviewUrl] = useState('');
+  const [pulseLensLogs, setPulseLensLogs] = useState([]);
   const [livePreviewNonce, setLivePreviewNonce] = useState(0);
   const [livePreviewWidth, setLivePreviewWidth] = useState(380);
   const [isResizingLivePreview, setIsResizingLivePreview] = useState(false);
@@ -1198,6 +1222,14 @@ function App() {
     return () => window.removeEventListener('tilder:workspace-updated', refresh);
   }, []);
 
+  useEffect(() => {
+    function handleArduinoAction() {
+      setActivePanel('hardware');
+    }
+    window.addEventListener('tilder:arduino-action', handleArduinoAction);
+    return () => window.removeEventListener('tilder:arduino-action', handleArduinoAction);
+  }, []);
+
   function openSearchPanel(request = null) {
     if (!builtInFeatures.search) {
       notifyExtensionDisabled('Search Navigator');
@@ -1401,7 +1433,7 @@ function App() {
   }
 
   function isPanelAvailable(panel) {
-    return AVAILABLE_SIDEBAR_PANELS.includes(panel) || panel === 'codeblocks' || panel === 'extensions' || panel === 'backpack' || panel === 'hardware';
+    return AVAILABLE_SIDEBAR_PANELS.includes(panel) || panel === 'codeblocks' || panel === 'extensions' || panel === 'backpack' || panel === 'hardware' || panel === 'testrunner' || panel === 'trashview';
   }
 
   useEffect(() => {
@@ -2567,6 +2599,7 @@ function App() {
       confirmationResolverRef.current?.(false);
       clearLivePreview();
       setLivePreviewDocument('');
+        setLivePreviewUrl('');
       livePreviewWindowRef.current?.close?.();
       livePreviewChannelRef.current?.close?.();
       lspBridgeRef.current?.dispose?.();
@@ -4882,6 +4915,7 @@ function App() {
     if (language !== 'html') {
       setLivePreviewOpen(false);
       setLivePreviewDocument('');
+        setLivePreviewUrl('');
       clearLivePreview();
     }
     refresh();
@@ -4920,61 +4954,15 @@ function App() {
   }
 
   async function buildLivePreviewDocument(tab) {
-    if (!tab || tab.language !== 'html') {
-      return { document: '', url: '' };
+    if (!tab || tab.language !== "html") {
+      return { document: "", url: "" };
     }
-
-    const parser = new DOMParser();
-    const parsedDocument = parser.parseFromString(tab.content ?? '', 'text/html');
-    const attributeElements = parsedDocument.querySelectorAll('[src], link[href]');
-    const tempUrls = [];
-
-    for (const element of attributeElements) {
-      const attribute = element.hasAttribute('src') ? 'src' : 'href';
-      const originalValue = element.getAttribute(attribute) || '';
-      const workspacePath = resolveRelativeWorkspacePath(tab.path || tab.name, originalValue);
-      if (!workspacePath) {
-        continue;
-      }
-
-      const node = workspace.findNode(workspacePath);
-      if (!node || node.type !== 'file') {
-        continue;
-      }
-
-      const openedTab = workspace.tabs.find((entry) => entry.path === workspacePath);
-      const content = openedTab?.content ?? (node.isDraft ? node.content || '' : (await workspace.readFile(node)).content);
-      const extension = node.name.includes('.') ? node.name.split('.').pop().toLowerCase() : '';
-      const mimeTypes = {
-        css: 'text/css',
-        gif: 'image/gif',
-        html: 'text/html',
-        ico: 'image/x-icon',
-        jpg: 'image/jpeg',
-        jpeg: 'image/jpeg',
-        js: 'text/javascript',
-        json: 'application/json',
-        png: 'image/png',
-        svg: 'image/svg+xml',
-        webp: 'image/webp',
-      };
-
-      const objectUrl = URL.createObjectURL(new Blob([content], { type: mimeTypes[extension] || 'text/plain' }));
-      tempUrls.push(objectUrl);
-      element.setAttribute(attribute, objectUrl);
-    }
-
-    const finalDocument = `<!DOCTYPE html>\n${parsedDocument.documentElement.outerHTML}`;
-    const finalUrl = URL.createObjectURL(new Blob([finalDocument], { type: 'text/html' }));
-    tempUrls.forEach((url) => {
-      setTimeout(() => URL.revokeObjectURL(url), 30000);
-    });
-
-    return {
-      document: finalDocument,
-      url: finalUrl,
-    };
+    const targetPath = tab.nativePath || tab.path;
+    const url = `${window.__TILDER_API_BASE_URL__ || ""}/live/${targetPath.split('\\').join('/')}`;
+    return { document: "", url };
   }
+
+
 
   function handleToggleLivePreview() {
     if (livePreviewContextTab?.language !== 'html') {
@@ -4989,6 +4977,7 @@ function App() {
       } else {
         clearLivePreview();
         setLivePreviewDocument('');
+        setLivePreviewUrl('');
         livePreviewWindowRef.current?.close?.();
         livePreviewWindowRef.current = null;
       }
@@ -5221,7 +5210,22 @@ function App() {
       content = '<!DOCTYPE html>\n<html>\n<head>\n  <title>New Document</title>\n</head>\n<body>\n  <h1>Hello World</h1>\n</body>\n</html>\n';
     }
 
-    workspace.createUntitledFile(parentPath, fileName, content);
+    // A workspace-backed "New File" should be a real file immediately.  The
+    // previous untitled-tab path always opened a save picker later, which made
+    // files created inside an already-open folder look saved but remain untitled.
+    if (workspace.rootSystemPath || workspace.rootHandle) {
+      try {
+        const created = await workspace.createFile(parentPath, fileName);
+        if (created && content) {
+          await workspace.writeFileContent(created.path, content);
+        }
+      } catch (error) {
+        pushNotification(error?.message || 'Could not create the file in this folder.', 'error');
+        return;
+      }
+    } else {
+      workspace.createUntitledFile(parentPath, fileName, content);
+    }
     const tab = workspace.getActiveTab();
     if (tab) {
       assignTabToFocusedGroup(tab.id, { preview: false });
@@ -5872,15 +5876,17 @@ function App() {
       }
     }
 
-    // Dynamic workspace mirroring & path resolution
+    // In desktop mode with a real folder, skip Temp copy, use real native path directly.
     let targetPath = tab.nativePath || tab.path;
     try {
-      const payload = await workspace.getSyncPayload?.();
-      if (payload) {
-        const syncRes = await syncTerminalWorkspaceRoot(payload);
-        if (syncRes && syncRes.cwd) {
-          if (tab.isUntitled) {
-            targetPath = `${syncRes.cwd}/${tab.name}`.replace(/\\/g, '/');
+      if (isDesktopRuntime() && workspace.rootSystemPath && tab.isUntitled) {
+        targetPath = workspace.rootSystemPath.replace(/\\/g, "/") + "/" + tab.name;
+      } else if (!isDesktopRuntime() || !workspace.rootSystemPath) {
+        const payload = await workspace.getSyncPayload?.();
+        if (payload) {
+          const syncRes = await syncTerminalWorkspaceRoot(payload);
+          if (syncRes && syncRes.cwd && tab.isUntitled) {
+            targetPath = (syncRes.cwd + "/" + tab.name).replace(/\\/g, "/");
           }
         }
       }
@@ -6154,13 +6160,18 @@ function App() {
     pushNotification(`Compiling/Running ${tab.name}...`, 'info');
 
     try {
-      // Sync workspace mirror and resolve target directory
+      // In desktop mode with a real native folder, NEVER copy files into Temp.
+      // Use the native workspace path directly. Only sync to Temp for in-memory/draft workspaces.
       let cwd = null;
       try {
-        const payload = await workspace.getSyncPayload?.();
-        if (payload) {
-          const syncRes = await syncTerminalWorkspaceRoot(payload);
-          cwd = syncRes?.cwd || null;
+        if (isDesktopRuntime() && workspace.rootSystemPath) {
+          cwd = workspace.rootSystemPath.replace(/\\\\/g, '/');
+        } else {
+          const payload = await workspace.getSyncPayload?.();
+          if (payload) {
+            const syncRes = await syncTerminalWorkspaceRoot(payload);
+            cwd = syncRes?.cwd || null;
+          }
         }
       } catch (err) {
         console.warn('Workspace sync failed, proceeding with legacy runner:', err);
@@ -6389,6 +6400,7 @@ function App() {
     if (!livePreviewOpen || livePreviewContextTab?.language !== 'html') {
       if (livePreviewContextTab?.language !== 'html') {
         setLivePreviewDocument('');
+        setLivePreviewUrl('');
         clearLivePreview();
       }
       return;
@@ -6400,6 +6412,7 @@ function App() {
       .then(({ document, url }) => {
         if (!cancelled) {
           setLivePreviewDocument(document);
+          setLivePreviewUrl(url);
           if (livePreviewMode === 'tab') {
             publishLivePreview({
               previewId: LIVE_PREVIEW_ID,
@@ -6415,6 +6428,7 @@ function App() {
       .catch(() => {
         if (!cancelled) {
           setLivePreviewDocument('');
+        setLivePreviewUrl('');
           clearLivePreview();
         }
       });
@@ -6457,10 +6471,123 @@ function App() {
         splitBreakpointDecorationsRef.current.get(paneIndex)
       );
     });
-  }, [debugBreakpoints, splitEditorOpen, splitPaneGroups, version]);
+  }, [splitEditorOpen, splitPaneGroups, debugBreakpoints]);
+
+  // ─── Zoom System (Zoom In, Zoom Out, Reset Zoom) ───────────────────────────
+  // VS Code-style zoom: integer levels, scale = 1.2^level, clamped to [-5, +5]
+  // Level 0 = 100%, 1 = 120%, -1 ~= 83%. Uses Tauri native OS-level zoom on desktop.
+  const applyZoomLevel = useCallback((level) => {
+    const clamped = Math.max(-5, Math.min(5, Math.round(level)));
+    zoomLevelRef.current = clamped;
+    setZoomLevel(clamped);
+    localStorage.setItem('window.zoomLevel', String(clamped));
+    const scale = Math.pow(1.2, clamped);
+    // Native Tauri zoom — zooms the entire webview at OS level (like VS Code)
+    desktopSetZoom(scale);
+    // Web-only fallback; clear CSS zoom in desktop so they don't stack
+    if (typeof window.__TAURI_INTERNALS__ === 'undefined') {
+      document.documentElement.style.zoom = scale;
+    } else {
+      document.documentElement.style.zoom = '';
+    }
+  }, []);
+
+  const handleZoomIn = useCallback(() => {
+    const next = Math.min(5, zoomLevelRef.current + 1);
+    applyZoomLevel(next);
+    broadcastZoom(next);
+    pushNotification(`Zoom: ${Math.round(Math.pow(1.2, next) * 100)}%`);
+  }, [applyZoomLevel]);
+
+  const handleZoomOut = useCallback(() => {
+    const next = Math.max(-5, zoomLevelRef.current - 1);
+    applyZoomLevel(next);
+    broadcastZoom(next);
+    pushNotification(`Zoom: ${Math.round(Math.pow(1.2, next) * 100)}%`);
+  }, [applyZoomLevel]);
+
+  const handleResetZoom = useCallback(() => {
+    applyZoomLevel(0);
+    broadcastZoom(0);
+    pushNotification('Zoom Reset (100%)');
+  }, [applyZoomLevel]);
+
+  // Apply saved zoom on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { applyZoomLevel(zoomLevel); }, []);
+
+  // ─── Inter-Window Synchronization & Initial Window Spawn ─────────────────────
+  useEffect(() => {
+    if (window.__TILDER_INITIAL_FOLDER_PATH__) {
+      const initialPath = window.__TILDER_INITIAL_FOLDER_PATH__;
+      delete window.__TILDER_INITIAL_FOLDER_PATH__;
+      (async () => {
+        try {
+          await workspace.openFolderFromPath(initialPath);
+          workspace.setSelectedNode('root');
+          recordRecentWorkspace({
+            id: workspace.rootName || 'workspace',
+            name: workspace.rootName || workspace.getRootNode()?.name || 'Workspace',
+          });
+          setActivePanel('filepioneer');
+          loadWorkspaceSettings();
+          refresh();
+        } catch (err) {
+          console.error('Failed to open initial folder in new window:', err);
+        }
+      })();
+    }
+  }, []);
+
+  // Update Window Title (VS Code format)
+  useEffect(() => {
+    const activeTab = workspace.getActiveTab?.();
+    const fileName = activeTab?.name;
+    const folderName = workspace.rootName || workspace.getRootNode?.()?.name;
+    if (fileName && folderName) {
+      document.title = `${fileName} — ${folderName} - Tilder`;
+    } else if (folderName) {
+      document.title = `${folderName} - Tilder`;
+    } else if (fileName) {
+      document.title = `${fileName} - Tilder`;
+    } else {
+      document.title = 'Tilder';
+    }
+    broadcastWindowPing({ rootSystemPath: workspace.rootSystemPath, rootName: workspace.rootName });
+  }, [tabActiveId, workspace.rootName, workspace.rootSystemPath]);
+
+  // Inter-window message listener
+  useEffect(() => {
+    const unsubscribe = subscribeWindowSync((type, payload) => {
+      if (type === 'ZOOM_CHANGED') {
+        // payload.zoomLevel is now an integer step (VS Code convention)
+        const incoming = Number(payload.zoomLevel);
+        if (!isNaN(incoming) && incoming !== zoomLevel) {
+          applyZoomLevel(incoming);
+        }
+      } else if (type === 'SETTINGS_CHANGED') {
+        loadWorkspaceSettings();
+      } else if (type === 'REQUEST_FOCUS_WORKSPACE') {
+        if (payload.rootSystemPath && workspace.rootSystemPath) {
+          const normCurrent = workspace.rootSystemPath.replace(/\\/g, '/').toLowerCase();
+          const normReq = payload.rootSystemPath.replace(/\\/g, '/').toLowerCase();
+          if (normCurrent === normReq) {
+            import('@tauri-apps/api/webviewWindow').then(({ getCurrentWebviewWindow }) => {
+              const win = getCurrentWebviewWindow();
+              win.setFocus?.();
+              win.unminimize?.();
+            }).catch(() => {});
+          }
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [workspace.rootSystemPath, zoomLevel, applyZoomLevel]);
 
   const commandActions = {
     'workbench.action.showCommands': () => openCommandPalette(),
+    'workbench.action.remote.showMenu': () => setRemoteWindowOpen(true),
     'workbench.action.openSettings': () => toggleSettingsFromState(),
     'workbench.action.openKeyboardShortcuts': () => openKeyboardShortcuts(),
     'workbench.action.toggleKeyboardShortcuts': () => openKeyboardShortcuts(),
@@ -6595,17 +6722,24 @@ function App() {
       }));
     },
     'workbench.action.newWindow': () => handleNewWindow(),
+    'workbench.action.zoomIn': () => handleZoomIn(),
+    'workbench.action.zoomOut': () => handleZoomOut(),
+    'workbench.action.zoomReset': () => handleResetZoom(),
     'workbench.action.checkForUpdates': () => handleCheckForUpdates(true),
   };
 
   useEffect(() => {
-    shortcutManager.setBindings(
-      KEYBINDING_COMMANDS.map((command) => ({
-        id: command.id,
-        binding: effectiveBindings[command.id],
-        action: commandActions[command.id],
-      }))
-    );
+    const bindings = KEYBINDING_COMMANDS.map((command) => ({
+      id: command.id,
+      binding: effectiveBindings[command.id],
+      action: commandActions[command.id],
+    }));
+
+    // On most keyboards, Ctrl++ fires as Ctrl+Shift+= (because + is Shift+=).
+    // The canonical binding is Ctrl+= (unshifted), so we add an alias so both work.
+    bindings.push({ id: 'workbench.action.zoomIn.alias', binding: 'Ctrl+Shift+=', action: handleZoomIn });
+
+    shortcutManager.setBindings(bindings);
   }, [activeTab?.id, effectiveBindings, modalOpen, modalType, tabActiveId, workspace.activeTabId, workspace.selectedNodePath]);
 
   useEffect(() => {
@@ -6703,6 +6837,13 @@ function App() {
         onCancel={() => resolvePrompt(null)}
         onSubmit={(value) => resolvePrompt(value)}
       />
+      <RemoteWindowModal
+        isOpen={remoteWindowOpen}
+        onClose={() => setRemoteWindowOpen(false)}
+        workspace={workspace}
+        pushNotification={pushNotification}
+        refreshWorkspace={refresh}
+      />
       <CommandPalette
         isOpen={commandPaletteOpen}
         commands={commandPaletteCommands}
@@ -6768,15 +6909,20 @@ function App() {
       <AILensModal isOpen={!!aiLensTarget} onClose={() => setAiLensTarget(null)} targetFile={aiLensTarget} />
 
       <Modal isOpen={modalOpen} closeModal={closeCurrentModal} title={modalType}>
-          <Settings modalType={modalType} settings={settings} setSettings={setSettings} systemFonts={systemFonts} extensionCatalog={extensionCatalog} />
-         <Extensions
+        {modalType === 'Settings' && (
+          <Settings modalType={modalType} settings={settings} setSettings={setSettings} systemFonts={systemFonts} extensionCatalog={extensionCatalog} pushNotification={pushNotification} />
+        )}
+        {modalType === 'Extensions' && (
+          <Extensions
           modalType={modalType}
           pushNotification={pushNotification}
           extensionCatalog={extensionCatalog}
           marketplacePublishers={marketplacePublishers}
           authSession={authSession}
-         />
-        <Account
+          />
+        )}
+        {modalType === 'Account' && (
+          <Account
           modalType={modalType}
           authSession={authSession}
           authServiceStatus={authServiceStatus}
@@ -6789,8 +6935,10 @@ function App() {
           onToggleSyncPreference={handleToggleSyncPreference}
           onPushSync={() => handlePushSync()}
           onPullSync={handlePullSync}
-        />
-        <KeyboardShortcuts
+          />
+        )}
+        {modalType === 'Keyboard Shortcuts' && (
+          <KeyboardShortcuts
           modalType={modalType}
           commands={KEYBINDING_COMMANDS}
           bindings={effectiveBindings}
@@ -6798,8 +6946,9 @@ function App() {
           onUpdateBinding={updateKeybinding}
           onResetBinding={resetKeybinding}
           onResetAll={resetAllKeybindings}
-        />
-        <SystemMonitor modalType={modalType} />
+          />
+        )}
+        {modalType === 'System Monitor' && <SystemMonitor modalType={modalType} />}
       </Modal>
       <div id="mainProductivityArea" className={`${zenMode ? 'zen-mode' : ''} ${(centeredLayout || zenMode) ? 'centered-layout' : ''}`}>
         {showMenuBar && !zenMode ? (
@@ -6892,6 +7041,11 @@ function App() {
           toggleBreadcrumbs={() => commandHandlers['breadcrumbs.toggle']()}
           toggleMinimap={() => commandHandlers['editor.action.toggleMinimap']()}
           toggleWordWrap={() => commandHandlers['editor.action.toggleWordWrap']()}
+          toggleWrapTabs={() => setWrapTabs(w => !w)}
+          wrapTabsEnabled={wrapTabs}
+          zoomIn={handleZoomIn}
+          zoomOut={handleZoomOut}
+          zoomReset={handleResetZoom}
           reopenClosedEditor={handleReopenClosedEditor}
           zenModeEnabled={zenMode}
           centeredLayoutEnabled={centeredLayout || zenMode}
@@ -6945,6 +7099,7 @@ function App() {
                     groupId="primary"
                     onTabDragStart={handleTabDragStart}
                     onTabDrop={handleGroupTabDrop}
+                    wrapTabs={wrapTabs}
                     onTogglePin={togglePinTab}
                     onOpenLivePreviewTab={() => {
                       if (openTabLivePreview()) {
@@ -7076,6 +7231,7 @@ function App() {
                           groupId="primary"
                           onTabDragStart={handleTabDragStart}
                           onTabDrop={handleGroupTabDrop}
+                    wrapTabs={wrapTabs}
                           onTogglePin={togglePinTab}
                           onOpenLivePreviewTab={() => {}}
                         />
@@ -7225,6 +7381,7 @@ function App() {
                                 groupId={group.id}
                                 onTabDragStart={handleTabDragStart}
                                 onTabDrop={handleGroupTabDrop}
+                    wrapTabs={wrapTabs}
                                 onTogglePin={togglePinTab}
                                 onOpenLivePreviewTab={() => {}}
                               />
@@ -7298,9 +7455,11 @@ function App() {
                 <LivePreview
                   isOpen={previewColumnOpen}
                   htmlDocument={livePreviewDocument}
+                  url={livePreviewUrl}
                   width={livePreviewWidth}
                   onRefresh={() => setLivePreviewNonce((current) => current + 1)}
-                  onOpenExternal={() => {
+                  onOpenInBrowser={() => { if (livePreviewUrl) { import('@tauri-apps/api/core').then(({ invoke }) => invoke('open_external_url', { url: livePreviewUrl })).then(() => pushNotification('Opened live preview in default browser.', 'info')).catch(() => {}); } }}
+                    onOpenExternal={() => {
                     if (openTabLivePreview()) {
                       pushNotification(`Live preview opened in a new tab for ${activeTab?.name || 'HTML file'}.`);
                     }
@@ -7308,7 +7467,15 @@ function App() {
                   onClose={() => {
                     setLivePreviewOpen(false);
                     setLivePreviewDocument('');
-                  }}
+        setLivePreviewUrl('');
+                    }}
+                  />
+                <PulseLens 
+                  editorRef={editorRef}
+                  monacoRef={monacoRef}
+                  currentFilePath={activeTab?.nativePath || activeTab?.path}
+                  socketUrl={window.__TILDER_API_BASE_URL__}
+                  onLogsUpdate={setPulseLensLogs}
                 />
               </div>
               <Terminal
@@ -7327,6 +7494,7 @@ function App() {
                 diagnostics={debugDiagnostics}
                 outputEntries={outputEntries}
                 debugConsoleEntries={debugConsoleEntries}
+                  pulseLensLogs={pulseLensLogs}
                 onEvaluateDebug={handleEvaluateDebug}
                 debugSession={debugSession}
                 onClearDebugConsole={() => setDebugConsoleEntries([])}
@@ -7344,15 +7512,19 @@ function App() {
               />
             ) : null}
             <CodeBlocks ariaExpandedisplaycodeblocks={panelDisplay('codeblocks')} />
-            <Git
-              ariaExpandedisplaygit={panelDisplay('git')}
-              workspace={workspace}
-              workspaceVersion={version}
-              authSession={authSession}
-              pushNotification={pushNotification}
-              onWorkspaceMutated={refresh}
-              requestConfirmation={requestConfirmation}
-            />
+            {activePanel === 'git' ? (
+              <React.Suspense fallback={<div className="sidebarscontent d-flex"><div className="scm-loading-state">Loading Source Control…</div></div>}>
+                <SourceControlPanel
+                  ariaExpandedisplaygit={panelDisplay('git')}
+                  workspace={workspace}
+                  workspaceVersion={version}
+                  authSession={authSession}
+                  pushNotification={pushNotification}
+                  onWorkspaceMutated={refresh}
+                  requestConfirmation={requestConfirmation}
+                />
+              </React.Suspense>
+            ) : null}
             <GitHub
               ariaExpandedisplaygithub={panelDisplay('github')}
               authSession={authSession}
@@ -7464,6 +7636,7 @@ function App() {
               showGit={builtInFeatures.sourceControl}
               showGitHub={builtInFeatures.githubConnect}
               showBackpack={true}
+              pulseLensLogs={pulseLensLogs}
               toggleAriaExpandedfilepioneer={() => toggleSidebarPanel('filepioneer')}
               toggleAriaExpandedsearch={() => {
                 if (!builtInFeatures.search) {
@@ -7661,6 +7834,7 @@ function App() {
         ) : null}
         {showStatusBar && !zenMode ? (
         <StatusBar
+          onOpenRemoteWindow={() => setRemoteWindowOpen(true)}
           activeTab={activeTab}
           intelliSense={activeIntelliSense}
           currentLanguageCapability={
@@ -7677,6 +7851,7 @@ function App() {
           onSetEol={handleSetEol}
           onMarkNotificationsRead={markNotificationsRead}
           onClearNotifications={clearNotifications}
+          pushNotification={pushNotification}
           settings={settings}
           detectedRuntimes={detectedRuntimesState}
           customRuntimes={customRuntimes}
@@ -7695,3 +7870,22 @@ function App() {
 }
 
 export default App;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

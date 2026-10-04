@@ -17,14 +17,14 @@
   }
 
   function render(payload) {
-    if (!payload || !payload.document) {
+    if (!payload || (!payload.document && !payload.url)) {
       frame.removeAttribute('srcdoc');
       emptyState.style.display = 'grid';
       meta.textContent = 'Waiting for HTML from Tilder...';
       return;
     }
 
-    frame.srcdoc = payload.document;
+    if (payload.url) { frame.removeAttribute('srcdoc'); frame.src = payload.url; } else { frame.removeAttribute('src'); frame.srcdoc = payload.document; }
     emptyState.style.display = 'none';
     meta.textContent = `${payload.title || 'Untitled'}${payload.updatedAt ? ` • ${new Date(payload.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}`;
   }
@@ -66,3 +66,4 @@
 
   sync();
 })();
+

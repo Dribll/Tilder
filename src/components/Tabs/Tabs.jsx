@@ -71,6 +71,8 @@ export default function Tabs({
 
   onSetTabColor,
 
+  wrapTabs = false,
+
 }) {
 
   const [dropInsertBefore, setDropInsertBefore] = useState(null);
@@ -193,11 +195,11 @@ export default function Tabs({
 
     <>
 
-      <div className="tabs" onDragEnd={clearDrop}>
+      <div className={`tabs ${wrapTabs ? 'tabs-wrapped' : ''}`} onDragEnd={clearDrop}>
 
         <div
           ref={tabsListRef}
-          className="tabs-list"
+          className={`tabs-list ${wrapTabs ? 'wrap-tabs' : ''}`}
 
           onDragOver={(event) => event.preventDefault()}
 
@@ -425,22 +427,22 @@ export default function Tabs({
                   className="tabs-action-btn primary arduino-btn"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onRunCurrentFile('arduino_compile');
+                    window.dispatchEvent(new CustomEvent('tilder:arduino-action', { detail: { action: 'compile' } }));
                   }}
-                  title="Verify / Compile (Arduino IDE)"
+                  title="Verify / Compile sketch"
                 >
-                  <span><i className="fa-solid fa-check"></i></span>
+                  <i className="fa-solid fa-check"></i>
                 </button>
                 <button
                   type="button"
                   className="tabs-action-btn primary arduino-btn"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onRunCurrentFile('arduino_upload');
+                    window.dispatchEvent(new CustomEvent('tilder:arduino-action', { detail: { action: 'upload' } }));
                   }}
-                  title="Upload to Board (Arduino IDE)"
+                  title="Upload to board"
                 >
-                  <span><i className="fa-solid fa-arrow-right"></i></span>
+                  <i className="fa-solid fa-arrow-right"></i>
                 </button>
               </div>
             ) : (

@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { WebglAddon } from '@xterm/addon-webgl';
+import { CanvasAddon } from '@xterm/addon-canvas';
 import '@xterm/xterm/css/xterm.css';
 import { executeTerminalCommand, getDisplayPath } from '../../../../core/terminalBridge.js';
 import { getApiOrigin, apiFetch } from '../../../../core/apiBase.js';
@@ -9,7 +11,7 @@ import { syncTerminalWorkspaceRoot } from '../../../../core/codeRunner.js';
 import { isDesktopRuntime } from '../../../../core/runtime.js';
 
 const DESKTOP_TERMINAL_FONT_STACK =
-  '"Cascadia Mono", Consolas, monospace';
+  '"TilderMono", "Cascadia Mono", Consolas, monospace';
 const DEFAULT_TERMINAL_FONT_SIZE = 11;
 const DEFAULT_TERMINAL_LINE_HEIGHT = 1.15;
 const DEFAULT_TERMINAL_LETTER_SPACING = 0;
@@ -797,9 +799,33 @@ function TerminalPane({
         }
       });
 
-      terminal.open(hostRef.current);
-      terminalRef.current = terminal;
-      fitAddonRef.current = fitAddon;
+      // Wait for our bundled TilderMono to load before measuring cell sizes
+      const openTerminal = () => {
+        if (!hostRef.current) return;
+        terminal.open(hostRef.current);
+        terminalRef.current = terminal;
+        fitAddonRef.current = fitAddon;
+        try {
+          const webgl = new WebglAddon();
+          webgl.onContextLoss(() => webgl.dispose());
+          terminal.loadAddon(webgl);
+        } catch (e) {
+          console.warn('WebGL unavailable, falling back to Canvas renderer');
+          try {
+            const canvas = new CanvasAddon();
+            terminal.loadAddon(canvas);
+          } catch (e2) {}
+        }
+        setTimeout(() => {
+          if (hostRef.current && fitAddonRef.current) {
+            fitAddonRef.current.fit();
+            terminal.refresh(0, terminal.rows - 1);
+          }
+        }, 50);
+      };
+
+      // Use fonts.load() to ensure TilderMono is ready before xterm measures cell widths
+      document.fonts.load('400 11px TilderMono').then(openTerminal).catch(openTerminal);
 
       // ─── Fast Keyboard Shortcuts (Ctrl+C / Ctrl+V / Ctrl+Shift+C / Ctrl+Shift+V) ───
       terminal.attachCustomKeyEventHandler((event) => {
@@ -957,6 +983,8 @@ function TerminalPane({
           const snapshot = workspaceSnapshotRef.current;
           if (initialCwd) {
               socket.emit('terminal:set-cwd', initialCwd);
+          } else if (isDesktopRuntime() && workspace.rootSystemPath) {
+            socket.emit('terminal:set-cwd', workspace.rootSystemPath);
           } else if (snapshot) {
             syncTerminalWorkspaceRoot(snapshot).then(res => {
               if (res?.cwd) socket.emit('terminal:set-cwd', res.cwd);
@@ -1119,6 +1147,15 @@ function TerminalPane({
           // Clear interval after 5 seconds just in case
           setTimeout(() => clearInterval(checkInterval), 5000);
         }
+      },
+      dispose: () => {
+        // Disconnect backend socket (kills PTY process) and destroy xterm
+        socketRef.current?.disconnect();
+        socketRef.current = null;
+        resizeObserverRef.current?.disconnect();
+        terminalRef.current?.dispose();
+        terminalRef.current = null;
+        fitAddonRef.current = null;
       },
     });
 
@@ -1424,10 +1461,29 @@ export default function Terminal({
 
   function closeSession(sessionId) {
     if (sessions.length === 1) {
+      // Kill: dispose the socket + xterm for this session via its API
+      const api = sessionApisRef.current.get(sessionId);
+      if (api) {
+        // Disconnect socket so the backend PTY process is signaled
+        api.dispose?.();
+      }
+      // Hide the panel
       onClose();
+      // After panel hides, replace with a completely fresh session
+      setTimeout(() => {
+        const fresh = createSession('Terminal');
+        setSessions([fresh]);
+        setActiveSessionId(fresh.id);
+        setSplitSessionIds([]);
+        setSessionMeta({});
+        sessionApisRef.current.clear();
+      }, 150);
       return;
     }
 
+    // Multiple sessions: kill just this one
+    const api = sessionApisRef.current.get(sessionId);
+    if (api) api.dispose?.();
     setSessions((current) => current.filter((session) => session.id !== sessionId));
     setSplitSessionIds((current) => current.filter((id) => id !== sessionId));
     setSessionMeta((current) => {
@@ -1500,7 +1556,9 @@ export default function Terminal({
     let cwd = '';
 
     try {
-      if (workspaceSnapshot) {
+      if (isDesktopRuntime() && workspace.rootSystemPath) {
+        cwd = workspace.rootSystemPath;
+      } else if (workspaceSnapshot) {
         try {
           const syncResult = await syncTerminalWorkspaceRoot(workspaceSnapshot);
           cwd = String(syncResult?.cwd || '').trim();
@@ -1558,12 +1616,8 @@ export default function Terminal({
     };
   }, [activeSessionApi, activeSessionId, terminalApiRef]);
 
-  if (!isOpen) {
-    return null;
-  }
-
   return (
-    <div className="terminal-drawer" style={{ height: `${height}px` }}>
+    <div className="terminal-drawer" style={{ height: `${height}px`, display: isOpen ? 'flex' : 'none' }}>
       <div className="terminal-resizer" onMouseDown={onResizeStart} />
       <div className="terminal-shell">
         <div className="terminal-header">
@@ -1641,16 +1695,16 @@ export default function Terminal({
                     onClick={() => activeSessionApi?.clear?.()}
                     title="Clear Terminal"
                   >
-                    <span><i className="fa-solid fa-trash-can"></i></span>
+                    <span><i className="fa-solid fa-ban"></i></span>
                   </button>
                 )}
                 <button
                   type="button"
                   className="terminal-toolbar-btn"
                   onClick={() => closeSession(activeSessionId)}
-                  title="Close Terminal Session"
+                  title="Kill Terminal Session"
                 >
-                  <span><i className="fa-solid fa-xmark"></i></span>
+                  <span><i className="fa-solid fa-trash-can"></i></span>
                 </button>
                 {availableProfiles.length ? (
                   <select
@@ -1692,7 +1746,10 @@ export default function Terminal({
                 </button>
               </>
             ) : null}
-            <button type="button" className="terminal-toolbar-btn" onClick={onClose} title="Hide Terminal">
+            <button type="button" className="terminal-toolbar-btn" onClick={onClose} title="Close Panel">
+              <span><i className="fa-solid fa-xmark"></i></span>
+            </button>
+            <button type="button" className="terminal-toolbar-btn" onClick={onClose} title="Hide Panel">
               <span><i className="fa-solid fa-chevron-down"></i></span>
             </button>
           </div>

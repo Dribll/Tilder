@@ -77,7 +77,7 @@ export default function UpdateModal({ update, currentVersion, onClose }) {
         
         <div className="update-modal-header">
           <div className="update-icon">
-            <span><i className="fa-solid fa-cloud-arrow-down"></i></span>
+            <span><i className="fa-solid fa-satellite-dish"></i></span>
           </div>
           <div className="update-title-group">
             <h2>Update Available</h2>

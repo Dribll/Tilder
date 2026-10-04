@@ -206,7 +206,12 @@ function MenuBar(props) {
                 <li onClick={() => { props.toggleBreadcrumbs(); closeAll(); }}>{props.breadcrumbsVisible ? 'Hide Breadcrumbs' : 'Show Breadcrumbs'}</li>
                 <li onClick={() => { props.toggleMinimap(); closeAll(); }}>{props.minimapVisible ? 'Hide Minimap' : 'Show Minimap'}</li>
                 <li onClick={() => { props.toggleWordWrap(); closeAll(); }}>{props.wordWrapEnabled ? 'Disable Word Wrap' : 'Enable Word Wrap'}</li>
+                <li onClick={() => { props.toggleWrapTabs?.(); closeAll(); }}>{props.wrapTabsEnabled ? 'Disable Tab Wrapping' : 'Enable Tab Wrapping'}</li>
                 <li onClick={() => { props.reopenClosedEditor(); closeAll(); }}>Reopen Closed Editor</li>
+                <hr className="dropdowncontent-hr" />
+                <li onClick={() => { props.zoomIn?.(); closeAll(); }}>Zoom In (Ctrl+=)</li>
+                <li onClick={() => { props.zoomOut?.(); closeAll(); }}>Zoom Out (Ctrl+-)</li>
+                <li onClick={() => { props.zoomReset?.(); closeAll(); }}>Reset Zoom (Ctrl+0)</li>
                 <hr className="dropdowncontent-hr" />
                 <li onClick={() => { props.openProblems(); closeAll(); }}>Problems</li>
                 <li onClick={() => { props.openOutput(); closeAll(); }}>Output</li>
@@ -298,7 +303,7 @@ function MenuBar(props) {
             <span><i className="fa-solid fa-paint-roller"></i></span>
           </span>
           <span className="dropdown-trigger-btn" onClick={props.checkForUpdates} title="Check for Updates">
-            <span><i className="fa-solid fa-gear"></i></span>
+            <span><i className="fa-solid fa-satellite-dish"></i></span>
           </span>
           <span className="dropdown-trigger-btn" onClick={props.toggleInfoDisplay} title="About">
             <span><i className="fa-solid fa-circle-info"></i></span>
@@ -416,6 +421,9 @@ MenuBar.defaultProps = {
   checkForUpdates: () => {},
   openWelcome: () => {},
   toggleSystemMonitor: () => {},
+  zoomIn: () => {},
+  zoomOut: () => {},
+  zoomReset: () => {},
 };
 
 MenuBar.propTypes = {
