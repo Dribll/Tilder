@@ -4,7 +4,7 @@ const defaultSettings = {
   // APPEARANCE
   // =========================
   theme: {
-    active: "tilder-tahoe"
+    active: "tilder-glass"
   },
   uiZoom: 100,
 
@@ -440,7 +440,7 @@ const defaultSettings = {
   // THEME
   // =========================
   theme: {
-    active: "ultra-dark",
+    active: "tilder-glass",
     glassmorphism: true,
     blurStrength: 10,
     activeTabGlow: true,
@@ -482,7 +482,8 @@ const defaultSettings = {
     enableCheckboxes: true,
     favorites: [],
     confirmDragAndDrop: true,
-    exclude: ["**/node_modules", "**/.git", "**/dist", "**/target"]
+    exclude: ["**/node_modules", "**/.git", "**/dist", "**/target"],
+    showExcludedFolders: false
   },
   search: {
     exclude: ["**/node_modules", "**/.git", "**/dist", "**/target"],
@@ -584,6 +585,14 @@ function isPlainObject(value) {
 
 export function mergeWithDefaultSettings(value) {
   const source = isPlainObject(value) ? value : {};
+
+  // Auto-migrate legacy theme ID 'tilder-tahoe' to 'tilder-glass'
+  if (source.theme?.active === 'tilder-tahoe') {
+    source.theme.active = 'tilder-glass';
+  }
+  if (source.workbench?.colorTheme === 'tilder-tahoe') {
+    source.workbench.colorTheme = 'tilder-glass';
+  }
 
   function merge(defaultValue, incomingValue) {
     if (Array.isArray(defaultValue)) {

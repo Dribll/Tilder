@@ -8,7 +8,6 @@ export default function CodeSearch({ fileTree, onFileSelect }) {
   const [isMatchCase, setIsMatchCase] = useState(false);
   const [results, setResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
-  const { isDesktop } = useWorkspace();
 
   const presets = [
     { label: 'Async Functions', icon: 'fa-bolt', regex: 'async\\s+function\\s+\\w+|const\\s+\\w+\\s*=\\s*async\\s*\\(' },

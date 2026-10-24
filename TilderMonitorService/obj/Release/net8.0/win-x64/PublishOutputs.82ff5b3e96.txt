@@ -1,4 +1,10 @@
 D:\Tilder - Copy\desktop-app\src-tauri\windows\monitor_bin\appsettings.Development.json
 D:\Tilder - Copy\desktop-app\src-tauri\windows\monitor_bin\appsettings.json
+D:\Tilder - Copy\desktop-app\src-tauri\windows\monitor_bin\publish_output\appsettings.Development.json
+D:\Tilder - Copy\desktop-app\src-tauri\windows\monitor_bin\publish_output\appsettings.json
+D:\Tilder - Copy\desktop-app\src-tauri\windows\monitor_bin\publish_output\TilderMonitorService.deps.json
+D:\Tilder - Copy\desktop-app\src-tauri\windows\monitor_bin\publish_output\TilderMonitorService.runtimeconfig.json
 D:\Tilder - Copy\desktop-app\src-tauri\windows\monitor_bin\TilderMonitorService.pdb
+D:\Tilder - Copy\desktop-app\src-tauri\windows\monitor_bin\MonoPosixHelper.dll
+D:\Tilder - Copy\desktop-app\src-tauri\windows\monitor_bin\libMonoPosixHelper.dll
 D:\Tilder - Copy\desktop-app\src-tauri\windows\monitor_bin\TilderMonitorService.exe

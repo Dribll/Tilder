@@ -125,13 +125,22 @@ function ensureTargetJunction(target, linkPath) {
     return;
   }
 
-  if (!fsSync.existsSync(linkPath)) {
-    try {
-      fsSync.symlinkSync(target, linkPath, 'junction');
-      console.log(`[prepare-runtime] Linked ${linkPath} -> ${target} (junction)`);
-    } catch (err) {
-      console.warn(`[prepare-runtime] Could not create junction for ${linkPath}:`, err.message);
+  try {
+    const stat = fsSync.lstatSync(linkPath);
+    if (stat.isSymbolicLink()) {
+      return; // Already a junction
     }
+    // Existing non-symlink folder: remove so we can create a clean junction
+    fsSync.rmSync(linkPath, { recursive: true, force: true });
+  } catch {
+    // Path does not exist yet
+  }
+
+  try {
+    fsSync.symlinkSync(target, linkPath, 'junction');
+    console.log(`[prepare-runtime] Linked ${linkPath} -> ${target} (junction)`);
+  } catch (err) {
+    console.warn(`[prepare-runtime] Could not create junction for ${linkPath}:`, err.message);
   }
 }
 
@@ -207,8 +216,62 @@ async function main() {
       console.log('[prepare-runtime] Staging production node_modules via multi-threaded robocopy...');
       if (process.platform === 'win32') {
         try {
+          const excludedDirs = [
+            '@vscjava',
+            '@fortawesome',
+            '@graphql-tools',
+            '@azure',
+            '@babel',
+            '@jest',
+            '@mixmark-io',
+            '@microsoft',
+            '@astrojs',
+            '@envelop',
+            '@istanbuljs',
+            '@emmetio',
+            '@google-cloud',
+            '@jridgewell',
+            'handsontable',
+            'tinymce',
+            '@tinymce',
+            'docx',
+            'mammoth',
+            'xlsx',
+            'moment',
+            '@xterm',
+            'eslint',
+            '@eslint',
+            '@eslint-community',
+            '@swc',
+            '@typespec',
+            '@vscode',
+            '@vue',
+            '@vitejs',
+            '@volar',
+            '@johnsoncodehk',
+            '@joe-re',
+            '@graphql-typed-document-node',
+            '@graphql-hive',
+            '@humanwhocodes',
+            '@bmewburn',
+            '@whatwg-node',
+            '@opentelemetry',
+            '@prisma',
+            '@handsontable',
+            '@ampproject',
+            '@selderee',
+            '@taplo',
+            '@sinonjs',
+            '@sindresorhus',
+            '@react-aria',
+            '@repeaterjs',
+            '@xmldom',
+            '@one-ini',
+            'eslint'
+          ].join(' ');
+
           execSync(
-            `robocopy "${nodeModulesDir}" "${stagedNodeModulesDir}" /MIR /MT:16 /NFL /NDO /NJH /NJS /R:1 /W:1 /XD @vscjava`,
+            `robocopy "${nodeModulesDir}" "${stagedNodeModulesDir}" /MIR /MT:16 /NFL /NDL /NP /NJH /NJS /R:1 /W:1 /XD ${excludedDirs}`,
             { stdio: 'ignore' }
           );
         } catch (err) {
@@ -221,22 +284,41 @@ async function main() {
         await syncDirIncremental(nodeModulesDir, stagedNodeModulesDir);
       }
 
-      // Remove @vscjava if present (exceeds Windows MAX_PATH for NSIS)
-      const vscJavaPath = path.join(stagedNodeModulesDir, '@vscjava');
-      if (fsSync.existsSync(vscJavaPath)) {
-        await fs.rm(vscJavaPath, { recursive: true, force: true }).catch(() => {});
-      }
-
       if (lockHash) {
         fsSync.writeFileSync(hashFile, lockHash, 'utf8');
       }
       console.log('[prepare-runtime] Production node_modules staged.');
     }
+
+    // Always run safety sweep regardless of hash match — ensures frontend-only
+    // packages never survive in the staged node_modules across incremental builds
+    // and between the two beforeBuildCommand calls that tauri build makes.
+    // Also removes packages with paths exceeding Windows MAX_PATH (breaks NSIS).
+    const frontendOnlyPkgs = [
+      '@vscjava', '@fortawesome', '@graphql-tools', '@azure', '@babel', '@jest',
+      '@mixmark-io', '@microsoft', '@astrojs', '@envelop', '@istanbuljs', '@emmetio',
+      '@google-cloud', '@jridgewell', '@xterm', '@eslint', '@eslint-community',
+      '@swc', '@typespec', '@vscode', '@vue', '@vitejs', '@volar', '@johnsoncodehk',
+      '@joe-re', '@graphql-typed-document-node', '@graphql-hive', '@humanwhocodes',
+      '@bmewburn', '@whatwg-node', '@opentelemetry', '@prisma', '@handsontable',
+      '@ampproject', '@selderee', '@taplo', '@sinonjs', '@sindresorhus', '@react-aria',
+      '@repeaterjs', '@xmldom', '@one-ini',
+      'handsontable', 'tinymce', 'docx', 'mammoth', 'xlsx', 'moment', 'eslint'
+    ];
+    let sweptCount = 0;
+    for (const pkg of frontendOnlyPkgs) {
+      const pkgPath = path.join(stagedNodeModulesDir, pkg);
+      if (fsSync.existsSync(pkgPath)) {
+        await fs.rm(pkgPath, { recursive: true, force: true }).catch(() => {});
+        sweptCount++;
+      }
+    }
+    if (sweptCount > 0) {
+      console.log(`[prepare-runtime] Safety sweep removed ${sweptCount} frontend-only package(s).`);
+    }
   }
 
-  // Link target/release/app and target/debug/app directly to stagedAppDir (instant zero-copy)
-  ensureTargetJunction(stagedAppDir, releaseAppDir);
-  ensureTargetJunction(stagedAppDir, debugAppDir);
+
 
   console.log(`[prepare-runtime] Tauri runtime assets staged in ${stagedAppDir}`);
 }

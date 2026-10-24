@@ -63,6 +63,10 @@ D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Release\net8.0\win-x64\RAM
 D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Release\net8.0\win-x64\System.IO.Ports.dll
 D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Release\net8.0\win-x64\MonoPosixHelper.dll
 D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Release\net8.0\win-x64\libMonoPosixHelper.dll
+D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Release\net8.0\win-x64\publish_output\appsettings.Development.json
+D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Release\net8.0\win-x64\publish_output\appsettings.json
+D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Release\net8.0\win-x64\publish_output\TilderMonitorService.deps.json
+D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Release\net8.0\win-x64\publish_output\TilderMonitorService.runtimeconfig.json
 D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Release\net8.0\win-x64\Microsoft.CSharp.dll
 D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Release\net8.0\win-x64\Microsoft.VisualBasic.Core.dll
 D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Release\net8.0\win-x64\Microsoft.VisualBasic.dll

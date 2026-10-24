@@ -1163,6 +1163,13 @@ const BASE_SECTION_DEFINITIONS = [
                 description: 'Hides files/folders listed in the workspace root .gitignore from the explorer tree.'
             },
             {
+                id: 'explorerShowExcluded',
+                path: 'explorer.showExcludedFolders',
+                label: 'Show Hidden Folders (node_modules, dist…)',
+                type: 'boolean',
+                description: 'When ON, shows folders like node_modules, dist, .git, target and build in the Explorer. Equivalent to removing them from files.exclude in VS Code.'
+            },
+            {
                 id: 'filesWatcherExclude',
                 path: 'files.watcherExclude',
                 label: 'Watcher Exclude',
@@ -1418,12 +1425,17 @@ const BASE_SECTION_DEFINITIONS = [
                 type: 'select',
                 description: 'Select the primary visual theme for the editor.',
                 options: [
-                    { value: 'ultra-dark', label: 'Ultra Dark (Default)' },
-                    { value: 'monokai-retro', label: 'Monokai Retro' },
-                    { value: 'nordic-frost', label: 'Nordic Frost' },
-                    { value: 'cyberpunk-neon', label: 'Cyberpunk Neon' },
-                    { value: 'midnight-purple', label: 'Midnight Purple' },
-                    { value: 'solarized-dark', label: 'Solarized Dark' }
+                    { value: 'tilder-formal', label: 'Tilder Pro Obsidian (Default)' },
+                    { value: 'tilder-violet', label: 'Tilder Cyber Violet' },
+                    { value: 'tilder-retro', label: 'Tilder Monokai Pro' },
+                    { value: 'tilder-frost', label: 'Tilder Arctic Nord' },
+                    { value: 'tilder-neon', label: 'Tilder Cyberpunk Neon' },
+                    { value: 'tilder-solar', label: 'Tilder Solarized Oceanic' },
+                    { value: 'tilder-midnight', label: 'Tilder OLED Midnight' },
+                    { value: 'tilder-emerald', label: 'Tilder Matrix Emerald' },
+                    { value: 'tilder-amber', label: 'Tilder Warm Amber' },
+                    { value: 'tilder-light', label: 'Tilder Pro Studio (Light)' },
+                    { value: 'tilder-glass', label: 'Tilder Glass (Vibrancy)' }
                 ]
             },
             {

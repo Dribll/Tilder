@@ -19,7 +19,7 @@ function getPrimarySymbol(content = '') {
   return '';
 }
 
-export default function BreadcrumbsBar({ activeTab, rootName }) {
+function BreadcrumbsBar({ activeTab, rootName }) {
   if (!activeTab) {
     return null;
   }
@@ -55,3 +55,5 @@ export default function BreadcrumbsBar({ activeTab, rootName }) {
     </div>
   );
 }
+
+export default React.memo(BreadcrumbsBar);

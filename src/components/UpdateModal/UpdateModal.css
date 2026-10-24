@@ -12,7 +12,7 @@
   z-index: 99999;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.3s ease, visibility 0.3s ease;
+  
 }
 
 .update-modal-overlay.visible {
@@ -30,7 +30,7 @@
   display: flex;
   flex-direction: column;
   transform: translateY(20px) scale(0.95);
-  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  
   overflow: hidden;
   backdrop-filter: blur(20px);
 }
@@ -130,7 +130,7 @@
   height: 100%;
   background: linear-gradient(90deg, var(--primary-gradient-1, #3a86ff), var(--primary-gradient-2, #8338ec));
   border-radius: 4px;
-  transition: width 0.2s ease-out;
+  
 }
 
 .update-progress-stats {
@@ -156,7 +156,7 @@
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  
   font-family: inherit;
 }
 
@@ -188,3 +188,4 @@
   cursor: not-allowed;
   transform: none !important;
 }
+

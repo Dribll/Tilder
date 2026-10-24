@@ -734,8 +734,9 @@ export default function FilePioneer({
     const term = search.trim().toLowerCase();
 
     // Build exclude matchers from settings + .gitignore patterns
-    const excludePatterns = settings?.explorer?.exclude || [];
-    const allExcludePatterns = [...excludePatterns, ...gitignorePatterns];
+    const showExcluded = settings?.explorer?.showExcludedFolders === true;
+    const excludePatterns = showExcluded ? [] : (settings?.explorer?.exclude || []);
+    const allExcludePatterns = showExcluded ? [] : [...excludePatterns, ...gitignorePatterns];
     function isExcluded(name) {
       if (!allExcludePatterns.length) return false;
       return allExcludePatterns.some(pat => {
@@ -1427,6 +1428,17 @@ export default function FilePioneer({
               await duplicateAndMoveNodes(validPaths, currentTarget);
             } else {
               await moveNodes(validPaths, currentTarget);
+            }
+          }
+        } else {
+          // Check if dropped onto the editor area to open the file(s)
+          const dropElem = document.elementFromPoint(upEvent.clientX, upEvent.clientY);
+          if (dropElem?.closest('.maincodearea, .monaco-editor, .editor-wrapper, .tabs-wrapper, .tabs-bar, .mainsect')) {
+            for (const path of dragPaths) {
+              const nodeToOpen = workspace.findNode(path);
+              if (nodeToOpen && nodeToOpen.type === 'file') {
+                await openFileNode(nodeToOpen);
+              }
             }
           }
         }

@@ -55,7 +55,7 @@
   align-items: flex-start;
   padding: 10px 15px;
   position: relative;
-  transition: background-color 0.15s;
+  
 }
 
 .timeline-item:hover {
@@ -97,7 +97,7 @@
 
 .timeline-item-actions {
   opacity: 0;
-  transition: opacity 0.15s;
+  
 }
 
 .timeline-item:hover .timeline-item-actions {
@@ -116,3 +116,4 @@
 .timeline-item-actions button:hover {
   background-color: rgba(255, 255, 255, 0.1);
 }
+

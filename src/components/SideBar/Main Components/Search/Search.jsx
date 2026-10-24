@@ -12,7 +12,7 @@ import {
 } from '../../../../core/searchUtils.js';
 import { invoke } from '@tauri-apps/api/core';
 
-export default function Search({
+function Search({
   ariaExpandedisplaysearch,
   workspace,
   workspaceVersion,
@@ -43,7 +43,20 @@ export default function Search({
   const [error, setError] = useState('');
   const [recentQueries, setRecentQueries] = useState([]);
   const [replaceBusy, setReplaceBusy] = useState('');
+  const [expandedFiles, setExpandedFiles] = useState(new Set());
   const searchInputRef = useRef(null);
+
+  const toggleExpand = (fileKey) => {
+    setExpandedFiles((current) => {
+      const next = new Set(current);
+      if (next.has(fileKey)) {
+        next.delete(fileKey);
+      } else {
+        next.add(fileKey);
+      }
+      return next;
+    });
+  };
 
   const scopeOptions = useMemo(
     () => [
@@ -267,58 +280,83 @@ export default function Search({
 
         const contentResults = [];
         let totalMatches = 0;
+        const rootSys = (workspace.roots?.[0]?.systemPath || workspace.rootSystemPath || '').replace(/\\/g, '/').replace(/\/+$/, '');
+        const isDesktop = workspace.adapter === 'tauri' || (typeof window !== 'undefined' && Boolean(window.__TAURI__));
 
-        if (workspace.adapter === 'tauri' && workspace.roots.length > 0 && workspace.roots[0].systemPath) {
-          const tauriResults = await invoke('tilder_search_workspace', {
-            workspacePath: workspace.roots[0].systemPath,
-            query: query.trim(),
-            isCaseSensitive: caseSensitive,
-            isRegex: useRegex,
-          });
-          
-          const grouped = {};
-          for (const res of tauriResults) {
-            // Apply include/exclude filters
-            const relPath = res.file_path.replace(/\\/g, '/').replace(workspace.roots[0].systemPath.replace(/\\/g, '/') + '/', '');
-            if (!matchesPathFilters(relPath, includeFilter, excludeFilter)) {
-               continue;
+        let searchedWithNative = false;
+        if (isDesktop && rootSys) {
+          try {
+            let effectiveQuery = query.trim();
+            let effectiveIsRegex = useRegex;
+            if (wholeWord && !useRegex) {
+              effectiveQuery = `\\b${effectiveQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`;
+              effectiveIsRegex = true;
             }
 
-            const extension = getExtension(relPath);
-            if (scope === 'code' && !CODE_EXTENSIONS.has(extension)) continue;
-            if (scope === 'assets' && !ASSET_EXTENSIONS.has(extension)) continue;
+            const tauriResults = await invoke('tilder_search_workspace', {
+              workspacePath: rootSys,
+              query: effectiveQuery,
+              isCaseSensitive: caseSensitive,
+              isRegex: effectiveIsRegex,
+            });
 
-            if (!grouped[res.file_path]) {
-              grouped[res.file_path] = {
-                path: res.file_path.replace(/\\/g, '/'),
-                name: res.file_path.split(/[\/\\]/).pop(),
-                matches: [],
-              };
-            }
-            
-            matcher.lastIndex = 0;
-            let nextMatch = matcher.exec(res.line_content);
-            let lineMatches = 0;
-            
-            while (nextMatch && lineMatches < 6) {
-              const preview = getLinePreview(res.line_content, nextMatch.index);
-              grouped[res.file_path].matches.push({
-                line: res.line_number,
-                column: preview.column,
-                preview: preview.preview,
-                matchLength: nextMatch[0].length,
-              });
-              
-              if (nextMatch[0].length === 0) {
-                matcher.lastIndex += 1;
+            searchedWithNative = true;
+            const grouped = {};
+            for (const res of tauriResults || []) {
+              const normalizedPath = res.file_path.replace(/\\/g, '/');
+              let relPath = normalizedPath;
+              if (rootSys && normalizedPath.toLowerCase().startsWith(rootSys.toLowerCase() + '/')) {
+                relPath = normalizedPath.slice(rootSys.length + 1);
               }
-              nextMatch = matcher.exec(res.line_content);
-              lineMatches++;
-              totalMatches++;
+
+              // Apply include/exclude filters
+              if (!matchesPathFilters(relPath, includeFilter, excludeFilter)) {
+                continue;
+              }
+
+              const extension = getExtension(relPath);
+              if (scope === 'code' && !CODE_EXTENSIONS.has(extension)) continue;
+              if (scope === 'assets' && !ASSET_EXTENSIONS.has(extension)) continue;
+
+              if (!grouped[relPath]) {
+                grouped[relPath] = {
+                  path: relPath,
+                  nativePath: res.file_path,
+                  name: relPath.split('/').pop() || res.file_path.split(/[\/\\]/).pop(),
+                  matches: [],
+                };
+              }
+
+              matcher.lastIndex = 0;
+              let nextMatch = matcher.exec(res.line_content);
+              let lineMatches = 0;
+
+              while (nextMatch && lineMatches < 10) {
+                const preview = getLinePreview(res.line_content, nextMatch.index);
+                grouped[relPath].matches.push({
+                  line: res.line_number,
+                  column: preview.column,
+                  preview: preview.preview,
+                  lineContent: res.line_content,
+                  matchLength: nextMatch[0].length,
+                });
+
+                if (nextMatch[0].length === 0) {
+                  matcher.lastIndex += 1;
+                }
+                nextMatch = matcher.exec(res.line_content);
+                lineMatches++;
+                totalMatches++;
+              }
             }
+            contentResults.push(...Object.values(grouped));
+          } catch (tauriSearchErr) {
+            console.warn('Native workspace search fallback to JS pool:', tauriSearchErr);
+            searchedWithNative = false;
           }
-          contentResults.push(...Object.values(grouped));
-        } else {
+        }
+
+        if (!searchedWithNative) {
           for (const entry of pool) {
             const content = await readSearchContent(workspace, entry);
 
@@ -330,12 +368,13 @@ export default function Search({
             const matches = [];
             let nextMatch = matcher.exec(content);
 
-            while (nextMatch && matches.length < 6) {
+            while (nextMatch && matches.length < 10) {
               const preview = getLinePreview(content, nextMatch.index);
               matches.push({
                 line: preview.line,
                 column: preview.column,
                 preview: preview.preview,
+                lineContent: preview.preview,
                 matchLength: nextMatch[0].length,
               });
               if (nextMatch[0].length === 0) {
@@ -357,6 +396,7 @@ export default function Search({
 
         if (!cancelled) {
           setResults(contentResults);
+          setExpandedFiles(new Set(contentResults.map((r) => r.path || r.name)));
           setSummary({ files: contentResults.length, matches: totalMatches });
           setRecentQueries((current) => [query.trim(), ...current.filter((entry) => entry !== query.trim())].slice(0, 5));
         }
@@ -523,28 +563,41 @@ export default function Search({
         {summary.matches > 0 && (
           <div className="search-results">
             {results.map((result) => {
-              const fileKey = result.file.path;
+              const fileKey = result.path || result.name;
               const isExpanded = expandedFiles.has(fileKey);
               return (
                 <div key={fileKey} className="search-result-group">
-                  <div className="search-result-file" onClick={() => toggleExpand(fileKey)}>
+                  <div
+                    className="search-result-file"
+                    onClick={() => {
+                      if (!result.matches || result.matches.length === 0) {
+                        openSearchResult?.({ path: result.path, nativePath: result.nativePath, name: result.name });
+                      } else {
+                        toggleExpand(fileKey);
+                      }
+                    }}
+                  >
                     <i className={`fa-solid ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'} search-result-file-icon`}></i>
-                    <span className="search-result-file-name">{result.file.name}</span>
-                    <span className="search-result-file-path">{workspace.findParentPath(result.file.path) || ''}</span>
-                    <span className="search-result-file-count" style={{marginLeft: 'auto', fontSize: '10px', color: 'rgba(174,183,214,0.4)'}}>{result.matches.length}</span>
+                    <span className="search-result-file-name">{result.name}</span>
+                    <span className="search-result-file-path">{result.path}</span>
+                    <span className="search-result-file-count" style={{ marginLeft: 'auto', fontSize: '10px', color: 'rgba(174,183,214,0.4)' }}>
+                      {result.matches?.length || 0}
+                    </span>
                   </div>
-                  {isExpanded && result.matches.map((match, matchIndex) => (
+                  {isExpanded && (result.matches || []).map((match, matchIndex) => (
                     <div
-                      key={matchIndex}
+                      key={`${fileKey}-${match.line}-${matchIndex}`}
                       className="search-result-line"
-                      onClick={() => onResultClick(result.file, match)}
+                      onClick={() => openSearchResult?.({
+                        path: result.path,
+                        nativePath: result.nativePath,
+                        name: result.name,
+                        line: match.line,
+                        column: match.column || 1,
+                      })}
                     >
                       <span className="search-result-line-number">{match.line}</span>
-                      <span className="search-result-line-text">
-                        {match.text.substring(0, match.start)}
-                        <span className="search-result-match-highlight">{match.text.substring(match.start, match.end)}</span>
-                        {match.text.substring(match.end)}
-                      </span>
+                      <span className="search-result-line-text">{match.preview || match.lineContent || '(match)'}</span>
                     </div>
                   ))}
                 </div>
@@ -556,3 +609,5 @@ export default function Search({
     </div>
   );
 }
+
+export default React.memo(Search);

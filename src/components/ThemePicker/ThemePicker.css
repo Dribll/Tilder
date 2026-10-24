@@ -75,7 +75,7 @@
   padding: 8px 12px;
   text-align: left;
   cursor: pointer;
-  transition: all 0.1s ease;
+  
 }
 
 .theme-picker-item:hover,
@@ -89,12 +89,51 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 4px;
+}
+
+.theme-picker-item-label-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .theme-picker-item-label {
   font-size: 13px;
+  font-weight: 500;
   color: #ffffff;
+}
+
+.theme-picker-category-tag {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.theme-picker-preview-strip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.theme-picker-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  display: inline-block;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s ease;
+}
+
+.theme-picker-item:hover .theme-picker-swatch,
+.theme-picker-item.active .theme-picker-swatch {
+  transform: scale(1.12);
 }
 
 .theme-picker-item-side {
@@ -123,3 +162,4 @@
   font-size: 13px;
   text-align: center;
 }
+

@@ -55,7 +55,7 @@
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
-  transition: all 0.2s;
+  
 }
 
 .ai-lens-close:hover {
@@ -119,3 +119,4 @@
 @keyframes spin {
   100% { transform: rotate(360deg); }
 }
+

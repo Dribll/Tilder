@@ -1,0 +1,6 @@
+D:\Tilder - Copy\desktop-app\obj\Release\net8.0\Mini.csproj.AssemblyReference.cache
+D:\Tilder - Copy\desktop-app\obj\Release\net8.0\Mini.GeneratedMSBuildEditorConfig.editorconfig
+D:\Tilder - Copy\desktop-app\obj\Release\net8.0\Mini.AssemblyInfoInputs.cache
+D:\Tilder - Copy\desktop-app\obj\Release\net8.0\Mini.AssemblyInfo.cs
+D:\Tilder - Copy\desktop-app\obj\Release\net8.0\Mini.csproj.CoreCompileInputs.cache
+D:\Tilder - Copy\desktop-app\obj\Release\net8.0\Mini.sourcelink.json

@@ -150,7 +150,7 @@ function DebugConsole({ entries, onEvaluate }) {
 
 // ─── Main Debug Panel ─────────────────────────────────────────────────────────
 
-export default function Debug({
+function Debug({
   ariaExpandedisplaydebug,
   activeTab,
   debugSession,
@@ -692,3 +692,5 @@ export default function Debug({
     </div>
   );
 }
+
+export default React.memo(Debug);

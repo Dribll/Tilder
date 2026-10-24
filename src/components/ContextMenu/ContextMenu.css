@@ -27,7 +27,7 @@
   min-height: 24px;
   line-height: 20px;
   cursor: pointer;
-  transition: background 60ms;
+  
   user-select: none;
   border-radius: 3px;
   margin: 1px 3px;
@@ -95,4 +95,5 @@
   -webkit-backdrop-filter: none !important;
   pointer-events: auto;
 }
+
 

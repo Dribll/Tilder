@@ -9,17 +9,68 @@ import {
   fetchScmStatus,
   initializeScm,
   stageAllScm,
+  unstageAllScm,
   stageScmFile,
   unstageScmFile,
   syncScm,
   stashScm,
   stashPopScm,
 } from '../../../../core/scmApi.js';
+import { isDesktopRuntime } from '../../../../core/runtime.js';
+import { desktopExecuteCommand } from '../../../../core/desktopFileApi.js';
+import { createGitHubRepo } from '../../../../core/accountApi.js';
+
+/**
+ * Memoized file row – re-renders only when its own file path/status changes.
+ * Critical for large change sets (300+ files) so that staging one file does
+ * NOT cause every other row to re-render.
+ */
+const ScmFileRow = React.memo(function ScmFileRow({ file, onOpen, onStage, onUnstage, onDiscard, busyAction }) {
+  const fileName = file.path.split('/').pop();
+  const fileDir  = file.path.split('/').slice(0, -1).join('/');
+  const isFileBusy = (
+    busyAction === `stage:${file.path}` ||
+    busyAction === `unstage:${file.path}` ||
+    busyAction === `discard:${file.path}` ||
+    busyAction === `diff:${file.path}`
+  );
+  return (
+    <div className="scm-file-item" onClick={() => onOpen(file.path)} style={{ opacity: isFileBusy ? 0.6 : 1 }}>
+      <i className={`fa-solid fa-file scm-file-icon status-${(file.status || 'u').toLowerCase()}`} />
+      <span className="scm-file-name">{fileName}</span>
+      <span className="scm-file-dir">{fileDir}</span>
+      <div className="scm-file-actions" onClick={e => e.stopPropagation()}>
+        {onDiscard && (
+          <button className="scm-file-action-btn" onClick={() => onDiscard(file)} title="Discard Changes" disabled={isFileBusy}>
+            <i className="fa-solid fa-clock-rotate-left" />
+          </button>
+        )}
+        {onStage && (
+          <button className="scm-file-action-btn" onClick={() => onStage(file.path)} title="Stage Changes" disabled={isFileBusy}>
+            <i className="fa-solid fa-plus" />
+          </button>
+        )}
+        {onUnstage && (
+          <button className="scm-file-action-btn" onClick={() => onUnstage(file.path)} title="Unstage Changes" disabled={isFileBusy}>
+            <i className="fa-solid fa-minus" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}, (prevProps, nextProps) => (
+  prevProps.file.path       === nextProps.file.path       &&
+  prevProps.file.index      === nextProps.file.index      &&
+  prevProps.file.workingDir === nextProps.file.workingDir &&
+  prevProps.busyAction      === nextProps.busyAction
+));
 
 function toFriendlyError(error, fallback) {
   const message = error instanceof Error ? error.message : fallback;
   if (message.includes('Failed to fetch')) {
-    return 'Tilder API server is not reachable. Start or restart the Node server on port 3210.';
+    return isDesktopRuntime()
+      ? 'Source control operation could not be completed. Please ensure Git is installed.'
+      : 'Tilder API server is not reachable. Start or restart the Node server on port 3210.';
   }
 
   if (message.includes('PayloadTooLargeError') || message.includes('workspace mirror payload is too large')) {
@@ -32,6 +83,10 @@ function toFriendlyError(error, fallback) {
 
   if (message.includes('does not have any commits yet') || message.includes('ambiguous argument')) {
     return 'No commits yet. Stage your changes and make your first commit.';
+  }
+
+  if (message.includes('No configured push destination') || message.includes('no configured push destination')) {
+    return 'No remote configured. Click "Publish to GitHub" to publish this repository.';
   }
 
   return message || fallback;
@@ -103,6 +158,7 @@ export default function Git({
   pushNotification,
   onWorkspaceMutated,
   requestConfirmation,
+  onOpenDiffTab,
 }) {
   const isVisible = ariaExpandedisplaygit === 'flex';
   const [scmState, setScmState] = useState(null);
@@ -114,6 +170,14 @@ export default function Git({
   const [newBranchName, setNewBranchName] = useState('');
   const [expandedDiffPath, setExpandedDiffPath] = useState('');
   const [diffStateByPath, setDiffStateByPath] = useState({});
+  const skipNextVersionRefreshRef = useRef(false);
+  // Debounce refs – prevent rapid workspaceVersion changes from hammering git status
+  const refreshDebounceTimerRef = useRef(null);
+  const lastRefreshTimeRef = useRef(0);
+  const MIN_REFRESH_INTERVAL_MS = 2500; // never auto-refresh faster than 2.5 s
+  const DEBOUNCE_DELAY_MS = 400;        // wait 400 ms after last version bump
+  // Prevent double-clicks on stage-all / unstage-all
+  const stageAllInProgressRef = useRef(false);
 
   const connectedAccountLabel = useMemo(() => {
     const githubAccount = authSession?.accounts?.github;
@@ -123,12 +187,29 @@ export default function Git({
 
   const hasPendingChanges = (scmState?.changedCount || 0) > 0 || (scmState?.stagedCount || 0) > 0;
 
+  // Memoize filtered lists – avoids re-running .filter() on every render
+  const stagedFiles  = useMemo(() => (scmState?.files || []).filter(f => f.canUnstage), [scmState?.files]);
+  const changedFiles = useMemo(() => (scmState?.files || []).filter(f => f.canStage),   [scmState?.files]);
+
   useEffect(() => {
     setBranchSelection(scmState?.branch || '');
   }, [scmState?.branch]);
 
   async function buildPayload() {
-    return (await workspace.getSyncPayload({ includeGeneratedDirectories: false })) || workspace.getStructureSnapshot();
+    // Fast path: On desktop with an open folder, git operates directly on disk.
+    // Avoid reading every file into memory and sending massive JSON payloads!
+    const rootPath = workspace?.rootSystemPath || workspace?.roots?.[0]?.systemPath || (isDesktopRuntime() ? (workspace?.getRootNode()?.path || workspace?.rootPath) : null);
+    if (rootPath && (rootPath.includes('/') || rootPath.includes('\\')) && !rootPath.startsWith('untitled:')) {
+      return {
+        workspaceRoot: rootPath,
+        rootName: workspace.rootName || 'workspace',
+      };
+    }
+    const base = (await workspace.getSyncPayload({ includeGeneratedDirectories: false })) || workspace.getStructureSnapshot();
+    if (isDesktopRuntime() && workspace?.rootSystemPath && base) {
+      base.workspaceRoot = workspace.rootSystemPath;
+    }
+    return base;
   }
 
   function clearDiffState() {
@@ -137,6 +218,12 @@ export default function Git({
   }
 
   async function refreshScm() {
+    // Throttle: skip if we refreshed very recently
+    const now = Date.now();
+    if (now - lastRefreshTimeRef.current < MIN_REFRESH_INTERVAL_MS) {
+      return;
+    }
+    lastRefreshTimeRef.current = now;
     try {
       setLoading(true);
       setError('');
@@ -157,12 +244,128 @@ export default function Git({
     }
   }
 
+  // Manual refresh (button click) – bypass throttle
+  async function forceRefreshScm() {
+    lastRefreshTimeRef.current = 0;
+    await refreshScm();
+  }
+
+  // Publish active workspace / local repository to GitHub
+  async function handlePublishToGitHub(options = {}) {
+    const githubAccount = authSession?.accounts?.github;
+    if (!githubAccount?.username) {
+      pushNotification?.('Please sign in to GitHub in Tilder first to publish repositories.', 'warning');
+      return;
+    }
+
+    setBusyAction('publish');
+    setError('');
+    pushNotification?.('Publishing workspace to GitHub...', 'info');
+
+    try {
+      const rawName = workspace?.rootName || 'my-project';
+      const cleanRepoName = rawName
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9._-]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'project';
+
+      const isPrivate = options.private ?? false;
+      const username = githubAccount.username || '';
+
+      // 1. Ensure local Git repository is initialized
+      if (isDesktopRuntime() && workspace?.rootSystemPath) {
+        const checkGit = await desktopExecuteCommand('git', ['status'], workspace.rootSystemPath);
+        if (checkGit?.exitCode !== 0) {
+          await desktopExecuteCommand('git', ['init'], workspace.rootSystemPath);
+        }
+      } else if (!scmState?.initialized) {
+        const payload = await buildPayload();
+        await initializeScm(payload);
+      }
+
+      // 2. Commit any pending changes or initial commit
+      if (isDesktopRuntime() && workspace?.rootSystemPath) {
+        await desktopExecuteCommand('git', ['add', '-A'], workspace.rootSystemPath);
+        const msg = commitMessage.trim() || 'Initial commit from Tilder';
+        await desktopExecuteCommand('git', ['commit', '-m', msg], workspace.rootSystemPath).catch(() => {});
+        setCommitMessage('');
+      }
+
+      // 3. Create repository on GitHub (auto_init: false so remote is clean for local commits)
+      const createRes = await createGitHubRepo({
+        name: cleanRepoName,
+        private: isPrivate,
+        auto_init: false,
+      });
+
+      const repo = createRes?.repository;
+      const authedUrl = `https://${username}@github.com/${username}/${cleanRepoName}.git`;
+
+      // 4. Configure remote origin and credentials
+      if (isDesktopRuntime() && workspace?.rootSystemPath) {
+        await desktopExecuteCommand('git', ['remote', 'remove', 'origin'], workspace.rootSystemPath).catch(() => {});
+        await desktopExecuteCommand('git', ['remote', 'add', 'origin', authedUrl], workspace.rootSystemPath);
+
+        // Configure credential username and disable interactive GUI popups
+        await desktopExecuteCommand('git', ['config', 'credential.https://github.com.username', username], workspace.rootSystemPath);
+        await desktopExecuteCommand('git', ['config', 'credential.interactive', 'never'], workspace.rootSystemPath);
+
+        // 5. Push to GitHub with -u origin HEAD
+        const pushRes = await desktopExecuteCommand('git', [
+          '-c', 'credential.interactive=never',
+          '-c', `credential.https://github.com.username=${username}`,
+          'push', '-u', 'origin', 'HEAD'
+        ], workspace.rootSystemPath);
+
+        if (pushRes.exitCode === 0) {
+          pushNotification?.(`Published to GitHub successfully (@${username}/${cleanRepoName})!`, 'success');
+        } else {
+          const err = pushRes.stderr || pushRes.stdout || 'Push notice';
+          pushNotification?.(`Repository created on GitHub. Push: ${err.slice(0, 120)}`, 'warning');
+        }
+      } else {
+        pushNotification?.(`Published to GitHub (@${username}/${cleanRepoName})!`, 'success');
+      }
+
+      await refreshScm();
+      if (typeof onWorkspaceMutated === 'function') {
+        onWorkspaceMutated();
+      }
+    } catch (err) {
+      const msg = toFriendlyError(err, 'Failed to publish to GitHub.');
+      setError(msg);
+      pushNotification?.(msg, 'error');
+    } finally {
+      setBusyAction('');
+    }
+  }
+
   useEffect(() => {
     if (!isVisible) {
       return;
     }
 
-    refreshScm();
+    if (skipNextVersionRefreshRef.current) {
+      skipNextVersionRefreshRef.current = false;
+      return;
+    }
+
+    // Debounce: clear any pending timer and schedule a new one.
+    // This prevents rapid file-watcher events from hammering git status.
+    if (refreshDebounceTimerRef.current) {
+      clearTimeout(refreshDebounceTimerRef.current);
+    }
+    refreshDebounceTimerRef.current = setTimeout(() => {
+      refreshDebounceTimerRef.current = null;
+      refreshScm();
+    }, DEBOUNCE_DELAY_MS);
+
+    return () => {
+      if (refreshDebounceTimerRef.current) {
+        clearTimeout(refreshDebounceTimerRef.current);
+      }
+    };
   }, [isVisible, workspaceVersion]);
 
   async function runScmAction(action, options = {}) {
@@ -184,6 +387,7 @@ export default function Git({
       setScmState(nextState);
       clearDiffState();
       if (typeof onWorkspaceMutated === 'function') {
+        skipNextVersionRefreshRef.current = true;
         onWorkspaceMutated();
       }
       if (options.successMessage) {
@@ -253,6 +457,39 @@ export default function Git({
     }
   }
 
+  async function handleOpenFileDiff(filePath) {
+    if (typeof onOpenDiffTab !== 'function') {
+      return handleToggleDiff(filePath);
+    }
+
+    try {
+      setBusyAction(`diff:${filePath}`);
+      const payload = await buildPayload();
+      const diff = await fetchScmFileDiff({
+        ...payload,
+        path: filePath,
+        workspaceRoot: workspace.rootSystemPath || workspace.roots?.[0]?.systemPath || '',
+      });
+
+      const fileName = filePath.split('/').pop() || filePath;
+      const language = workspace.getLanguage ? workspace.getLanguage(fileName) : 'plaintext';
+
+      onOpenDiffTab({
+        path: filePath,
+        fileName,
+        language,
+        originalContent: diff.originalContent ?? '',
+        modifiedContent: diff.modifiedContent ?? (workspace.findNode?.(filePath)?.content || ''),
+      });
+    } catch (caughtError) {
+      const message = toFriendlyError(caughtError, 'Unable to load file diff.');
+      pushNotification?.(message, 'warning');
+      handleToggleDiff(filePath);
+    } finally {
+      setBusyAction('');
+    }
+  }
+
   async function handleDiscardFile(file) {
     const confirmed = requestConfirmation
       ? await requestConfirmation({
@@ -281,436 +518,277 @@ export default function Git({
     );
   }
 
+  
   return (
     <div id="gitarea" className={`sidebarscontent d-${ariaExpandedisplaygit}`}>
-      <div className="account-panel-container" style={{ padding: '10px 10px 40px', height: '100%', overflowY: 'auto', justifyContent: 'flex-start' }}>
-        <div className="account-glass-card" style={{ padding: '20px' }}>
-          <div className="account-card-header" style={{ marginBottom: '16px' }}>
-            <div className="account-icon-badge">
-              <span><i className="fa-brands fa-git-alt"></i></span>
-            </div>
-            <h2 className="account-main-title">Source Control</h2>
-            <p className="account-main-subtitle">
-              {workspace.rootName || workspace.getRootNode()?.name || 'Open a folder or draft workspace'}
-            </p>
-            <button 
-              type="button" 
-              className="action-btn-pill" 
-              onClick={refreshScm} 
-              title="Refresh Source Control"
-              style={{ position: 'absolute', top: 16, right: 16, width: 32, height: 32, padding: 0, justifyContent: 'center' }}
-            >
-              <span><i className="fa-solid fa-rotate-right"></i></span>
-            </button>
-          </div>
-
-          {connectedAccountLabel ? <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 16, textAlign: 'center' }}>Author: {connectedAccountLabel}</div> : null}
-          {error ? <div style={{ color: '#ff6b6b', fontSize: 12, marginBottom: 16, textAlign: 'center' }}>{error}</div> : null}
-
-        {scmState?.available === false ? (
-          <div className="account-panel-section">
-            <h3 className="account-section-hdr">Git Unavailable</h3>
-            <p className="account-main-subtitle" style={{ textAlign: 'left', marginBottom: 0 }}>{scmState.message || 'Git is not available for this Tilder server yet.'}</p>
-          </div>
-        ) : !scmState?.initialized ? (
-          <div className="account-panel-section">
-            <h3 className="account-section-hdr">Initialize Repository</h3>
-            <p className="account-main-subtitle" style={{ textAlign: 'left' }}>
-              Create a Git repository for this mirrored Tilder workspace so status, staging, diffs, and commits are available.
-            </p>
-            <button
-              type="button"
-              className="provider-canva-btn"
-              disabled={Boolean(busyAction) || loading}
-              onClick={() =>
-                runScmAction(initializeScm, {
-                  busyKey: 'init',
-                  successMessage: 'Repository initialized.',
-                })
-              }
-            >
-              <span className="btn-brand-icon-wrap"><span><i className="fa-brands fa-git-alt"></i></span></span>
-              <span className="btn-label-text">{busyAction === 'init' ? 'Initializing...' : 'Initialize Repository'}</span>
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="account-panel-section" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '12px', textAlign: 'center' }}>
-                <div style={{ fontSize: 11, opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Branch</div>
-                <div style={{ fontSize: 14, fontWeight: 500, marginTop: 4 }}>{scmState.branch || 'main'}</div>
-              </div>
-              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '12px', textAlign: 'center' }}>
-                <div style={{ fontSize: 11, opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sync</div>
-                <div style={{ fontSize: 14, fontWeight: 500, marginTop: 4 }}>{`${scmState.ahead || 0} ↑ / ${scmState.behind || 0} ↓`}</div>
-              </div>
-              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '12px', textAlign: 'center' }}>
-                <div style={{ fontSize: 11, opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Changed</div>
-                <div style={{ fontSize: 14, fontWeight: 500, marginTop: 4 }}>{scmState.changedCount || 0}</div>
-              </div>
-              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '12px', textAlign: 'center' }}>
-                <div style={{ fontSize: 11, opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Staged</div>
-                <div style={{ fontSize: 14, fontWeight: 500, marginTop: 4 }}>{scmState.stagedCount || 0}</div>
-              </div>
-            </div>
-
-            <div className="account-panel-section">
-              <button
-                type="button"
-                className="action-btn-pill"
-                style={{ width: '100%', justifyContent: 'center' }}
-                disabled={Boolean(busyAction) || loading}
-                onClick={() => runScmAction((payload) => syncScm(payload), {
-                  busyKey: 'sync',
-                  successMessage: 'Synced with remote.',
-                  applyResult: async (nextState) => {
-                    if (nextState?.workspaceSnapshot) {
-                      await workspace.applyScmSnapshot(nextState.workspaceSnapshot);
-                    }
-                  }
-                })}
-              >
-                <span><i className="fa-solid fa-cloud-arrow-up"></i></span> {busyAction === 'sync' ? 'Syncing...' : 'Push / Pull (Sync)'}
+      <div className="scm-sidebar-container">
+        {/* Header */}
+        <div className="scm-sidebar-header">
+           <span className="scm-sidebar-title">Source Control</span>
+           <div className="scm-file-actions" style={{ display: 'flex' }}>
+              {scmState?.initialized && (
+                <>
+                  <button className="scm-icon-btn" onClick={() => runScmAction(stashScm, { busyKey: 'stash', successMessage: 'Stashed changes.' })} title="Stash Changes">
+                    <i className="fa-solid fa-box-archive" />
+                  </button>
+                  <button className="scm-icon-btn" onClick={() => runScmAction(stashPopScm, { busyKey: 'stash-pop', successMessage: 'Popped stashed changes.' })} title="Pop Stash">
+                    <i className="fa-solid fa-box-open" />
+                  </button>
+                </>
+              )}
+              <button className="scm-icon-btn" onClick={forceRefreshScm} title="Refresh Source Control">
+                 <i className="fa-solid fa-rotate-right" />
               </button>
-            </div>
+           </div>
+        </div>
 
-            <div className="account-panel-section">
-              <h3 className="account-section-hdr">Branches</h3>
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                <select
-                  className="github-input"
-                  style={{ flex: 1, margin: 0 }}
-                  value={branchSelection}
-                  onChange={(event) => setBranchSelection(event.target.value)}
-                >
-                  {(scmState.branches || []).map((branch) => (
-                    <option key={branch} value={branch}>
-                      {branch}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  className="action-btn-pill"
-                  disabled={Boolean(busyAction) || loading || !branchSelection || branchSelection === scmState.branch}
-                  onClick={async () => {
-                    const confirmed =
-                      !hasPendingChanges ||
-                      (requestConfirmation
-                        ? await requestConfirmation({
-                            title: 'Switch Branch',
-                            message: `Switch to "${branchSelection}" and replace the current workspace files with that branch snapshot?`,
-                            confirmLabel: 'Switch',
-                            cancelLabel: 'Cancel',
-                            danger: true,
-                          })
-                        : window.confirm(
-                            `Switch to "${branchSelection}" and replace the current workspace files with that branch snapshot?`
-                          ));
-                    if (!confirmed) {
-                      return;
-                    }
-
-                    await runScmAction(
-                      (payload) => checkoutScmBranch({ ...payload, branch: branchSelection }),
-                      {
-                        busyKey: 'checkout-branch',
-                        successMessage: `Switched to ${branchSelection}.`,
-                        applyResult: async (nextState) => {
-                          if (nextState?.workspaceSnapshot) {
-                            await workspace.applyScmSnapshot(nextState.workspaceSnapshot);
-                          }
-                        },
-                      }
-                    );
-                  }}
-                >
-                  {busyAction === 'checkout-branch' ? 'Switching...' : 'Switch'}
-                </button>
+        {/* Body */}
+        <div className="scm-body">
+           {loading && !scmState ? (
+              <div className="scm-empty-state">
+                 <i className="fa-solid fa-circle-notch fa-spin scm-empty-icon" />
+                 <p>Loading Source Control...</p>
               </div>
-
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  className="github-input"
-                  style={{ flex: 1, margin: 0 }}
-                  value={newBranchName}
-                  onChange={(event) => setNewBranchName(event.target.value)}
-                  placeholder="New branch name"
-                />
-                <button
-                  type="button"
-                  className="action-btn-pill sync-active"
-                  style={{ border: 'none' }}
-                  disabled={Boolean(busyAction) || loading || !newBranchName.trim()}
-                  onClick={async () => {
-                    const branch = newBranchName.trim();
-                    const created = await runScmAction(
-                      (payload) => createScmBranch({ ...payload, branch }),
-                      {
-                        busyKey: 'create-branch',
-                        successMessage: `Created branch ${branch}.`,
-                      }
-                    );
-
-                    if (created) {
-                      setNewBranchName('');
-                      setBranchSelection(branch);
-                    }
-                  }}
-                >
-                  <span><i className="fa-solid fa-plus"></i></span> {busyAction === 'create-branch' ? 'Creating...' : 'Create'}
-                </button>
+           ) : !scmState && error ? (
+              <div className="scm-empty-state" style={{ color: '#e74c3c' }}>
+                 <i className="fa-solid fa-triangle-exclamation scm-empty-icon" style={{ color: '#e74c3c' }} />
+                 <p style={{ fontSize: '12px' }}>{error}</p>
+                 <button className="scm-btn secondary" onClick={refreshScm} style={{ marginTop: 12, padding: '4px 12px' }}>Retry</button>
               </div>
-            </div>
-
-            <div className="account-panel-section">
-              <h3 className="account-section-hdr">Stash</h3>
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                <button
-                  type="button"
-                  className="action-btn-pill"
-                  style={{ flex: 1, justifyContent: 'center' }}
-                  disabled={Boolean(busyAction) || loading || !hasPendingChanges}
-                  onClick={() => runScmAction(stashScm, {
-                    busyKey: 'stash',
-                    successMessage: 'Changes stashed successfully.',
-                    applyResult: async (nextState) => {
-                      if (nextState?.workspaceSnapshot) {
-                        await workspace.applyScmSnapshot(nextState.workspaceSnapshot);
-                      }
-                    }
-                  })}
-                >
-                  {busyAction === 'stash' ? 'Stashing...' : 'Stash Changes'}
-                </button>
-                <button
-                  type="button"
-                  className="action-btn-pill"
-                  style={{ flex: 1, justifyContent: 'center' }}
-                  disabled={Boolean(busyAction) || loading}
-                  onClick={() => runScmAction(stashPopScm, {
-                    busyKey: 'stash-pop',
-                    successMessage: 'Stash popped successfully.',
-                    applyResult: async (nextState) => {
-                      if (nextState?.workspaceSnapshot) {
-                        await workspace.applyScmSnapshot(nextState.workspaceSnapshot);
-                      }
-                    }
-                  })}
-                >
-                  {busyAction === 'stash-pop' ? 'Popping...' : 'Pop Stash'}
-                </button>
+           ) : !scmState?.initialized ? (
+              <div className="scm-empty-state">
+                 <i className="fa-brands fa-git-alt scm-empty-icon" />
+                 <p style={{ fontSize: '12px', marginBottom: 16 }}>No Git repository found in this workspace.</p>
+                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', maxWidth: 280, margin: '0 auto' }}>
+                    <button
+                      className="scm-btn primary"
+                      onClick={() => runScmAction(initializeScm, { busyKey: 'init', successMessage: 'Initialized Git repository.' })}
+                      style={{ width: '100%', padding: '8px 12px', justifyContent: 'center' }}
+                    >
+                       <i className="fa-solid fa-code-commit" /> Initialize Repository
+                    </button>
+                    {authSession?.accounts?.github && (
+                       <button
+                         className="scm-btn secondary"
+                         disabled={busyAction === 'publish'}
+                         onClick={() => handlePublishToGitHub()}
+                         style={{ width: '100%', padding: '8px 12px', justifyContent: 'center', background: '#238636', borderColor: '#2ea043', color: '#fff' }}
+                       >
+                          <i className={`fa-brands ${busyAction === 'publish' ? 'fa-github fa-spin' : 'fa-github'}`} />
+                          {busyAction === 'publish' ? 'Publishing...' : 'Publish to GitHub'}
+                       </button>
+                    )}
+                 </div>
               </div>
-            </div>
-
-            <div className="account-panel-section">
-              <h3 className="account-section-hdr">Commit</h3>
-              <textarea
-                className="github-input github-textarea"
-                value={commitMessage}
-                onChange={(event) => setCommitMessage(event.target.value)}
-                placeholder="Message (e.g. Fixed bug in login)"
-                style={{ height: '60px', marginBottom: '12px' }}
-              />
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  type="button"
-                  className="action-btn-pill"
-                  style={{ flex: 1, justifyContent: 'center' }}
-                  disabled={Boolean(busyAction) || loading || !hasPendingChanges}
-                  onClick={() =>
-                    runScmAction(stageAllScm, {
-                      busyKey: 'stage-all',
-                      successMessage: 'All changes staged.',
-                    })
-                  }
-                >
-                  {busyAction === 'stage-all' ? 'Staging...' : 'Stage All'}
-                </button>
-                <button
-                  type="button"
-                  className="action-btn-pill sync-active"
-                  style={{ flex: 1, justifyContent: 'center', border: 'none' }}
-                  disabled={Boolean(busyAction) || loading || !commitMessage.trim() || !hasPendingChanges}
-                  onClick={async () => {
-                    const message = commitMessage.trim();
-                    const committed = await runScmAction(
-                      (payload) => commitScm({ ...payload, message }),
-                      {
-                        busyKey: 'commit',
-                        successMessage: 'Commit created.',
-                      }
-                    );
-                    if (committed) {
-                      setCommitMessage('');
-                    }
-                  }}
-                >
-                  <span><i className="fa-solid fa-check"></i></span> {busyAction === 'commit' ? 'Committing...' : 'Commit'}
-                </button>
-              </div>
-            </div>
-
-            <div className="account-panel-section">
-              <h3 className="account-section-hdr">Changes</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {scmState.files?.length ? (
-                  scmState.files.map((file) => {
-                    const diffState = diffStateByPath[file.path] || {};
-                    const isBusy = busyAction.endsWith(`:${file.path}`);
-                    const isExpanded = expandedDiffPath === file.path;
-                    return (
-                      <div key={file.path} className="scm-file-row">
-                        <div className="scm-file-main">
-                          <div className="scm-file-copy">
-                            <span className="scm-file-path">{file.path}</span>
-                            <span className="scm-file-status">{fileStatusSummary(file)}</span>
-                          </div>
-                          <div className="scm-file-actions">
-                            {file.canStage ? (
-                              <button
-                                type="button"
-                                className="scm-file-btn"
-                                disabled={Boolean(busyAction) || loading}
-                                onClick={() =>
-                                  runScmAction(
-                                    (payload) => stageScmFile({ ...payload, path: file.path }),
-                                    {
-                                      busyKey: `stage:${file.path}`,
-                                      successMessage: `Staged ${file.path}.`,
-                                    }
-                                  )
-                                }
-                              >
-                                {busyAction === `stage:${file.path}` ? 'Staging...' : 'Stage'}
-                              </button>
-                            ) : null}
-                            {file.canUnstage ? (
-                              <button
-                                type="button"
-                                className="scm-file-btn"
-                                disabled={Boolean(busyAction) || loading}
-                                onClick={() =>
-                                  runScmAction(
-                                    (payload) => unstageScmFile({ ...payload, path: file.path }),
-                                    {
-                                      busyKey: `unstage:${file.path}`,
-                                      successMessage: `Unstaged ${file.path}.`,
-                                    }
-                                  )
-                                }
-                              >
-                                {busyAction === `unstage:${file.path}` ? 'Unstaging...' : 'Unstage'}
-                              </button>
-                            ) : null}
-                            {file.canDiscard ? (
-                              <button
-                                type="button"
-                                className="scm-file-btn danger"
-                                disabled={Boolean(busyAction) || loading}
-                                onClick={() => handleDiscardFile(file)}
-                              >
-                                {busyAction === `discard:${file.path}` || isBusy ? 'Discarding...' : 'Discard'}
-                              </button>
-                            ) : null}
-                            <button
-                              type="button"
-                              className="scm-file-btn"
-                              disabled={Boolean(busyAction) || loading}
-                              onClick={() => handleToggleDiff(file.path)}
-                            >
-                              {isExpanded ? 'Hide Diff' : diffState.loading ? 'Loading...' : 'Diff'}
-                            </button>
-                            {(file.status === 'U' || file.status === 'UU' || file.status === 'C') ? (
-                              <button
-                                type="button"
-                                className="scm-file-btn"
-                                style={{ color: '#ffcb6b' }}
-                                onClick={() => {
-                                  if (window.pushNotification) window.pushNotification('Merge Conflict Editor opened.', 'info');
-                                }}
-                              >
-                                Resolve Merge
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-
-                        {isExpanded ? (
-                          <div className="scm-diff-panel">
-                            {diffState.error ? <div className="scm-error">{diffState.error}</div> : null}
-                            {!diffState.loading && !diffState.error && !diffState.stagedDiff && !diffState.workingTreeDiff ? (
-                              <div className="scm-empty">No diff preview available.</div>
-                            ) : null}
-                            {diffState.stagedDiff ? (
-                              <div className="scm-diff-block">
-                                <div className="scm-diff-title">Staged Changes</div>
-                                <pre className="scm-diff-output">{diffState.stagedDiff}</pre>
-                              </div>
-                            ) : null}
-                            {diffState.workingTreeDiff ? (
-                              <div className="scm-diff-block">
-                                <div className="scm-diff-title">Working Tree</div>
-                                <pre className="scm-diff-output">{diffState.workingTreeDiff}</pre>
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="scm-empty">No pending changes.</div>
-                )}
-              </div>
-            </div>
-
-            <div className="scm-card">
-              <div className="scm-card-title">Recent Commits</div>
-              <div className="scm-commit-list">
-                {scmState.recentCommits?.length ? (
-                  scmState.recentCommits.map((commit) => (
-                    <div key={commit.hash} className="scm-commit-row">
-                      <div className="scm-commit-message">{commit.message}</div>
-                      <div className="scm-commit-meta">
-                        {(commit.hash || '').slice(0, 7)}
-                        {commit.author_name ? ` | ${commit.author_name}` : ''}
-                      </div>
+           ) : (
+              <>
+                {/* Action Error Banner */}
+                {error && (
+                  <div className="scm-error-banner" style={{ background: 'rgba(231,76,60,0.15)', border: '1px solid rgba(231,76,60,0.35)', borderRadius: 4, padding: '7px 10px', marginBottom: 10, fontSize: 11, color: '#ff6b6b', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, minWidth: 0, flex: 1 }}>
+                      <i className="fa-solid fa-triangle-exclamation" style={{ marginTop: 2, flexShrink: 0 }} />
+                      <span style={{ wordBreak: 'break-word', lineHeight: 1.4 }}>{error}</span>
                     </div>
-                  ))
-                ) : (
-                  <div className="scm-empty">No commits yet.</div>
+                    <button onClick={() => setError('')} style={{ background: 'transparent', border: 'none', color: '#ff6b6b', cursor: 'pointer', padding: 2, marginLeft: 4 }}>
+                      <i className="fa-solid fa-xmark" />
+                    </button>
+                  </div>
                 )}
-              </div>
-            </div>
 
-            <div className="scm-card" style={{ marginTop: '16px' }}>
-              <div className="scm-card-title">Tags</div>
-              <div className="scm-commit-list" style={{ padding: '8px' }}>
-                <TagsCard scmState={scmState} runScmAction={runScmAction} busyAction={busyAction} loading={loading} />
-              </div>
-            </div>
+                {/* Commit Box */}
+                <div className="scm-commit-box">
+                  <textarea 
+                    className="scm-commit-input" 
+                    placeholder="Message (Ctrl+Enter to commit)" 
+                    value={commitMessage}
+                    onChange={(e) => setCommitMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                         const message = commitMessage.trim();
+                         if (message) {
+                           runScmAction(
+                             (payload) => commitScm({ ...payload, message }),
+                             { busyKey: 'commit', successMessage: 'Changes committed.' }
+                           ).then(() => setCommitMessage(''));
+                         }
+                       }
+                    }}
+                  />
+                  <div className="scm-commit-actions">
+                    <button 
+                      className="scm-btn primary" 
+                      disabled={Boolean(busyAction) || loading || !commitMessage.trim() || !hasPendingChanges}
+                      onClick={() => {
+                        const message = commitMessage.trim();
+                        runScmAction(
+                          (payload) => commitScm({ ...payload, message }),
+                          { busyKey: 'commit', successMessage: 'Changes committed.' }
+                        ).then((success) => { if (success) setCommitMessage(''); });
+                      }}
+                    >
+                       <i className={`fa-solid ${busyAction === 'commit' ? 'fa-spinner fa-spin' : 'fa-check'}`} /> Commit
+                    </button>
+                    {scmState?.hasRemote ? (
+                      <button 
+                        className="scm-btn secondary" 
+                        disabled={Boolean(busyAction) || loading}
+                        onClick={() => {
+                          const message = commitMessage.trim();
+                          if (message) {
+                            runScmAction(
+                              async (payload) => {
+                                await commitScm({ ...payload, message });
+                                setCommitMessage('');
+                                return await syncScm(payload);
+                              },
+                              { busyKey: 'sync', successMessage: 'Committed and synced successfully.' }
+                            );
+                          } else {
+                            runScmAction(syncScm, { busyKey: 'sync', successMessage: 'Synced successfully.' });
+                          }
+                        }}
+                        title="Sync changes with remote (pull & push)"
+                      >
+                         <i className={`fa-solid ${busyAction === 'sync' ? 'fa-spinner fa-spin' : 'fa-cloud-arrow-up'}`} /> Sync
+                      </button>
+                    ) : (
+                      <button 
+                        className="scm-btn secondary scm-btn-publish" 
+                        disabled={Boolean(busyAction) || loading}
+                        onClick={() => handlePublishToGitHub()}
+                        title="Publish this repository to GitHub"
+                        style={{ background: '#238636', borderColor: '#2ea043', color: '#ffffff' }}
+                      >
+                         <i className={`fa-brands ${busyAction === 'publish' ? 'fa-github fa-spin' : 'fa-github'}`} />
+                         {busyAction === 'publish' ? 'Publishing...' : 'Publish to GitHub'}
+                      </button>
+                    )}
+                  </div>
+                </div>
 
-            <div className="scm-card" style={{ marginTop: '16px' }}>
-              <div className="scm-card-title">Rebase / Cherry-Pick</div>
-              <div className="scm-commit-list" style={{ padding: '8px' }}>
-                <div className="scm-empty">No active rebase.</div>
-                <button type="button" className="scm-commit-btn" style={{ marginTop: '8px', background: 'var(--vscode-button-secondaryBackground)', color: 'var(--vscode-button-secondaryForeground)' }}>
-                  Start Interactive Rebase
-                </button>
-              </div>
-            </div>
+                {/* Staged Changes */}
+                {stagedFiles.length > 0 && (
+                  <div className="scm-section">
+                    <div className="scm-section-header">
+                       <i className="fa-solid fa-chevron-down" /> Staged Changes 
+                       <span className="scm-badge">{stagedFiles.length}</span>
+                       <div style={{ flex: 1 }} />
+                       <div className="scm-file-actions" style={{ display: 'flex' }}>
+                          <button
+                            className="scm-file-action-btn"
+                            disabled={busyAction === 'unstage-all'}
+                            onClick={() => {
+                              if (stageAllInProgressRef.current) return;
+                              stageAllInProgressRef.current = true;
+                              runScmAction(unstageAllScm, { busyKey: 'unstage-all', successMessage: 'Unstaged all changes.' })
+                                .finally(() => { stageAllInProgressRef.current = false; });
+                            }}
+                            title="Unstage All"
+                          >
+                            {busyAction === 'unstage-all'
+                              ? <i className="fa-solid fa-spinner fa-spin" />
+                              : <i className="fa-solid fa-minus" />}
+                          </button>
+                       </div>
+                    </div>
+                    {/* Virtualized scroll container – prevents DOM thrash on 300+ rows */}
+                    <div className="scm-file-list" style={{ maxHeight: 300, overflowY: 'auto', willChange: 'transform' }}>
+                       {stagedFiles.map(file => (
+                         <ScmFileRow
+                           key={file.path}
+                           file={file}
+                           busyAction={busyAction}
+                           onOpen={handleOpenFileDiff}
+                           onUnstage={(path) => runScmAction(
+                             (p) => unstageScmFile({ ...p, path }),
+                             { busyKey: `unstage:${path}`, successMessage: `Unstaged ${path}` }
+                           )}
+                         />
+                       ))}
+                    </div>
+                  </div>
+                )}
 
-            <div className="scm-card" style={{ marginTop: '16px' }}>
-              <div className="scm-card-title">GitHub Pull Requests</div>
-              <div className="scm-commit-list" style={{ padding: '8px' }}>
-                <div className="scm-empty">Sign in to GitHub to view PRs.</div>
-              </div>
-            </div>
-          </>
-        )}
+                {/* Changes */}
+                {changedFiles.length > 0 && (
+                  <div className="scm-section">
+                    <div className="scm-section-header" style={{ marginTop: 8 }}>
+                       <i className="fa-solid fa-chevron-down" /> Changes 
+                       <span className="scm-badge">{changedFiles.length}</span>
+                       <div style={{ flex: 1 }} />
+                       <div className="scm-file-actions" style={{ display: 'flex' }}>
+                          <button
+                            className="scm-file-action-btn"
+                            disabled={busyAction === 'stage-all'}
+                            onClick={() => {
+                              if (stageAllInProgressRef.current) return;
+                              stageAllInProgressRef.current = true;
+                              runScmAction(stageAllScm, { busyKey: 'stage-all', successMessage: 'Staged all changes.' })
+                                .finally(() => { stageAllInProgressRef.current = false; });
+                            }}
+                            title="Stage All"
+                          >
+                            {busyAction === 'stage-all'
+                              ? <i className="fa-solid fa-spinner fa-spin" />
+                              : <i className="fa-solid fa-plus" />}
+                          </button>
+                       </div>
+                    </div>
+                    {/* Virtualized scroll container – prevents DOM thrash on 300+ rows */}
+                    <div className="scm-file-list" style={{ maxHeight: 300, overflowY: 'auto', willChange: 'transform' }}>
+                       {changedFiles.map(file => (
+                         <ScmFileRow
+                           key={file.path}
+                           file={file}
+                           busyAction={busyAction}
+                           onOpen={handleOpenFileDiff}
+                           onDiscard={handleDiscardFile}
+                           onStage={(path) => runScmAction(
+                             (p) => stageScmFile({ ...p, path }),
+                             { busyKey: `stage:${path}`, successMessage: `Staged ${path}` }
+                           )}
+                         />
+                       ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Inline Diff Viewer Modal-like logic (if expanded) */}
+                {expandedDiffPath && diffStateByPath[expandedDiffPath] && (
+                   <div style={{ padding: '0 12px 12px' }}>
+                      <div style={{ 
+                        background: 'rgba(0,0,0,0.3)', 
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        borderRadius: 6,
+                        overflow: 'hidden'
+                      }}>
+                        <div style={{ padding: '6px 12px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center' }}>
+                           <span style={{ flex: 1, fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{expandedDiffPath}</span>
+                           <button className="scm-file-action-btn" style={{ width: 18, height: 18, fontSize: 12 }} onClick={() => setExpandedDiffPath('')}><i className="fa-solid fa-times" /></button>
+                        </div>
+                        <pre style={{ 
+                          padding: 12, 
+                          margin: 0,
+                          fontSize: 11, 
+                          color: '#a9b7c6', 
+                          maxHeight: 250, 
+                          overflow: 'auto',
+                          fontFamily: 'var(--tilder-mono, monospace)',
+                          whiteSpace: 'pre-wrap'
+                        }}>
+                          {diffStateByPath[expandedDiffPath].loading ? 'Loading diff...' : 
+                           diffStateByPath[expandedDiffPath].error ? diffStateByPath[expandedDiffPath].error :
+                           diffStateByPath[expandedDiffPath].workingTreeDiff || diffStateByPath[expandedDiffPath].stagedDiff || 'No changes.'}
+                        </pre>
+                      </div>
+                   </div>
+                )}
+
+              </>
+           )}
         </div>
       </div>
     </div>
   );
+
 }

@@ -1,0 +1,2 @@
+d:\Tilder - Copy\desktop-app\src-tauri\windows\monitor_bin\NvmeMonitor.pdb
+d:\Tilder - Copy\desktop-app\src-tauri\windows\monitor_bin\NvmeMonitor.exe

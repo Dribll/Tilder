@@ -91,7 +91,7 @@
   align-items: center;
   gap: 6px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  
 }
 
 .cs-preset-card:hover {
@@ -176,3 +176,4 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+

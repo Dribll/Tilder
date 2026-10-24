@@ -20,6 +20,8 @@ public class Worker : BackgroundService
     private readonly string _tempPath;
     private Computer _computer;
     private UpdateVisitor _visitor;
+    private PerformanceCounter? _cpuPerfCounter;
+    private double _cpuBaseSpeedGhz = 0;
 
     public Worker(ILogger<Worker> logger)
     {
@@ -41,6 +43,26 @@ public class Worker : BackgroundService
         };
         try { _computer.Open(); } catch {}
         _visitor = new UpdateVisitor();
+
+        // Initialize live CPU clock speed counter (% Processor Performance × base speed = actual GHz)
+        try
+        {
+            _cpuPerfCounter = new PerformanceCounter("Processor Information", "% Processor Performance", "_Total");
+            _cpuPerfCounter.NextValue(); // first call always returns 0, discard it
+        }
+        catch { _cpuPerfCounter = null; }
+
+        // Read base speed from WMI (MHz → GHz)
+        try
+        {
+            using var searcher = new ManagementObjectSearcher("SELECT MaxClockSpeed FROM Win32_Processor");
+            foreach (ManagementObject mo in searcher.Get())
+            {
+                var mhz = Convert.ToDouble(mo["MaxClockSpeed"]);
+                if (mhz > 0) { _cpuBaseSpeedGhz = Math.Round(mhz / 1000.0, 2); break; }
+            }
+        }
+        catch { _cpuBaseSpeedGhz = 0; }
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -53,6 +75,18 @@ public class Worker : BackgroundService
             
             CollectLhm(data);
             CollectBattery(data);
+
+            // Live CPU clock speed: base GHz × (% Processor Performance / 100)
+            if (_cpuPerfCounter != null && _cpuBaseSpeedGhz > 0)
+            {
+                try
+                {
+                    float perfPct = _cpuPerfCounter.NextValue();
+                    if (perfPct > 0)
+                        data.CpuSpeedGhz = Math.Round(_cpuBaseSpeedGhz * perfPct / 100.0, 2);
+                }
+                catch { }
+            }
 
             var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
             try
@@ -118,21 +152,42 @@ public class Worker : BackgroundService
             else if (hw.HardwareType == HardwareType.Storage)
             {
                 var info = new StorageInfo { Name = hw.Name, MediaType = "Drive" };
+                // NVMe drives expose multiple temperature sensors via LHM:
+                //   "Temperature"        → Composite temperature (register 0x01) = what Windows Settings shows
+                //   "NAND Temperature"   → NAND hot-spot — can be 30-40°C higher, often stuck at 84°C
+                // Explicitly prefer the sensor named "Temperature" or "Composite" (index 0).
+                // Fall back to minimum value only if no named match is found.
+                int? minTemp = null;
+                int? compositeTemp = null;
                 foreach (ISensor s in hw.Sensors)
                 {
-                    if (s.SensorType == SensorType.Temperature)
-                        if (s.Value.HasValue) info.TempCelsius = (int)Math.Round(s.Value.Value);
+                    if (s.SensorType == SensorType.Temperature && s.Value.HasValue)
+                    {
+                        int val = (int)Math.Round(s.Value.Value);
+                        if (s.Name != null &&
+                            (s.Name.Equals("Temperature", StringComparison.OrdinalIgnoreCase) ||
+                             s.Name.StartsWith("Composite", StringComparison.OrdinalIgnoreCase)))
+                        {
+                            compositeTemp = val;
+                        }
+                        if (minTemp == null || val < minTemp)
+                            minTemp = val;
+                    }
                 }
+                if (compositeTemp.HasValue) info.TempCelsius = compositeTemp;
+                else if (minTemp.HasValue) info.TempCelsius = minTemp;
                 storage.Add(info);
             }
         }
 
         if (fans.Count > 0) data.Fans = fans;
         
-        // Also map drives
+        // Also map drives with proper name-based temperature matching
         try
         {
             var existingStorage = new List<StorageInfo>();
+            var lhmPool = new List<StorageInfo>(storage); // mutable copy
+
             foreach (var drive in DriveInfo.GetDrives().Where(d => d.IsReady))
             {
                 var info = new StorageInfo
@@ -144,13 +199,30 @@ public class Worker : BackgroundService
                     UsedGb  = Math.Round((drive.TotalSize - drive.AvailableFreeSpace) / 1073741824.0, 1),
                     FreeGb  = Math.Round(drive.AvailableFreeSpace / 1073741824.0, 1),
                 };
-                
-                // Try to match temps from LHM (very naive approach)
-                var lhmMatch = storage.FirstOrDefault(s => s.TempCelsius.HasValue);
-                if (lhmMatch != null) {
-                    info.TempCelsius = lhmMatch.TempCelsius;
-                    info.Name = lhmMatch.Name;
-                    storage.Remove(lhmMatch);
+
+                // Best-match: find LHM entry whose name most closely matches the drive's label or whose index aligns
+                StorageInfo? best = null;
+                int bestScore = -1;
+                foreach (var lhm in lhmPool.Where(l => l.TempCelsius.HasValue))
+                {
+                    int score = 0;
+                    if (!string.IsNullOrEmpty(drive.VolumeLabel) && lhm.Name != null &&
+                        lhm.Name.Contains(drive.VolumeLabel, StringComparison.OrdinalIgnoreCase))
+                        score += 10;
+                    // Prefer NVMe for the first drive, HDD/SSD for subsequent
+                    if (lhm.Name != null && drive.Name.StartsWith("C:", StringComparison.OrdinalIgnoreCase) &&
+                        lhm.Name.Contains("nvme", StringComparison.OrdinalIgnoreCase))
+                        score += 5;
+                    if (score > bestScore) { bestScore = score; best = lhm; }
+                }
+                // Fallback: take any remaining LHM entry in order
+                if (best == null) best = lhmPool.FirstOrDefault(l => l.TempCelsius.HasValue);
+
+                if (best != null)
+                {
+                    info.TempCelsius = best.TempCelsius;
+                    info.Name = best.Name;
+                    lhmPool.Remove(best);
                 }
                 existingStorage.Add(info);
             }
@@ -187,15 +259,17 @@ public class Worker : BackgroundService
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
         try { _computer?.Close(); } catch {}
+        try { _cpuPerfCounter?.Dispose(); } catch {}
         await base.StopAsync(cancellationToken);
     }
 }
 
 public class MonitorData
 {
-    public int?    CpuUsage { get; set; }
-    public int?    CpuTemp  { get; set; }
-    public int[]?  CpuCores { get; set; }
+    public int?    CpuUsage    { get; set; }
+    public int?    CpuTemp     { get; set; }
+    public double? CpuSpeedGhz { get; set; }
+    public int[]?  CpuCores    { get; set; }
     public int?    GpuUsage { get; set; }
     public int?    GpuTemp  { get; set; }
     public string? GpuName  { get; set; }

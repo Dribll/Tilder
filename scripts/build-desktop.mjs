@@ -10,8 +10,13 @@ const isDev = process.argv.includes('--dev');
 console.log(`[build:desktop] Starting desktop build in ${isDev ? 'DEVELOPMENT' : 'PRODUCTION'} mode...`);
 
 // Step 1: Incremental Monitor Build
-console.log('\n[build:desktop] Step 1/3: Checking monitor service...');
-execSync('node scripts/build-monitor-if-needed.mjs', { cwd: projectRoot, stdio: 'inherit' });
+// (already handled by predesktop:dev / predesktop:build npm hooks — skip if run standalone)
+if (!process.env.npm_lifecycle_event?.startsWith('desktop:')) {
+  console.log('\n[build:desktop] Step 1/3: Checking monitor service...');
+  execSync('node scripts/build-monitor-if-needed.mjs', { cwd: projectRoot, stdio: 'inherit' });
+} else {
+  console.log('\n[build:desktop] Step 1/3: Monitor already built by pre-hook. ✓');
+}
 
 // Step 2: Vite Build
 console.log('\n[build:desktop] Step 2/3: Building frontend with Vite...');

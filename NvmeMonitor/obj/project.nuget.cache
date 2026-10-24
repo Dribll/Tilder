@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "oZyaxPWJZ3k=",
+  "success": true,
+  "projectFilePath": "D:\\Tilder - Copy\\desktop-app\\NvmeMonitor\\NvmeMonitor.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\dhrub\\.nuget\\packages\\microsoft.net.illink.tasks\\8.0.25\\microsoft.net.illink.tasks.8.0.25.nupkg.sha512"
+  ],
+  "logs": []
+}

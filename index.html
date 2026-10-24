@@ -40,6 +40,13 @@
     type="text/javascript"
     src="https://unpkg.com/monaco-themes/dist/monaco-themes.js"
   ></script>
+  <script>
+    // CRITICAL: Disable FontAwesome's SVG auto-replacement.
+    // Without this, FA replaces <i> elements with <svg> elements directly in the DOM,
+    // causing React's virtual DOM to lose track of nodes and crash with:
+    // "Failed to execute 'removeChild' on 'Node'"
+    window.FontAwesomeConfig = { autoReplaceSvg: false, observeMutations: false };
+  </script>
   <script
     src="https://kit.fontawesome.com/f614d99ea8.js"
     crossorigin="anonymous"

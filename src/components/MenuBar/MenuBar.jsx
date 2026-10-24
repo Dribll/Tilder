@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import tilderIcon from '../../assets/Tilder_icon.png';
 import { isDesktopRuntime } from '../../core/runtime.js';
 import { invoke } from '@tauri-apps/api/core';
+import { openExternalUrl } from '../../core/desktopFileApi.js';
 
 function MenuBar(props) {
   const [openMenu, setOpenMenu] = useState(null);
@@ -277,9 +278,9 @@ function MenuBar(props) {
               <div className="dropdown-content">
                 <li onClick={() => { props.openWelcome?.(); closeAll(); }}>Welcome</li>
                 <hr className="dropdowncontent-hr" />
-                <li onClick={() => { window.open('https://github.com/Dribll/Tilder/wiki', '_blank'); closeAll(); }}>Documentation</li>
-                <li onClick={() => { window.open('https://github.com/Dribll/Tilder/releases', '_blank'); closeAll(); }}>Release Notes</li>
-                <li onClick={() => { window.open('https://github.com/Dribll/Tilder/issues/new', '_blank'); closeAll(); }}>Report Issue</li>
+                <li onClick={() => { openExternalUrl('https://github.com/Dribll/Tilder/wiki'); closeAll(); }}>Documentation</li>
+                <li onClick={() => { openExternalUrl('https://github.com/Dribll/Tilder/releases'); closeAll(); }}>Release Notes</li>
+                <li onClick={() => { openExternalUrl('https://github.com/Dribll/Tilder/issues/new'); closeAll(); }}>Report Issue</li>
                 <hr className="dropdowncontent-hr" />
                 <li onClick={() => { props.checkForUpdates?.(); closeAll(); }}>Check for Updates...</li>
                 <hr className="dropdowncontent-hr" />
@@ -368,7 +369,7 @@ function MenuBar(props) {
   );
 }
 
-export default MenuBar;
+export default React.memo(MenuBar);
 
 MenuBar.defaultProps = {
   file: 'File',

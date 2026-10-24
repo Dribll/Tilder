@@ -9,6 +9,7 @@ import { executeTerminalCommand, getDisplayPath } from '../../../../core/termina
 import { getApiOrigin, apiFetch } from '../../../../core/apiBase.js';
 import { syncTerminalWorkspaceRoot } from '../../../../core/codeRunner.js';
 import { isDesktopRuntime } from '../../../../core/runtime.js';
+import { openExternalUrl } from '../../../../core/desktopFileApi.js';
 
 const DESKTOP_TERMINAL_FONT_STACK =
   '"TilderMono", "Cascadia Mono", Consolas, monospace';
@@ -439,21 +440,36 @@ function TasksView({ onRunTask, workspace }) {
   );
 }
 
-function ProblemsView({ diagnostics }) {
-  if (!diagnostics.length) {
-    return <div className="bottom-panel-empty">No problems have been detected in the active editor.</div>;
+function ProblemsView({ diagnostics, onSelectProblem }) {
+  if (!diagnostics || !diagnostics.length) {
+    return <div className="bottom-panel-empty">No problems have been detected in the workspace.</div>;
   }
 
   return (
     <div className="bottom-panel-problems-list">
-      {diagnostics.map((diagnostic, index) => (
-        <div key={`${diagnostic.message}-${index}`} className={`bottom-panel-problem ${diagnostic.severity || 'info'}`}>
-          <div className="bottom-panel-problem-title">{diagnostic.message}</div>
-          <div className="bottom-panel-problem-meta">
-            line {diagnostic.startLineNumber}, col {diagnostic.startColumn} | {diagnostic.owner || 'editor'}
+      {diagnostics.map((diagnostic, index) => {
+        const fileLabel = diagnostic.fileName || (diagnostic.filePath ? String(diagnostic.filePath).split('/').pop() : '');
+        return (
+          <div
+            key={`${diagnostic.message}-${diagnostic.startLineNumber}-${index}`}
+            className={`bottom-panel-problem ${diagnostic.severity || 'info'}`}
+            onClick={() => onSelectProblem?.(diagnostic)}
+            style={{ cursor: 'pointer' }}
+            title="Click to jump to file and line"
+          >
+            <div className="bottom-panel-problem-title">
+              <span style={{ marginRight: '6px', fontWeight: 'bold', color: diagnostic.severity === 'error' ? '#f87171' : diagnostic.severity === 'warning' ? '#facc15' : '#60a5fa' }}>
+                {diagnostic.severity === 'error' ? '✖' : diagnostic.severity === 'warning' ? '⚠' : 'ℹ'}
+              </span>
+              {diagnostic.message}
+            </div>
+            <div className="bottom-panel-problem-meta">
+              {fileLabel ? <span style={{ color: 'var(--vscode-textLink-foreground, #60a5fa)', marginRight: '6px' }}>{fileLabel}:</span> : null}
+              line {diagnostic.startLineNumber}, col {diagnostic.startColumn} | {diagnostic.owner || diagnostic.source || 'editor'}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -707,7 +723,7 @@ function TerminalPane({
       if (!hostRef.current) return;
 
       // Clear host element to prevent "rendering down" or duplicated terminals
-      hostRef.current.innerHTML = '';
+      while(hostRef.current.firstChild) hostRef.current.removeChild(hostRef.current.firstChild);
 
       const terminal = new XTerm({
         convertEol: true,
@@ -1058,7 +1074,11 @@ function TerminalPane({
       _auxClickRef.current = null;
       resizeObserverRef.current?.disconnect();
       socketRef.current?.disconnect();
-      terminalRef.current?.dispose();
+      try {
+        terminalRef.current?.dispose();
+      } catch (e) {
+        console.warn('XTerm dispose error:', e);
+      }
       terminalRef.current = null;
     };
   }, [bridgeConfig, session.id, session.profileId]); 
@@ -1153,7 +1173,11 @@ function TerminalPane({
         socketRef.current?.disconnect();
         socketRef.current = null;
         resizeObserverRef.current?.disconnect();
+        try {
         terminalRef.current?.dispose();
+      } catch (e) {
+        console.warn('XTerm dispose error:', e);
+      }
         terminalRef.current = null;
         fitAddonRef.current = null;
       },
@@ -1178,7 +1202,7 @@ function TerminalPane({
   );
 }
 
-export default function Terminal({
+function Terminal({
   isOpen,
   height,
   isMaximized = false,
@@ -1199,6 +1223,7 @@ export default function Terminal({
   onClearDebugConsole,
   settings,
   requestPrompt,
+  onSelectProblem,
 }) {
   const [debugFilterText, setDebugFilterText] = useState('');
   const [availableProfiles, setAvailableProfiles] = useState([]);
@@ -1319,13 +1344,7 @@ export default function Terminal({
 
   function handleOpenBrowser(url) {
     if (!url) return;
-    apiFetch('/api/open-link', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
-    }).catch(() => {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    });
+    openExternalUrl(url);
   }
 
   useEffect(() => {
@@ -1461,15 +1480,12 @@ export default function Terminal({
 
   function closeSession(sessionId) {
     if (sessions.length === 1) {
-      // Kill: dispose the socket + xterm for this session via its API
-      const api = sessionApisRef.current.get(sessionId);
-      if (api) {
-        // Disconnect socket so the backend PTY process is signaled
-        api.dispose?.();
-      }
       // Hide the panel
       onClose();
-      // After panel hides, replace with a completely fresh session
+      // After panel hides, replace with a completely fresh session.
+      // We do NOT manually call api.dispose() here anymore because when setSessions 
+      // unmounts the old TerminalPane, its useEffect cleanup will naturally 
+      // dispose the xterm instance and socket without crashing React DOM.
       setTimeout(() => {
         const fresh = createSession('Terminal');
         setSessions([fresh]);
@@ -1481,9 +1497,7 @@ export default function Terminal({
       return;
     }
 
-    // Multiple sessions: kill just this one
-    const api = sessionApisRef.current.get(sessionId);
-    if (api) api.dispose?.();
+    // Multiple sessions: remove from state. React unmount triggers cleanup automatically.
     setSessions((current) => current.filter((session) => session.id !== sessionId));
     setSplitSessionIds((current) => current.filter((id) => id !== sessionId));
     setSessionMeta((current) => {
@@ -1779,7 +1793,7 @@ export default function Terminal({
 
         {activeView === 'problems' ? (
           <div className="bottom-panel-content">
-            <ProblemsView diagnostics={diagnostics} />
+            <ProblemsView diagnostics={diagnostics} onSelectProblem={onSelectProblem} />
           </div>
         ) : null}
         {activeView === 'output' ? (
@@ -1856,3 +1870,5 @@ export default function Terminal({
 
 
 
+
+export default React.memo(Terminal);

@@ -100,7 +100,27 @@ export default function ThemePicker({ isOpen, onClose, onSelectTheme, activeThem
               }}
             >
               <div className="theme-picker-item-main">
-                <div className="theme-picker-item-label">{theme.label}</div>
+                <div className="theme-picker-item-label-row">
+                  <div className="theme-picker-item-label">{theme.label}</div>
+                  {theme.category ? <span className="theme-picker-category-tag">{theme.category}</span> : null}
+                </div>
+                <div className="theme-picker-preview-strip">
+                  <span
+                    className="theme-picker-swatch"
+                    style={{ background: theme.preview?.[0] || theme.colors?.['--body-main-bg-color'] || '#121212' }}
+                    title="Body Background"
+                  />
+                  <span
+                    className="theme-picker-swatch"
+                    style={{ background: theme.preview?.[1] || theme.colors?.['--content-box-bg-color'] || '#1e1e1e' }}
+                    title="Editor Canvas"
+                  />
+                  <span
+                    className="theme-picker-swatch"
+                    style={{ background: theme.preview?.[2] || theme.colors?.['--accent-color'] || '#7c3aed' }}
+                    title="Theme Accent"
+                  />
+                </div>
               </div>
               <div className="theme-picker-item-side">
                 {theme.id === activeTheme ? <span className="theme-picker-item-active-badge">Active</span> : null}

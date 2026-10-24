@@ -1,0 +1,6 @@
+D:\Tilder - Copy\desktop-app\obj\Debug\net8.0\test_hw.csproj.AssemblyReference.cache
+D:\Tilder - Copy\desktop-app\obj\Debug\net8.0\test_hw.GeneratedMSBuildEditorConfig.editorconfig
+D:\Tilder - Copy\desktop-app\obj\Debug\net8.0\test_hw.AssemblyInfoInputs.cache
+D:\Tilder - Copy\desktop-app\obj\Debug\net8.0\test_hw.AssemblyInfo.cs
+D:\Tilder - Copy\desktop-app\obj\Debug\net8.0\test_hw.csproj.CoreCompileInputs.cache
+D:\Tilder - Copy\desktop-app\obj\Debug\net8.0\test_hw.sourcelink.json

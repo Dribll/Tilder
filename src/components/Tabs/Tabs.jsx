@@ -29,7 +29,7 @@ const TAB_COLOR_OPTIONS = [
 
 
 
-export default function Tabs({
+function Tabs({
 
   tabs,
 
@@ -95,6 +95,24 @@ export default function Tabs({
       activeEl.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
     }
   }, [activeTabId]);
+
+  // Enable smooth horizontal mouse wheel scrolling across tabs
+  useEffect(() => {
+    const el = tabsListRef.current;
+    if (!el) return;
+    const handleWheel = (e) => {
+      if (wrapTabs) return;
+      const delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+      if (delta !== 0) {
+        el.scrollLeft += delta;
+        e.preventDefault();
+      }
+    };
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', handleWheel);
+    };
+  }, [wrapTabs]);
 
 
   useEffect(() => {
@@ -200,21 +218,22 @@ export default function Tabs({
         <div
           ref={tabsListRef}
           className={`tabs-list ${wrapTabs ? 'wrap-tabs' : ''}`}
-
-          onDragOver={(event) => event.preventDefault()}
-
-          onDrop={(event) => {
-
-            event.preventDefault();
-
-            const insert = dropInsertBefore != null ? dropInsertBefore : tabs.length;
-
-            onTabDrop?.(groupId, insert);
-
-            clearDrop();
-
+          onWheel={(event) => {
+            if (tabsListRef.current && !wrapTabs) {
+              const delta = event.deltaY || event.deltaX;
+              if (delta !== 0) {
+                tabsListRef.current.scrollLeft += delta;
+                event.preventDefault();
+              }
+            }
           }}
-
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            event.preventDefault();
+            const insert = dropInsertBefore != null ? dropInsertBefore : tabs.length;
+            onTabDrop?.(groupId, insert);
+            clearDrop();
+          }}
         >
 
           {tabs.map((tab, index) => (
@@ -264,11 +283,15 @@ export default function Tabs({
                       <span className="tab-color-dot" style={{ background: tab.colorLabel }} aria-hidden="true" />
                     ) : null}
                     
-                    {IconComp && (
+                    {tab.isDiff ? (
+                      <span className="tab-file-icon" style={{ color: '#a78bfa' }} title="Diff Comparison">
+                        <i className="fa-solid fa-code-compare" />
+                      </span>
+                    ) : IconComp ? (
                       <span className="tab-file-icon" style={{ color: iconDef.color }}>
                         <IconComp />
                       </span>
-                    )}
+                    ) : null}
 
                     {!tab.pinned && <span className="tab-name">{tab.name}</span>}
 
@@ -635,3 +658,5 @@ export default function Tabs({
 
 }
 
+
+export default React.memo(Tabs);

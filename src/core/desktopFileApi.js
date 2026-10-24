@@ -82,6 +82,31 @@ export async function revealInExplorer(path) {
   return invoke('reveal_in_explorer', { path });
 }
 
+export async function openExternalUrl(url) {
+  if (!url) return;
+  const target = String(url).trim();
+  if (!target) return;
+  if (isDesktopRuntime()) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('open_external_url', { url: target });
+      return;
+    } catch (e) {
+      console.warn('[openExternalUrl] Tauri invoke failed, falling back to API/browser:', e);
+    }
+  }
+  try {
+    const { apiFetch } = await import('./apiBase.js');
+    await apiFetch('/api/open-link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: target }),
+    });
+  } catch (_) {
+    window.open(target, '_blank', 'noopener,noreferrer');
+  }
+}
+
 export async function openDesktopWindow(folderPath = null) {
   ensureDesktop();
   return invoke('open_new_window', { folderPath: folderPath || null });

@@ -1885,7 +1885,28 @@ function buildUntrackedDiff(relativePath, content = '') {
 
 async function openScmRepo(payload, session, options = {}) {
   const { allowMissingGit = false, allowUninitialized = false } = options;
-  const { cwd } = await mirrorWorkspace(payload, true);
+
+  // On desktop, if a real on-disk workspace root is provided, use it directly
+  // instead of creating a temp mirror (mirrors never contain .git directories,
+  // which causes existing git repos to appear as "not initialized").
+  let cwd;
+  const rawWorkspaceRoot = String(payload?.workspaceRoot || '').trim();
+  if (rawWorkspaceRoot && path.isAbsolute(rawWorkspaceRoot)) {
+    try {
+      const stat = await fs.stat(rawWorkspaceRoot);
+      if (stat.isDirectory()) {
+        cwd = rawWorkspaceRoot;
+      }
+    } catch (_) {
+      // Path doesn't exist — fall through to mirror
+    }
+  }
+
+  if (!cwd) {
+    const mirror = await mirrorWorkspace(payload, true);
+    cwd = mirror.cwd;
+  }
+
   const git = simpleGit({ baseDir: cwd, binary: gitBinary });
   let initialized = false;
 
@@ -1925,15 +1946,21 @@ async function openScmRepo(payload, session, options = {}) {
 }
 
 async function collectScmStatusFromRepo(git, cwd) {
-  const [status, branchSummary, log] = await Promise.all([
+  const [status, branchSummary, log, remotes] = await Promise.all([
     git.status(),
     git.branchLocal(),
     git.log({ maxCount: 8 }).catch(() => ({ all: [] })),
+    git.getRemotes(true).catch(() => []),
   ]);
+
+  const originRemote = (Array.isArray(remotes) ? remotes : []).find((r) => r.name === 'origin') || (Array.isArray(remotes) ? remotes[0] : null) || null;
 
   return {
     available: true,
     initialized: true,
+    hasRemote: Boolean(originRemote),
+    remoteUrl: originRemote?.refs?.push || originRemote?.refs?.fetch || '',
+    remoteName: originRemote?.name || null,
     cwd,
     branch: branchSummary.current || status.current || 'main',
     branches: (branchSummary.all || []).filter(Boolean),
@@ -2622,7 +2649,7 @@ app.post('/api/backpack/local', async (request, response) => {
   }
 });
 
-app.get('/api/github/repos', async (request, response) => {
+app.get('/api/github/user', async (request, response) => {
   const account = request.session.accounts?.github;
   if (!account?.accessToken) {
     response.status(400).json({ message: 'Connect GitHub first.' });
@@ -2630,7 +2657,92 @@ app.get('/api/github/repos', async (request, response) => {
   }
 
   try {
-    const upstream = await fetch('https://api.github.com/user/repos?sort=updated&per_page=30', {
+    const upstream = await fetch('https://api.github.com/user', {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${account.accessToken}`,
+        'User-Agent': 'Tilder',
+      },
+    });
+    const user = await upstream.json();
+    if (!upstream.ok) {
+      response.status(upstream.status).json({ message: user.message || 'Unable to load user profile.' });
+      return;
+    }
+
+    response.json({
+      user: {
+        id: user.id,
+        login: user.login,
+        name: user.name || user.login,
+        avatarUrl: user.avatar_url,
+        htmlUrl: user.html_url,
+        bio: user.bio || '',
+        publicRepos: user.public_repos || 0,
+        totalPrivateRepos: user.total_private_repos || 0,
+        followers: user.followers || 0,
+        following: user.following || 0,
+        company: user.company || '',
+        location: user.location || '',
+      },
+    });
+  } catch (error) {
+    response.status(500).json({ message: 'Failed to load GitHub user.' });
+  }
+});
+
+app.get('/api/github/orgs', async (request, response) => {
+  const account = request.session.accounts?.github;
+  if (!account?.accessToken) {
+    response.status(400).json({ message: 'Connect GitHub first.' });
+    return;
+  }
+
+  try {
+    const upstream = await fetch('https://api.github.com/user/orgs', {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${account.accessToken}`,
+        'User-Agent': 'Tilder',
+      },
+    });
+    const orgs = await upstream.json();
+    if (!upstream.ok) {
+      response.status(upstream.status).json({ message: orgs.message || 'Unable to load organizations.' });
+      return;
+    }
+
+    response.json({
+      organizations: (Array.isArray(orgs) ? orgs : []).map((org) => ({
+        id: org.id,
+        login: org.login,
+        avatarUrl: org.avatar_url,
+        description: org.description || '',
+      })),
+    });
+  } catch (error) {
+    response.status(500).json({ message: 'Failed to load organizations.' });
+  }
+});
+
+app.get('/api/github/repos', async (request, response) => {
+  const account = request.session.accounts?.github;
+  if (!account?.accessToken) {
+    response.status(400).json({ message: 'Connect GitHub first.' });
+    return;
+  }
+
+  const page = parseInt(request.query.page, 10) || 1;
+  const perPage = Math.min(100, parseInt(request.query.per_page, 10) || 100);
+  const sort = request.query.sort || 'updated';
+  const org = request.query.org || '';
+
+  const apiUrl = org
+    ? `https://api.github.com/orgs/${encodeURIComponent(org)}/repos?sort=${sort}&per_page=${perPage}&page=${page}`
+    : `https://api.github.com/user/repos?sort=${sort}&per_page=${perPage}&page=${page}&affiliation=owner,collaborator,organization_member`;
+
+  try {
+    const upstream = await fetch(apiUrl, {
       headers: {
         Accept: 'application/vnd.github+json',
         Authorization: `Bearer ${account.accessToken}`,
@@ -2644,18 +2756,31 @@ app.get('/api/github/repos', async (request, response) => {
     }
 
     response.json({
-      repositories: repos.map((repo) => ({
+      repositories: (Array.isArray(repos) ? repos : []).map((repo) => ({
         id: repo.id,
         name: repo.name,
         fullName: repo.full_name,
         private: repo.private,
         url: repo.html_url,
-        defaultBranch: repo.default_branch,
+        cloneUrl: repo.clone_url,
+        sshUrl: repo.ssh_url,
+        defaultBranch: repo.default_branch || 'main',
         updatedAt: repo.updated_at,
+        pushedAt: repo.pushed_at,
         description: repo.description || '',
+        language: repo.language || '',
+        stars: repo.stargazers_count || 0,
+        forks: repo.forks_count || 0,
+        openIssues: repo.open_issues_count || 0,
+        isFork: repo.fork || false,
+        owner: {
+          login: repo.owner?.login || '',
+          avatarUrl: repo.owner?.avatar_url || '',
+          type: repo.owner?.type || 'User',
+        },
       })),
     });
-  } catch {
+  } catch (error) {
     response.status(500).json({ message: 'Failed to load GitHub repositories.' });
   }
 });
@@ -2669,15 +2794,38 @@ app.post('/api/github/repos', async (request, response) => {
 
   const name = String(request.body?.name || '').trim();
   const description = String(request.body?.description || '').trim();
-  const isPrivate = request.body?.private !== false;
+  // Support explicit boolean: true = private, false = public
+  const isPrivate = request.body?.private === true;
+  const owner = String(request.body?.owner || '').trim();
+  const autoInit = request.body?.auto_init !== false;
+  const gitignoreTemplate = String(request.body?.gitignore_template || '').trim();
+  const licenseTemplate = String(request.body?.license_template || '').trim();
 
   if (!name) {
     response.status(400).json({ message: 'Enter a repository name.' });
     return;
   }
 
+  // Determine whether to create under user or organization
+  const targetUrl = (owner && owner.toLowerCase() !== account.username?.toLowerCase())
+    ? `https://api.github.com/orgs/${encodeURIComponent(owner)}/repos`
+    : `https://api.github.com/user/repos`;
+
+  const payload = {
+    name,
+    description,
+    private: isPrivate,
+    auto_init: autoInit,
+  };
+  if (gitignoreTemplate) {
+    payload.gitignore_template = gitignoreTemplate;
+  }
+  if (licenseTemplate) {
+    payload.license_template = licenseTemplate;
+  }
+
   try {
-    const upstream = await fetch('https://api.github.com/user/repos', {
+    const upstream = await fetch(targetUrl, {
       method: 'POST',
       headers: {
         Accept: 'application/vnd.github+json',
@@ -2685,17 +2833,19 @@ app.post('/api/github/repos', async (request, response) => {
         'User-Agent': 'Tilder',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        name,
-        description,
-        private: isPrivate,
-        auto_init: true,
-      }),
+      body: JSON.stringify(payload),
     });
     const repo = await upstream.json().catch(() => ({}));
 
     if (!upstream.ok) {
-      response.status(upstream.status).json({ message: repo.message || 'Unable to create GitHub repository.' });
+      let errorMessage = repo.message || 'Unable to create GitHub repository.';
+      if (Array.isArray(repo.errors) && repo.errors.length > 0) {
+        const details = repo.errors
+          .map((err) => (typeof err === 'string' ? err : err.message || `${err.field || 'field'}: ${err.code || 'invalid'}`))
+          .join(', ');
+        errorMessage = `${errorMessage} (${details})`;
+      }
+      response.status(upstream.status).json({ message: errorMessage });
       return;
     }
 
@@ -2706,13 +2856,256 @@ app.post('/api/github/repos', async (request, response) => {
         fullName: repo.full_name,
         private: repo.private,
         url: repo.html_url,
-        defaultBranch: repo.default_branch,
+        cloneUrl: repo.clone_url,
+        sshUrl: repo.ssh_url,
+        defaultBranch: repo.default_branch || 'main',
         updatedAt: repo.updated_at,
         description: repo.description || '',
+        owner: {
+          login: repo.owner?.login || '',
+          avatarUrl: repo.owner?.avatar_url || '',
+          type: repo.owner?.type || 'User',
+        },
       },
     });
-  } catch {
+  } catch (error) {
     response.status(500).json({ message: 'Failed to create GitHub repository.' });
+  }
+});
+
+app.post('/api/github/clone', async (request, response) => {
+  const account = request.session.accounts?.github;
+  if (!account?.accessToken) {
+    response.status(400).json({ message: 'Connect GitHub first.' });
+    return;
+  }
+
+  const repoFullName = String(request.body?.repoFullName || '').trim();
+  const repoName = String(request.body?.repoName || repoFullName.split('/').pop() || '').trim();
+  let targetDir = String(request.body?.targetDir || '').trim();
+
+  if (!repoFullName) {
+    response.status(400).json({ message: 'Repository full name is required.' });
+    return;
+  }
+
+  try {
+    if (!targetDir) {
+      const homeDir = os.homedir();
+      targetDir = path.join(homeDir, 'TilderProjects');
+    }
+
+    await fs.mkdir(targetDir, { recursive: true });
+    const finalPath = path.join(targetDir, repoName);
+
+    // If destination already exists and is a git repository
+    if (fsSync.existsSync(finalPath)) {
+      const gitDir = path.join(finalPath, '.git');
+      if (fsSync.existsSync(gitDir)) {
+        response.json({
+          success: true,
+          localPath: finalPath.replace(/\\/g, '/'),
+          alreadyExisted: true,
+          message: `Repository already cloned at ${finalPath}. Opening it now!`,
+        });
+        return;
+      }
+      response.status(400).json({
+        message: `Destination directory "${finalPath}" already exists and is not empty.`,
+      });
+      return;
+    }
+
+    // Authenticated clone URL using GitHub Bearer token
+    // Seamless for both public and private repos
+    const username = account.username || '';
+    const authCloneUrl = username
+      ? `https://${username}:${account.accessToken}@github.com/${repoFullName}.git`
+      : `https://${account.accessToken}@github.com/${repoFullName}.git`;
+    const cleanCloneUrl = username
+      ? `https://${username}@github.com/${repoFullName}.git`
+      : `https://github.com/${repoFullName}.git`;
+
+    const git = simpleGit();
+    await git.clone(authCloneUrl, finalPath);
+
+    // Clean remote origin and configure non-interactive credentials
+    try {
+      const repoGit = simpleGit(finalPath);
+      await repoGit.remote(['set-url', 'origin', cleanCloneUrl]);
+      if (username) {
+        await repoGit.addConfig('credential.https://github.com.username', username);
+        await repoGit.addConfig('credential.interactive', 'never');
+      }
+      await ensureGitIdentity(repoGit, request.session);
+    } catch {
+      // Non-critical
+    }
+
+    response.json({
+      success: true,
+      localPath: finalPath.replace(/\\/g, '/'),
+      repoName,
+      message: `Successfully cloned ${repoFullName}!`,
+    });
+  } catch (error) {
+    console.error('GitHub clone error:', error);
+    response.status(500).json({
+      message: error instanceof Error ? error.message : 'Failed to clone repository.',
+    });
+  }
+});
+
+app.get('/api/github/repos/:owner/:repo/tree', async (request, response) => {
+  const account = request.session.accounts?.github;
+  if (!account?.accessToken) {
+    response.status(400).json({ message: 'Connect GitHub first.' });
+    return;
+  }
+
+  const { owner, repo } = request.params;
+  const branch = request.query.branch || 'main';
+
+  try {
+    const upstream = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${account.accessToken}`,
+        'User-Agent': 'Tilder',
+      },
+    });
+    const data = await upstream.json();
+    if (!upstream.ok) {
+      response.status(upstream.status).json({ message: data.message || 'Unable to load repository tree.' });
+      return;
+    }
+
+    response.json({
+      tree: data.tree || [],
+      truncated: Boolean(data.truncated),
+    });
+  } catch (error) {
+    response.status(500).json({ message: 'Failed to load repository tree.' });
+  }
+});
+
+app.get('/api/github/repos/:owner/:repo/blob', async (request, response) => {
+  const account = request.session.accounts?.github;
+  if (!account?.accessToken) {
+    response.status(400).json({ message: 'Connect GitHub first.' });
+    return;
+  }
+
+  const { owner, repo } = request.params;
+  const filePath = request.query.path || '';
+  const ref = request.query.ref || 'main';
+
+  try {
+    const upstream = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath).replace(/%2F/g, '/')}?ref=${ref}`, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${account.accessToken}`,
+        'User-Agent': 'Tilder',
+      },
+    });
+    const data = await upstream.json();
+    if (!upstream.ok) {
+      response.status(upstream.status).json({ message: data.message || 'Unable to load file content.' });
+      return;
+    }
+
+    let content = '';
+    if (data.content && data.encoding === 'base64') {
+      content = Buffer.from(data.content, 'base64').toString('utf8');
+    }
+
+    response.json({
+      path: data.path,
+      name: data.name,
+      size: data.size,
+      content,
+      downloadUrl: data.download_url,
+    });
+  } catch (error) {
+    response.status(500).json({ message: 'Failed to load file content.' });
+  }
+});
+
+app.get('/api/github/pulls', async (request, response) => {
+  const account = request.session.accounts?.github;
+  if (!account?.accessToken) {
+    response.status(400).json({ message: 'Connect GitHub first.' });
+    return;
+  }
+
+  try {
+    const username = account.username;
+    const query = encodeURIComponent(`is:pr state:open author:${username} archived:false`);
+    const upstream = await fetch(`https://api.github.com/search/issues?q=${query}&sort=updated&per_page=30`, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${account.accessToken}`,
+        'User-Agent': 'Tilder',
+      },
+    });
+    const data = await upstream.json();
+    response.json({
+      pullRequests: (data.items || []).map((item) => ({
+        id: item.id,
+        number: item.number,
+        title: item.title,
+        url: item.html_url,
+        state: item.state,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+        repoFullName: item.repository_url ? item.repository_url.replace('https://api.github.com/repos/', '') : '',
+        user: {
+          login: item.user?.login,
+          avatarUrl: item.user?.avatar_url,
+        },
+      })),
+    });
+  } catch {
+    response.json({ pullRequests: [] });
+  }
+});
+
+app.get('/api/github/issues', async (request, response) => {
+  const account = request.session.accounts?.github;
+  if (!account?.accessToken) {
+    response.status(400).json({ message: 'Connect GitHub first.' });
+    return;
+  }
+
+  try {
+    const upstream = await fetch('https://api.github.com/user/issues?filter=all&state=open&per_page=30', {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${account.accessToken}`,
+        'User-Agent': 'Tilder',
+      },
+    });
+    const items = await upstream.json();
+    response.json({
+      issues: (Array.isArray(items) ? items : [])
+        .filter((item) => !item.pull_request)
+        .map((item) => ({
+          id: item.id,
+          number: item.number,
+          title: item.title,
+          url: item.html_url,
+          state: item.state,
+          createdAt: item.created_at,
+          updatedAt: item.updated_at,
+          repoFullName: item.repository?.full_name || '',
+          user: {
+            login: item.user?.login,
+            avatarUrl: item.user?.avatar_url,
+          },
+        })),
+    });
+  } catch {
+    response.json({ issues: [] });
   }
 });
 
@@ -2727,7 +3120,19 @@ app.post('/api/scm/status', async (request, response) => {
 
 app.post('/api/scm/init', async (request, response) => {
   try {
-    const { cwd } = await mirrorWorkspace(request.body || {}, true);
+    // Use real on-disk path if provided (desktop), else mirror
+    let cwd;
+    const rawRoot = String(request.body?.workspaceRoot || '').trim();
+    if (rawRoot && path.isAbsolute(rawRoot)) {
+      try {
+        const stat = await fs.stat(rawRoot);
+        if (stat.isDirectory()) cwd = rawRoot;
+      } catch (_) {}
+    }
+    if (!cwd) {
+      const mirror = await mirrorWorkspace(request.body || {}, true);
+      cwd = mirror.cwd;
+    }
     const git = simpleGit({ baseDir: cwd, binary: gitBinary });
     if (!(await git.checkIsRepo())) {
       await git.init();
@@ -2814,10 +3219,27 @@ app.post('/api/scm/diff-file', async (request, response) => {
       }
     }
 
+    let originalContent = '';
+    try {
+      originalContent = await git.show([`HEAD:${target}`]);
+    } catch {
+      originalContent = '';
+    }
+
+    let modifiedContent = '';
+    try {
+      const snapshot = await readScmFileSnapshot(cwd, target);
+      modifiedContent = snapshot.deleted ? '' : (snapshot.content || '');
+    } catch {
+      modifiedContent = '';
+    }
+
     response.json({
       path: target,
       stagedDiff,
       workingTreeDiff,
+      originalContent,
+      modifiedContent,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to load file diff.';
@@ -2890,12 +3312,75 @@ app.post('/api/scm/checkout-branch', async (request, response) => {
 app.post('/api/scm/sync', async (request, response) => {
   try {
     const { cwd, git } = await openScmRepo(request.body || {}, request.session);
-    await git.pull();
-    await git.push();
-    response.json({
-      ...(await collectScmStatusFromRepo(git, cwd)),
-      workspaceSnapshot: await collectWorkspaceSnapshotFromMirror(cwd, request.body?.rootName || 'workspace'),
-    });
+
+    // Auto-commit any pending changes if working tree is dirty
+    try {
+      const status = await git.status();
+      if ((status.files || []).length > 0) {
+        await git.add(['-A']);
+        await git.commit('Update from Tilder');
+      }
+    } catch (_) {}
+
+    // Identify current branch
+    let currentBranch = 'main';
+    try {
+      const branchSummary = await git.branchLocal();
+      currentBranch = branchSummary?.current || 'main';
+    } catch (_) {}
+
+    // Identify remote name
+    let remoteName = null;
+    try {
+      const remotes = await git.getRemotes(true);
+      if (remotes.some((r) => r.name === 'origin')) {
+        remoteName = 'origin';
+      } else if (remotes.length > 0) {
+        remoteName = remotes[0].name;
+      }
+    } catch (_) {}
+
+    if (!remoteName) {
+      response.status(400).json({
+        message: 'No remote configured. Click "Publish to GitHub" to publish this repository.',
+      });
+      return;
+    }
+
+    // Non-interactive env: suppress any GUI password/credential prompts
+    const noPromptEnv = {
+      GIT_TERMINAL_PROMPT: '0',
+      GIT_ASKPASS: 'echo',
+    };
+
+    // Pull with fallback (ignore error if remote branch/tracking not set yet)
+    try {
+      await git.env({ ...process.env, ...noPromptEnv }).pull(remoteName, currentBranch, { '--rebase': 'true' });
+    } catch (_) {
+      try {
+        await git.env({ ...process.env, ...noPromptEnv }).pull();
+      } catch (_) {}
+    }
+
+    // Push with -u to establish tracking
+    try {
+      await git.env({ ...process.env, ...noPromptEnv }).push(['-u', remoteName, currentBranch]);
+    } catch (_) {
+      try {
+        await git.env({ ...process.env, ...noPromptEnv }).push(['-u', remoteName, 'HEAD']);
+      } catch (pushErr) {
+        throw new Error(pushErr instanceof Error ? pushErr.message : 'Git push failed. Check your credentials and remote URL.');
+      }
+    }
+
+    const scmResult = await collectScmStatusFromRepo(git, cwd);
+    // Only collect workspace snapshot when we used a temp mirror (not the real disk path)
+    // to avoid sending massive payloads for large projects on desktop.
+    const usedRealPath = Boolean(request.body?.workspaceRoot && path.isAbsolute(String(request.body.workspaceRoot || '')) && cwd === String(request.body.workspaceRoot || '').trim());
+    if (!usedRealPath) {
+      scmResult.workspaceSnapshot = await collectWorkspaceSnapshotFromMirror(cwd, request.body?.rootName || 'workspace');
+    }
+    response.json(scmResult);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to sync (push/pull) with remote.';
     response.status(500).json({ message });
@@ -3138,6 +3623,46 @@ function getCpuUsage() {
 
 let monitorProcess = null;
 
+let cachedFans = null;
+let cachedStorage = null;
+let nvmeProcess = null;
+
+function ensureNvmeMonitor() {
+  try {
+    const candidatePaths = [
+      path.join(process.env.ProgramData || 'C:\\ProgramData', 'Tilder', 'NvmeMonitor.exe'),
+      path.join(__dirname, 'src-tauri', 'windows', 'monitor_bin', 'NvmeMonitor.exe'),
+      path.join(__dirname, '..', 'src-tauri', 'windows', 'monitor_bin', 'NvmeMonitor.exe'),
+      path.join(path.dirname(process.execPath), 'monitor_bin', 'NvmeMonitor.exe')
+    ];
+    const exePath = candidatePaths.find(p => fsSync.existsSync(p));
+    if (exePath && !nvmeProcess) {
+      nvmeProcess = spawn(exePath, [], { detached: false, stdio: 'ignore', windowsHide: true });
+      nvmeProcess.on('error', () => { nvmeProcess = null; });
+      nvmeProcess.on('exit', () => { nvmeProcess = null; });
+      process.on('exit', () => { if (nvmeProcess) nvmeProcess.kill(); });
+    }
+  } catch {}
+}
+
+function readStorageHardwareInfo() {
+  try {
+    ensureNvmeMonitor();
+    const nvmePath = path.join(
+      process.env.ProgramData || 'C:\\ProgramData', 'Tilder', 'nvme_temp.json'
+    );
+    if (fsSync.existsSync(nvmePath)) {
+      const stat = fsSync.statSync(nvmePath);
+      // Valid if updated within 10 seconds
+      if (Date.now() - stat.mtimeMs < 10000) {
+        const raw = fsSync.readFileSync(nvmePath, 'utf8');
+        return JSON.parse(raw);
+      }
+    }
+  } catch {}
+  return null;
+}
+
 // CPU/GPU telemetry is written by the C# Windows Service (TilderMonitorService)
 // installed via NSIS hooks.
 function readMonitorData() {
@@ -3155,6 +3680,16 @@ function readMonitorData() {
       const stat = fsSync.statSync(monitorPath);
       const ageMs = Date.now() - stat.mtimeMs;
       if (ageMs < 10000) {
+        if (Array.isArray(data.fans) && data.fans.length > 0) {
+          cachedFans = data.fans;
+        } else if (cachedFans) {
+          data.fans = cachedFans;
+        }
+        if (Array.isArray(data.storage) && data.storage.length > 0) {
+          cachedStorage = data.storage;
+        } else if (cachedStorage) {
+          data.storage = cachedStorage;
+        }
         return data;
       }
     }
@@ -3164,30 +3699,36 @@ function readMonitorData() {
   return null;
 }
 
-// The background monitor service runs independently. We just read the json file.
 setTimeout(() => {
   try {
+    ensureNvmeMonitor();
     const existing = readMonitorData();
     if (existing) {
-      console.log('[Monitor] Monitor data detected from Windows Service.');
-    } else {
-      console.log('[Monitor] No active monitor data found yet. Starting fallback PowerShell monitor...');
-      const scriptPath = path.join(__dirname, 'tilder_monitor_service.ps1');
-      if (fsSync.existsSync(scriptPath)) {
-        // spawn is already imported at the top of this ES module file
-        monitorProcess = spawn('powershell.exe', [
-          '-ExecutionPolicy', 'Bypass',
-          '-WindowStyle', 'Hidden',
-          '-File', scriptPath
-        ], { detached: false, stdio: 'ignore' });
-        
-        process.on('exit', () => {
-          if (monitorProcess) monitorProcess.kill();
-        });
-      }
+      console.log('[Monitor] Active telemetry detected from installed service. No extra worker needed.');
+      return;
+    }
+
+    const csharpExe = path.join(
+      process.env.ProgramData || 'C:\\ProgramData', 'Tilder', 'TilderMonitorService.exe'
+    );
+    const psScript = path.join(__dirname, 'tilder_monitor_service.ps1');
+
+    if (fsSync.existsSync(csharpExe)) {
+      console.log('[Monitor] Launching C# TilderMonitorService worker...');
+      monitorProcess = spawn(csharpExe, [], { detached: false, stdio: 'ignore' });
+      monitorProcess.on('error', (err) => console.error('[Monitor] C# service error:', err.message));
+      process.on('exit', () => { if (monitorProcess) monitorProcess.kill(); });
+    } else if (fsSync.existsSync(psScript)) {
+      console.log('[Monitor] Starting fallback PowerShell monitor...');
+      monitorProcess = spawn('powershell.exe', [
+        '-ExecutionPolicy', 'Bypass',
+        '-WindowStyle', 'Hidden',
+        '-File', psScript
+      ], { detached: false, stdio: 'ignore' });
+      process.on('exit', () => { if (monitorProcess) monitorProcess.kill(); });
     }
   } catch (err) {
-    console.error('[Monitor] Error checking monitor data:', err);
+    console.error('[Monitor] Error checking/starting monitor:', err);
   }
 }, 2000);
 
@@ -3196,11 +3737,12 @@ app.get('/api/system/stats', async (request, response) => {
     // Read the background monitor data (CPU/GPU usage & temps)
     const monitor = readMonitorData();
 
-    const [cpuData, currentLoad, memData, graphics] = await Promise.all([
+    const [cpuData, currentLoad, memData, graphics, fsSizes] = await Promise.all([
       si.cpu(),
       si.currentLoad(),
       si.mem(),
       si.graphics(),
+      si.fsSize().catch(() => []),
     ]);
 
     // CPU usage: prefer monitor service (uses % Processor Utility = Task Manager),
@@ -3220,13 +3762,18 @@ app.get('/api/system/stats', async (request, response) => {
     // GPU temperature: from background service (nvidia-smi)
     const gpuTemp = (monitor && monitor.gpuTemp != null) ? monitor.gpuTemp : null;
 
+    // CPU clock speed: use live counter from monitor service (base × % Processor Performance)
+    const cpuActualSpeed = (monitor && monitor.cpuSpeedGhz != null && monitor.cpuSpeedGhz > 0)
+      ? monitor.cpuSpeedGhz
+      : cpuData.speed;
+
     response.json({
       cpu: {
         usage: cpuUsage,
         cores: cpuData.cores,
         physicalCores: cpuData.physicalCores,
         model: `${cpuData.manufacturer} ${cpuData.brand}`,
-        speed: cpuData.speed,
+        speed: cpuActualSpeed,
         speedMax: cpuData.speedMax,
         temperature: cpuTemp,
         loadHistory: currentLoad.cpus.map(c => Math.round(c.load))
@@ -3254,11 +3801,203 @@ app.get('/api/system/stats', async (request, response) => {
       arch: os.arch(),
       uptime: os.uptime(),
       loadAvg: os.loadavg(),
+      fans: monitor ? monitor.fans : null,
+      storage: (() => {
+        const hwStorage = readStorageHardwareInfo();
+        const drivesMap = hwStorage?.drives || {};
+
+        if (monitor && Array.isArray(monitor.storage) && monitor.storage.length > 0) {
+          return monitor.storage.map(s => {
+            const letterKey = (s.letter || '').toUpperCase().trim();
+            const hwInfo = drivesMap[letterKey] || drivesMap[letterKey.replace(/:$/, '') + ':'] || null;
+
+            // Real-time hardware media type (NVMe SSD, SATA SSD, HDD)
+            const mediaType = hwInfo?.mediaType || (s.name && /nvme/i.test(s.name) ? 'NVMe SSD' : 'HDD');
+            const isNvme = hwInfo ? hwInfo.isNvme : mediaType.includes('NVMe');
+
+            // Temperature: for NVMe, use live hardware register 0x01 composite temperature; for others, use SATA SMART
+            let actualTemp = s.tempCelsius;
+            if (isNvme && hwInfo?.tempCelsius != null) {
+              actualTemp = hwInfo.tempCelsius;
+            } else if (isNvme && hwStorage?.tempCelsius != null) {
+              actualTemp = hwStorage.tempCelsius;
+            }
+
+            const fsMatch = Array.isArray(fsSizes) ? fsSizes.find(f => f.fs && s.letter && f.fs.toLowerCase().startsWith(s.letter.toLowerCase())) : null;
+            if (fsMatch) {
+              return {
+                ...s,
+                mediaType,
+                tempCelsius: actualTemp,
+                totalGb: Math.round((fsMatch.size / 1073741824) * 10) / 10,
+                usedGb: Math.round((fsMatch.used / 1073741824) * 10) / 10,
+                freeGb: Math.round((fsMatch.available / 1073741824) * 10) / 10,
+              };
+            }
+            return { ...s, mediaType, tempCelsius: actualTemp };
+          });
+        }
+        if (Array.isArray(fsSizes) && fsSizes.length > 0) {
+          return fsSizes.map(f => {
+            const letterKey = (f.fs || '').toUpperCase().trim();
+            const hwInfo = drivesMap[letterKey] || drivesMap[letterKey.replace(/:$/, '') + ':'] || null;
+            const mediaType = hwInfo?.mediaType || 'Storage';
+            return {
+              letter: f.fs,
+              name: f.type || 'Volume',
+              label: f.mount || '',
+              type: 'Fixed',
+              mediaType,
+              totalGb: Math.round((f.size / 1073741824) * 10) / 10,
+              usedGb: Math.round((f.used / 1073741824) * 10) / 10,
+              freeGb: Math.round((f.available / 1073741824) * 10) / 10,
+              tempCelsius: hwInfo?.tempCelsius ?? null,
+            };
+          });
+        }
+        return null;
+      })(),
+      battery: monitor ? monitor.battery : null,
     });
   } catch (err) {
     console.error('Failed to gather system stats:', err);
     response.status(500).json({ message: 'Internal server error fetching stats' });
   }
+});
+
+// ── Jupyter Notebook Kernel Management ────────────────────────────────────
+const jupyterSessions = new Map(); // sessionId -> { process, pendingRequests, buffer, status }
+
+function getOrCreateJupyterSession(sessionId = 'default', cwd = null) {
+  if (jupyterSessions.has(sessionId)) {
+    const s = jupyterSessions.get(sessionId);
+    if (!s.process.killed && s.process.exitCode === null) {
+      return s;
+    }
+    jupyterSessions.delete(sessionId);
+  }
+
+  const kernelScriptPath = path.join(__dirname, 'server', 'jupyter_kernel.py');
+  const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+  const procCwd = (cwd && fsSync.existsSync(cwd)) ? cwd : process.cwd();
+
+  const proc = spawn(pythonCmd, ['-u', kernelScriptPath], {
+    cwd: procCwd,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    windowsHide: true,
+  });
+
+  const session = {
+    process: proc,
+    pending: new Map(), // reqId -> { resolve, reject, timeout }
+    buffer: '',
+    status: 'starting',
+  };
+
+  proc.stdout.on('data', (chunk) => {
+    session.buffer += chunk.toString('utf-8');
+    const lines = session.buffer.split('\n');
+    session.buffer = lines.pop(); // keep partial trailing line
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const msg = JSON.parse(trimmed);
+        if (msg.type === 'ready') {
+          session.status = 'idle';
+        } else if (msg.type === 'execute_reply' && msg.id) {
+          const req = session.pending.get(msg.id);
+          if (req) {
+            clearTimeout(req.timeout);
+            session.pending.delete(msg.id);
+            req.resolve(msg);
+          }
+        } else if (msg.type === 'restart_reply') {
+          const req = session.pending.get('__restart__');
+          if (req) {
+            clearTimeout(req.timeout);
+            session.pending.delete('__restart__');
+            req.resolve(msg);
+          }
+        }
+      } catch (_) {}
+    }
+  });
+
+  proc.stderr.on('data', (chunk) => {
+    console.error(`[JupyterKernel ${sessionId}] stderr:`, chunk.toString());
+  });
+
+  proc.on('close', () => {
+    session.status = 'dead';
+    for (const req of session.pending.values()) {
+      clearTimeout(req.timeout);
+      req.reject(new Error('Kernel process exited unexpectedly.'));
+    }
+    session.pending.clear();
+    jupyterSessions.delete(sessionId);
+  });
+
+  jupyterSessions.set(sessionId, session);
+  return session;
+}
+
+app.post('/api/jupyter/execute', async (request, response) => {
+  const { sessionId = 'default', code = '', cwd = null } = request.body || {};
+  const reqId = crypto.randomUUID();
+
+  try {
+    const session = getOrCreateJupyterSession(sessionId, cwd);
+    const result = await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        session.pending.delete(reqId);
+        reject(new Error('Execution timed out after 120 seconds.'));
+      }, 120000);
+
+      session.pending.set(reqId, { resolve, reject, timeout });
+
+      const payload = JSON.stringify({ type: 'execute', id: reqId, code }) + '\n';
+      session.process.stdin.write(payload, 'utf-8', (err) => {
+        if (err) {
+          clearTimeout(timeout);
+          session.pending.delete(reqId);
+          reject(err);
+        }
+      });
+    });
+
+    response.json(result);
+  } catch (err) {
+    response.status(500).json({
+      stdout: '',
+      stderr: '',
+      result: null,
+      error: err.message || 'Execution error',
+      images: [],
+    });
+  }
+});
+
+app.post('/api/jupyter/restart', async (request, response) => {
+  const { sessionId = 'default' } = request.body || {};
+  if (jupyterSessions.has(sessionId)) {
+    const s = jupyterSessions.get(sessionId);
+    try {
+      s.process.kill();
+    } catch (_) {}
+    jupyterSessions.delete(sessionId);
+  }
+  response.json({ ok: true, message: 'Kernel restarted successfully.' });
+});
+
+app.get('/api/jupyter/status', (request, response) => {
+  const sessionId = String(request.query.sessionId || 'default');
+  const hasSession = jupyterSessions.has(sessionId);
+  response.json({
+    active: hasSession,
+    status: hasSession ? (jupyterSessions.get(sessionId).status || 'idle') : 'stopped',
+  });
 });
 
 app.post('/api/open-link', (request, response) => {
@@ -3599,9 +4338,7 @@ io.on('connection', async (socket) => {
     socket.emit('terminal:output', data);
   });
 
-  ptyProcess.onExit(({ exitCode, signal }) => {
-    socket.emit('terminal:error', `Terminal exited with code ${exitCode}${signal ? ` (${signal})` : ''}.`);
-  });
+
 
   socket.on('terminal:input', (data) => {
     ptyProcess.write(data);
@@ -3629,8 +4366,23 @@ io.on('connection', async (socket) => {
     ptyProcess.write(activeProfile.setCwdCommand(normalizedNextPath));
   });
 
+  let ptyKilled = false;
+
+  ptyProcess.onExit(({ exitCode, signal }) => {
+    ptyKilled = true;
+    socket.emit('terminal:error', `Terminal exited with code ${exitCode}${signal ? ` (${signal})` : ''}.`);
+  });
+
   socket.on('disconnect', () => {
-    ptyProcess.kill();
+    if (!ptyKilled) {
+      ptyKilled = true;
+      try {
+        // Prevent assertion crash by only killing if not already exited
+        ptyProcess.kill();
+      } catch (e) {
+        console.error('Error killing pty:', e);
+      }
+    }
   });
 });
 
@@ -3930,6 +4682,41 @@ app.get(/^\/live(?:\/(.*))?$/, async (req, res) => {
       } else {
         html = injectedScript + html;
       }
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(html);
+
+    } else if (ext === '.md' || ext === '.markdown') {
+      const injectedScript = `<script src="http://localhost:${port}/pulse-lens.js" data-file="${targetPath.replace(/\\/g, '/')}"></script>`;
+      const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Markdown Preview</title>
+  ${injectedScript}
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; padding: 20px; max-width: 900px; margin: 0 auto; color: #eceff4; background-color: #12131d; }
+    h1, h2, h3, h4, h5, h6 { color: #fff; margin-top: 24px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px; }
+    a { color: #82aaff; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code { background: rgba(255,255,255,0.1); padding: 2px 5px; border-radius: 4px; font-family: monospace; font-size: 0.9em; }
+    pre { background: rgba(0,0,0,0.3); padding: 16px; border-radius: 8px; overflow-x: auto; }
+    pre code { background: none; padding: 0; border-radius: 0; }
+    blockquote { border-left: 4px solid rgba(255,255,255,0.2); margin: 0; padding-left: 16px; color: rgba(255,255,255,0.7); }
+    table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+    th, td { border: 1px solid rgba(255,255,255,0.15); padding: 8px 12px; }
+    th { background: rgba(255,255,255,0.05); }
+    img { max-width: 100%; }
+  </style>
+</head>
+<body>
+  <div id="content"></div>
+  <script>
+    document.getElementById('content').innerHTML = marked.parse(${JSON.stringify(rawContent)});
+  </script>
+</body>
+</html>`;
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.send(html);
     }

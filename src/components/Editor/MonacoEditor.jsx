@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Editor } from '@monaco-editor/react';
 import { emmetCSS, emmetHTML, emmetJSX } from 'emmet-monaco-es';
 import { getExtensionCompletions } from '../../core/extensionsRuntime.js';
@@ -6,6 +6,279 @@ import { fetchScmBlame } from '../../core/scmApi.js';
 import workspace from '../../core/workspace.js';
 import '../../App.css';
 import { disposeEditorResources } from '../../core/editorUtils.js';
+import { registerMonacoThemes } from '../../core/themeRegistry.js';
+
+// ── Shared helpers ────────────────────────────────────────────────────────────
+function _fmtTime(s) {
+  if (!isFinite(s) || s < 0) return '0:00';
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+const _mpBtn = {
+  width: 36, height: 36, borderRadius: 8, border: 'none',
+  background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.8)',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  cursor: 'pointer', fontSize: 14, flexShrink: 0,
+  transition: 'background 0.1s, transform 0.1s cubic-bezier(.175,.885,.32,1.275)',
+};
+
+// ── Inline Audio Player ───────────────────────────────────────────────────────
+function InlineAudioPlayer({ src, name }) {
+  const audioRef = useRef(null);
+  const canvasRef = useRef(null);
+  const progressRef = useRef(null);
+  const rafRef = useRef(null);
+  const analyserRef = useRef(null);
+  const actxRef = useRef(null);
+  const sourceRef = useRef(null);
+
+  const [playing, setPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [current, setCurrent] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [muted, setMuted] = useState(false);
+  const [loop, setLoop] = useState(false);
+  const [speed, setSpeed] = useState(1);
+  const [showSpeed, setShowSpeed] = useState(false);
+  const [dragging, setDragging] = useState(false);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    const canvas = canvasRef.current;
+    if (!audio || !canvas) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    try {
+      if (!actxRef.current) actxRef.current = new AC();
+      if (!analyserRef.current) {
+        analyserRef.current = actxRef.current.createAnalyser();
+        analyserRef.current.fftSize = 256;
+        analyserRef.current.connect(actxRef.current.destination);
+      }
+      if (!sourceRef.current) {
+        sourceRef.current = actxRef.current.createMediaElementSource(audio);
+        sourceRef.current.connect(analyserRef.current);
+      }
+    } catch (_) {}
+    const draw = () => {
+      rafRef.current = requestAnimationFrame(draw);
+      if (!analyserRef.current) return;
+      const buf = new Uint8Array(analyserRef.current.frequencyBinCount);
+      analyserRef.current.getByteFrequencyData(buf);
+      const c = canvas.getContext('2d');
+      c.clearRect(0, 0, canvas.width, canvas.height);
+      const bw = (canvas.width / buf.length) * 2.2;
+      let x = 0;
+      for (let i = 0; i < buf.length; i++) {
+        const bh = (buf[i] / 255) * canvas.height;
+        c.fillStyle = `hsla(${240 + (i / buf.length) * 60},70%,65%,${playing ? 0.85 : 0.25})`;
+        c.beginPath();
+        if (c.roundRect) c.roundRect(x, canvas.height - bh, bw - 1, bh, 2);
+        else c.rect(x, canvas.height - bh, bw - 1, bh);
+        c.fill();
+        x += bw;
+      }
+    };
+    draw();
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [src, playing]);
+
+  const togglePlay = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (actxRef.current?.state === 'suspended') actxRef.current.resume();
+    playing ? a.pause() : a.play();
+  };
+
+  const seek = (e) => {
+    const a = audioRef.current;
+    const p = progressRef.current;
+    if (!a || !p) return;
+    const r = p.getBoundingClientRect();
+    a.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * (a.duration || 0);
+  };
+
+  const pct = duration ? (current / duration) * 100 : 0;
+  const ext = name.split('.').pop().toUpperCase();
+
+  return (
+    <div style={{ width: '100%', maxWidth: 600, margin: '0 auto', background: 'rgba(10,8,22,0.88)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 20, backdropFilter: 'blur(24px)', boxShadow: '0 20px 60px rgba(0,0,0,0.7)', overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ padding: '20px 24px 0', display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ width: 52, height: 52, borderRadius: 14, background: 'linear-gradient(135deg,#6d28d9,#312e81)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 16px rgba(109,40,217,0.5)' }}>
+          <span><i className="fa-solid fa-music" style={{ fontSize: 22, color: '#fff' }}></i></span>
+        </div>
+        <div style={{ overflow: 'hidden', flex: 1 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>{ext} · {_fmtTime(duration)}</div>
+        </div>
+      </div>
+      {/* Waveform */}
+      <div style={{ padding: '16px 24px 8px' }}>
+        <canvas ref={canvasRef} width={552} height={60} style={{ width: '100%', height: 60, borderRadius: 10, background: 'rgba(255,255,255,0.03)', display: 'block' }} />
+      </div>
+      {/* Seek */}
+      <div style={{ padding: '4px 24px' }}>
+        <div ref={progressRef} onClick={seek}
+          onMouseMove={(e) => dragging && seek(e)}
+          onMouseDown={(e) => { setDragging(true); seek(e); }}
+          onMouseUp={() => setDragging(false)} onMouseLeave={() => setDragging(false)}
+          style={{ height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 99, cursor: 'pointer', position: 'relative' }}>
+          <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct}%`, background: 'linear-gradient(90deg,#7c3aed,#a855f7)', borderRadius: 99 }} />
+          <div style={{ position: 'absolute', top: '50%', transform: 'translate(-50%,-50%)', left: `${pct}%`, width: 14, height: 14, borderRadius: '50%', background: '#a855f7', border: '2px solid #fff', boxShadow: '0 0 8px rgba(168,85,247,0.8)' }} />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
+          <span>{_fmtTime(current)}</span><span>{_fmtTime(duration)}</span>
+        </div>
+      </div>
+      {/* Controls */}
+      <div style={{ padding: '8px 24px 20px', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button onClick={() => { setLoop(l => { const nl = !l; if (audioRef.current) audioRef.current.loop = nl; return nl; })} } title="Loop" style={{ ..._mpBtn, color: loop ? '#a855f7' : 'rgba(255,255,255,0.5)' }}><span><i className="fa-solid fa-repeat"></i></span></button>
+        <button onClick={() => { if (audioRef.current) audioRef.current.currentTime -= 10; }} title="-10s" style={_mpBtn}><span><i className="fa-solid fa-backward-step"></i></span></button>
+        <button onClick={togglePlay} style={{ ..._mpBtn, width: 52, height: 52, borderRadius: '50%', fontSize: 18, background: 'linear-gradient(135deg,#7c3aed,#a855f7)', boxShadow: '0 4px 20px rgba(139,92,246,0.5)', color: '#fff', flexShrink: 0 }}>
+          <span><i className={`fa-solid ${playing ? 'fa-pause' : 'fa-play'}`} style={{ marginLeft: playing ? 0 : 2 }}></i></span>
+        </button>
+        <button onClick={() => { if (audioRef.current) audioRef.current.currentTime += 10; }} title="+10s" style={_mpBtn}><span><i className="fa-solid fa-forward-step"></i></span></button>
+        <button onClick={() => { const a = audioRef.current; if (!a) return; a.muted = !muted; setMuted(!muted); }} style={_mpBtn}>
+          <span><i className={`fa-solid ${muted || volume === 0 ? 'fa-volume-xmark' : volume < 0.5 ? 'fa-volume-low' : 'fa-volume-high'}`}></i></span>
+        </button>
+        <input type="range" min={0} max={1} step={0.02} value={muted ? 0 : volume}
+          onChange={(e) => { const v = parseFloat(e.target.value); setVolume(v); setMuted(v === 0); if (audioRef.current) { audioRef.current.volume = v; audioRef.current.muted = v === 0; } }}
+          style={{ flex: 1, accentColor: '#a855f7', cursor: 'pointer' }} />
+        <div style={{ position: 'relative' }}>
+          <button onClick={() => setShowSpeed(s => !s)} style={{ ..._mpBtn, fontSize: 10, fontWeight: 700, width: 'auto', padding: '0 10px', letterSpacing: '0.5px' }}>{speed}x</button>
+          {showSpeed && (
+            <div style={{ position: 'absolute', bottom: '110%', right: 0, background: 'rgba(16,12,32,0.98)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: 6, display: 'flex', flexDirection: 'column', gap: 2, zIndex: 999, boxShadow: '0 8px 32px rgba(0,0,0,0.7)' }}>
+              {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map(s => (
+                <button key={s} onClick={() => { setSpeed(s); setShowSpeed(false); if (audioRef.current) audioRef.current.playbackRate = s; }}
+                  style={{ ..._mpBtn, width: 64, fontSize: 12, height: 28, background: speed === s ? 'rgba(139,92,246,0.3)' : 'transparent', color: speed === s ? '#a855f7' : 'rgba(255,255,255,0.7)' }}>{s}x</button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      <audio ref={audioRef} src={src} loop={loop}
+        onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)}
+        onTimeUpdate={(e) => setCurrent(e.target.currentTime)}
+        onLoadedMetadata={(e) => setDuration(e.target.duration)}
+        onVolumeChange={(e) => { setVolume(e.target.volume); setMuted(e.target.muted); }}
+        style={{ display: 'none' }} preload="metadata" />
+    </div>
+  );
+}
+
+// ── Inline Video Player ───────────────────────────────────────────────────────
+function InlineVideoPlayer({ src, name }) {
+  const videoRef = useRef(null);
+  const containerRef = useRef(null);
+  const progressRef = useRef(null);
+  const hideRef = useRef(null);
+
+  const [playing, setPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [current, setCurrent] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [muted, setMuted] = useState(false);
+  const [loop, setLoop] = useState(false);
+  const [speed, setSpeed] = useState(1);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [showCtrl, setShowCtrl] = useState(true);
+  const [showSpeed, setShowSpeed] = useState(false);
+  const [dragging, setDragging] = useState(false);
+
+  const resetHide = () => {
+    setShowCtrl(true);
+    clearTimeout(hideRef.current);
+    hideRef.current = setTimeout(() => setShowCtrl(false), 2500);
+  };
+  useEffect(() => () => clearTimeout(hideRef.current), []);
+
+  const togglePlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    playing ? v.pause() : v.play();
+    resetHide();
+  };
+
+  const seek = (e) => {
+    const v = videoRef.current;
+    const p = progressRef.current;
+    if (!v || !p) return;
+    const r = p.getBoundingClientRect();
+    v.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * (v.duration || 0);
+  };
+
+  const toggleFS = () => {
+    const el = containerRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement) el.requestFullscreen?.().then(() => setFullscreen(true)).catch(() => {});
+    else document.exitFullscreen?.().then(() => setFullscreen(false)).catch(() => {});
+  };
+
+  const pct = duration ? (current / duration) * 100 : 0;
+
+  return (
+    <div ref={containerRef} onMouseMove={resetHide}
+      style={{ position: 'relative', width: '100%', maxWidth: 900, margin: '0 auto', borderRadius: fullscreen ? 0 : 16, overflow: 'hidden', background: '#000', boxShadow: '0 20px 60px rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.06)' }}>
+      <video ref={videoRef} src={src} loop={loop} onClick={togglePlay}
+        onPlay={() => { setPlaying(true); resetHide(); }} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)}
+        onTimeUpdate={(e) => setCurrent(e.target.currentTime)}
+        onLoadedMetadata={(e) => setDuration(e.target.duration)}
+        onVolumeChange={(e) => { setVolume(e.target.volume); setMuted(e.target.muted); }}
+        style={{ width: '100%', display: 'block', maxHeight: fullscreen ? '100vh' : '60vh', objectFit: 'contain', cursor: 'pointer' }}
+        preload="metadata" />
+
+      {!playing && (
+        <div onClick={togglePlay} style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.35)', cursor: 'pointer' }}>
+          <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid rgba(255,255,255,0.3)' }}>
+            <span><i className="fa-solid fa-play" style={{ fontSize: 24, color: '#fff', marginLeft: 4 }}></i></span>
+          </div>
+        </div>
+      )}
+
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent,rgba(0,0,0,0.88))', padding: '28px 16px 12px', transition: 'opacity 0.25s', opacity: showCtrl ? 1 : 0, pointerEvents: showCtrl ? 'auto' : 'none' }}>
+        {/* Seek bar */}
+        <div ref={progressRef} onClick={seek}
+          onMouseMove={(e) => dragging && seek(e)}
+          onMouseDown={(e) => { setDragging(true); seek(e); }}
+          onMouseUp={() => setDragging(false)} onMouseLeave={() => setDragging(false)}
+          style={{ height: 4, background: 'rgba(255,255,255,0.2)', borderRadius: 99, cursor: 'pointer', position: 'relative', marginBottom: 12 }}>
+          <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct}%`, background: 'linear-gradient(90deg,#7c3aed,#a855f7)', borderRadius: 99 }} />
+          <div style={{ position: 'absolute', top: '50%', transform: 'translate(-50%,-50%)', left: `${pct}%`, width: 12, height: 12, borderRadius: '50%', background: '#a855f7', border: '2px solid #fff' }} />
+        </div>
+        {/* Controls row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button onClick={togglePlay} style={{ ..._mpBtn, color: '#fff' }}><span><i className={`fa-solid ${playing ? 'fa-pause' : 'fa-play'}`}></i></span></button>
+          <button onClick={() => { if (videoRef.current) videoRef.current.currentTime -= 10; }} style={{ ..._mpBtn, color: '#fff' }} title="-10s"><span><i className="fa-solid fa-backward-step"></i></span></button>
+          <button onClick={() => { if (videoRef.current) videoRef.current.currentTime += 10; }} style={{ ..._mpBtn, color: '#fff' }} title="+10s"><span><i className="fa-solid fa-forward-step"></i></span></button>
+          <button onClick={() => { const v = videoRef.current; if (!v) return; v.muted = !muted; setMuted(!muted); }} style={{ ..._mpBtn, color: '#fff' }}>
+            <span><i className={`fa-solid ${muted || volume === 0 ? 'fa-volume-xmark' : volume < 0.5 ? 'fa-volume-low' : 'fa-volume-high'}`}></i></span>
+          </button>
+          <input type="range" min={0} max={1} step={0.02} value={muted ? 0 : volume}
+            onChange={(e) => { const vv = parseFloat(e.target.value); setVolume(vv); setMuted(vv === 0); if (videoRef.current) { videoRef.current.volume = vv; videoRef.current.muted = vv === 0; } }}
+            style={{ width: 80, accentColor: '#a855f7', cursor: 'pointer' }} />
+          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', marginLeft: 4, whiteSpace: 'nowrap' }}>{_fmtTime(current)} / {_fmtTime(duration)}</span>
+          <div style={{ flex: 1 }} />
+          <button onClick={() => { setLoop(l => { const nl = !l; if (videoRef.current) videoRef.current.loop = nl; return nl; })} } style={{ ..._mpBtn, color: loop ? '#a855f7' : 'rgba(255,255,255,0.6)' }} title="Loop"><span><i className="fa-solid fa-repeat"></i></span></button>
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => setShowSpeed(s => !s)} style={{ ..._mpBtn, fontSize: 10, fontWeight: 700, width: 'auto', padding: '0 8px', color: '#fff' }}>{speed}x</button>
+            {showSpeed && (
+              <div style={{ position: 'absolute', bottom: '110%', right: 0, background: 'rgba(16,12,32,0.98)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: 6, display: 'flex', flexDirection: 'column', gap: 2, zIndex: 999, boxShadow: '0 8px 32px rgba(0,0,0,0.7)' }}>
+                {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map(s => (
+                  <button key={s} onClick={() => { setSpeed(s); setShowSpeed(false); if (videoRef.current) videoRef.current.playbackRate = s; }}
+                    style={{ ..._mpBtn, width: 64, fontSize: 12, height: 28, background: speed === s ? 'rgba(139,92,246,0.3)' : 'transparent', color: speed === s ? '#a855f7' : 'rgba(255,255,255,0.7)' }}>{s}x</button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button onClick={toggleFS} style={{ ..._mpBtn, color: '#fff' }} title="Fullscreen"><span><i className={`fa-solid ${fullscreen ? 'fa-compress' : 'fa-expand'}`}></i></span></button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 const VOID_HTML_TAGS = new Set([
   'area',
@@ -1377,45 +1650,9 @@ export default function MonacoEditor({
       disposeExtensionCompletionProvider(tab.language);
     }
 
-    monaco.editor.defineTheme('tilder-night', {
-      base: 'vs-dark',
-      inherit: true,
-      rules: [
-        { token: 'comment', foreground: '6f7c99' },
-        { token: 'keyword', foreground: 'c7a3ff' },
-        { token: 'string', foreground: '8fe388' },
-        { token: 'number', foreground: 'ffd27a' },
-        { token: 'type.identifier', foreground: '7dcfff' },
-        { token: 'identifier', foreground: 'e8edff' },
-      ],
-      colors: {
-        'editor.background': '#0a0d16',
-        'editor.foreground': '#edf1ff',
-        'editorCursor.foreground': '#a79dff',
-        'editor.lineHighlightBackground': '#151a2a',
-        'editorLineNumber.foreground': '#5b6685',
-        'editorLineNumber.activeForeground': '#cdd7ff',
-        'editor.selectionBackground': '#2d3560',
-        'editor.inactiveSelectionBackground': '#232941',
-        'editorIndentGuide.background1': '#1c2236',
-        'editorIndentGuide.activeBackground1': '#414b73',
-        'editorWidget.background': '#121726',
-        'editorWidget.border': '#2f3760',
-        'editorSuggestWidget.background': '#121726',
-        'editorSuggestWidget.border': '#2f3760',
-        'editorSuggestWidget.selectedBackground': '#242d4a',
-        'editorHoverWidget.background': '#121726',
-        'editorHoverWidget.border': '#2f3760',
-        'scrollbarSlider.background': '#3a4470aa',
-        'scrollbarSlider.hoverBackground': '#4b578faa',
-        'scrollbarSlider.activeBackground': '#6270b8aa',
-        'editorError.foreground': '#ff5370',
-        'editorWarning.foreground': '#ffcb6b',
-        'editorInfo.foreground': '#82aaff',
-      },
-    });
-
-    monaco.editor.setTheme('tilder-night');
+    registerMonacoThemes(monaco);
+    const activeTheme = settings?.theme?.active || 'tilder-formal';
+    monaco.editor.setTheme(activeTheme);
 
       if (onOpenCommandPalette) {
         editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyP, () => onOpenCommandPalette());
@@ -1535,6 +1772,38 @@ export default function MonacoEditor({
     });
 
     onMount?.(editor, monaco);
+
+    // Register #region/#endregion custom folding for common languages (once per monaco instance)
+    {
+      const regionLangs = ['javascript','javascriptreact','typescript','typescriptreact','css','scss','less','python','csharp','json','html'];
+      if (!monaco.__tilderRegionFoldingRegistered) {
+        monaco.__tilderRegionFoldingRegistered = new Set();
+      }
+      regionLangs.forEach(lang => {
+        if (monaco.__tilderRegionFoldingRegistered.has(lang)) return;
+        monaco.__tilderRegionFoldingRegistered.add(lang);
+        try {
+          monaco.languages.registerFoldingRangeProvider(lang, {
+            provideFoldingRanges(model) {
+              const ranges = [];
+              const lines = model.getLinesContent();
+              const stack = [];
+              lines.forEach((line, i) => {
+                const t = line.trim();
+                if (/^(?:\/\/\s*|#\s*|<!--\s*)#?region\b/i.test(t)) {
+                  stack.push(i + 1);
+                } else if (/^(?:\/\/\s*|#\s*|<!--\s*)#?endregion\b/i.test(t)) {
+                  if (stack.length > 0) {
+                    ranges.push({ start: stack.pop(), end: i + 1, kind: monaco.languages.FoldingRangeKind.Region });
+                  }
+                }
+              });
+              return ranges;
+            }
+          });
+        } catch (_) { /* language may not support custom folding */ }
+      });
+    }
   }
 
   React.useEffect(() => {
@@ -1610,6 +1879,15 @@ export default function MonacoEditor({
       decorations
     );
   }, [gitDiff]);
+
+  React.useEffect(() => {
+    const active = settings?.theme?.active || 'tilder-formal';
+    if (monacoRef.current) {
+      try {
+        monacoRef.current.editor.setTheme(active);
+      } catch (_) {}
+    }
+  }, [settings?.theme?.active]);
 
   React.useEffect(() => {
     if (monacoRef.current && tab.language) {
@@ -1785,9 +2063,9 @@ export default function MonacoEditor({
               {binaryKind === 'image' ? (
                 <img src={binaryPreviewUrl} alt={tab.name || 'image preview'} className="binary-preview-image" />
               ) : binaryKind === 'audio' ? (
-                <audio controls src={binaryPreviewUrl} className="binary-preview-audio" />
+                <InlineAudioPlayer src={binaryPreviewUrl} name={tab.name || ''} />
               ) : binaryKind === 'video' ? (
-                <video controls src={binaryPreviewUrl} className="binary-preview-video" />
+                <InlineVideoPlayer src={binaryPreviewUrl} name={tab.name || ''} />
               ) : (
                 <iframe title={tab.name || 'PDF preview'} src={binaryPreviewUrl} className="binary-preview-pdf" />
               )}
@@ -1795,7 +2073,7 @@ export default function MonacoEditor({
           ) : (
             <Editor
               height="100%"
-              theme={settings?.theme?.active && settings.theme.active !== 'tilder-night' ? 'vs-dark' : 'tilder-night'}
+              theme={settings?.theme?.active || 'tilder-formal'}
                 language="plaintext"
                 value={tab.content}
                 onChange={onChange}
@@ -1812,7 +2090,7 @@ export default function MonacoEditor({
       ) : (
         <Editor
           height="100%"
-          theme={settings?.theme?.active && settings.theme.active !== 'tilder-night' ? 'vs-dark' : 'tilder-night'}
+          theme={settings?.theme?.active || 'tilder-formal'}
           language={effectiveLanguage}
             value={tab.content}
             onChange={onChange}

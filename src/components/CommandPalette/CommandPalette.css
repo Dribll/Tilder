@@ -82,7 +82,7 @@
   font-size: 12px;
   border-radius: 50%;
   display: flex;
-  transition: color 0.15s;
+  
 }
 .cp-clear:hover { color: #ff5f5f; }
 
@@ -104,7 +104,7 @@
   padding: 3px 10px;
   border-radius: 20px;
   cursor: pointer;
-  transition: all 0.15s;
+  
   white-space: nowrap;
 }
 .cp-hint-pill:hover { background:rgba(141,90,255,0.15); color:#c0a0ff; border-color:rgba(141,90,255,0.3); }
@@ -130,7 +130,7 @@
   border-radius: 8px;
   cursor: pointer;
   text-align: left;
-  transition: background 0.1s;
+  
   color: #c8c8d8;
   min-height: 40px;
 }
@@ -264,3 +264,4 @@
 .cp-footer-spacer { flex: 1; }
 .cp-footer-tip { color: #3a3a5a; }
 .cp-footer-tip code { color: #6a5acd; }
+

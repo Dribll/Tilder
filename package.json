@@ -4,7 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "desktop:dev": "node scripts/build-desktop.mjs --dev && tauri dev",
+    "predesktop:dev":   "node scripts/build-monitor-if-needed.mjs",
+    "predesktop:build": "node scripts/build-monitor-if-needed.mjs",
+    "setup:dev": "node scripts/setup-dev-deploy-task.mjs",
+    "desktop:dev":   "node scripts/build-desktop.mjs --dev && tauri dev",
     "desktop:build": "node scripts/build-desktop.mjs && npm run tauri:build",
     "dev": "concurrently -n web,api -c cyan,magenta \"npm:dev:web\" \"npm:dev:api\"",
     "dev:web": "vite",

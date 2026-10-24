@@ -1,0 +1,827 @@
+/* ==========================================================================
+   Tilder GitHub Panel Styles - Next-Gen Architecture
+   ========================================================================== */
+
+.gh-panel-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--sidebar-background, #181818);
+  color: var(--foreground, #cccccc);
+  font-family: inherit;
+  font-size: 12px;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* Header */
+.gh-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+}
+
+.gh-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gh-header-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.gh-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.gh-icon-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.gh-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.gh-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Profile Bar */
+.gh-profile-card {
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+}
+
+.gh-profile-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gh-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.gh-avatar-placeholder {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.gh-profile-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.gh-profile-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gh-profile-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gh-profile-user {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.gh-profile-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.gh-profile-stat-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  font-size: 10px;
+}
+
+/* Nav Tabs */
+.gh-nav-tabs {
+  display: flex;
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.gh-nav-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 6px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.gh-nav-tab:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.gh-nav-tab.active {
+  color: #58a6ff;
+  border-bottom-color: #58a6ff;
+  background: rgba(88, 166, 255, 0.06);
+  font-weight: 600;
+}
+
+.gh-nav-count {
+  font-size: 9px;
+  padding: 1px 5px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.gh-nav-tab.active .gh-nav-count {
+  background: rgba(88, 166, 255, 0.25);
+  color: #58a6ff;
+}
+
+/* Scrollable Body */
+.gh-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px 12px;
+}
+
+/* Current Workspace Banner */
+.gh-workspace-banner {
+  background: linear-gradient(135deg, rgba(88, 166, 255, 0.1), rgba(138, 75, 255, 0.08));
+  border: 1px solid rgba(88, 166, 255, 0.25);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.gh-workspace-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.gh-workspace-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: #58a6ff;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.gh-workspace-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gh-workspace-btn {
+  font-size: 11px;
+  padding: 4px 8px;
+  background: #238636;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: background 0.15s ease;
+}
+
+.gh-workspace-btn:hover {
+  background: #2ea043;
+}
+
+.gh-workspace-banner-linked {
+  background: linear-gradient(135deg, rgba(35, 134, 54, 0.15), rgba(88, 166, 255, 0.1));
+  border: 1px solid rgba(63, 185, 80, 0.35);
+}
+
+.gh-workspace-header-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gh-workspace-banner-linked .gh-workspace-label {
+  color: #3fb950;
+}
+
+.gh-workspace-subname {
+  font-size: 11px;
+  font-weight: normal;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.gh-workspace-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.gh-workspace-icon-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.75);
+  border-radius: 4px;
+  padding: 4px 7px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  transition: all 0.15s ease;
+}
+
+.gh-workspace-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
+.gh-workspace-sync-btn {
+  background: #238636;
+}
+
+.gh-workspace-sync-btn:hover:not(:disabled) {
+  background: #2ea043;
+}
+
+.gh-workspace-sync-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Search and Filters */
+.gh-search-filter-box {
+  margin-bottom: 10px;
+}
+
+.gh-search-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.gh-search-icon {
+  position: absolute;
+  left: 9px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.gh-search-input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  color: #ffffff;
+  padding: 6px 26px 6px 26px;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.gh-search-input:focus {
+  border-color: #58a6ff;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.gh-search-clear {
+  position: absolute;
+  right: 6px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 4px;
+}
+
+.gh-search-clear:hover {
+  color: #ffffff;
+}
+
+.gh-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gh-filter-select {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.8);
+  padding: 4px 6px;
+  font-size: 11px;
+  outline: none;
+}
+
+.gh-filter-select option {
+  background: #1f1f1f;
+  color: #ffffff;
+}
+
+/* Repository Card */
+.gh-repo-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 6px;
+  padding: 10px 10px;
+  margin-bottom: 8px;
+  transition: all 0.15s ease;
+}
+
+.gh-repo-card:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.gh-repo-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.gh-repo-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.gh-repo-name-link {
+  font-weight: 600;
+  font-size: 12.5px;
+  color: #58a6ff;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.gh-repo-name-link:hover {
+  text-decoration: underline;
+}
+
+.gh-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.gh-badge.public {
+  background: rgba(46, 204, 113, 0.12);
+  color: #2ecc71;
+  border: 1px solid rgba(46, 204, 113, 0.25);
+}
+
+.gh-badge.private {
+  background: rgba(241, 196, 15, 0.12);
+  color: #f1c40f;
+  border: 1px solid rgba(241, 196, 15, 0.25);
+}
+
+.gh-repo-desc {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 6px;
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.gh-repo-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.45);
+  margin-bottom: 8px;
+}
+
+.gh-repo-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.gh-lang-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* Actions Row */
+.gh-repo-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.gh-btn-primary {
+  flex: 1;
+  background: #238636;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.gh-btn-primary:hover:not(:disabled) {
+  background: #2ea043;
+}
+
+.gh-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.gh-btn-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.gh-btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+/* Remote Tree View */
+.gh-remote-tree {
+  margin-top: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.gh-tree-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+}
+
+.gh-tree-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+
+.gh-tree-item.tree {
+  font-weight: 500;
+  color: #e2b340;
+}
+
+/* Create Repository Form */
+.gh-create-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gh-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gh-form-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.gh-form-hint {
+  font-size: 10px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.gh-input {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  color: #ffffff;
+  padding: 7px 9px;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.gh-input:focus {
+  border-color: #58a6ff;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.gh-input-addon-wrap {
+  display: flex;
+  align-items: stretch;
+}
+
+.gh-input-addon-select {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-right: none;
+  border-radius: 5px 0 0 5px;
+  color: #58a6ff;
+  font-weight: 600;
+  padding: 0 8px;
+  font-size: 11.5px;
+  outline: none;
+}
+
+.gh-input-addon-select option {
+  background: #1f1f1f;
+  color: #ffffff;
+}
+
+.gh-input-addon-input {
+  flex: 1;
+  border-radius: 0 5px 5px 0 !important;
+}
+
+/* Visibility Segmented Cards (PUBLIC VS PRIVATE) */
+.gh-visibility-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.gh-visibility-card {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.gh-visibility-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.gh-visibility-card.selected.public {
+  background: rgba(46, 204, 113, 0.08);
+  border-color: #2ecc71;
+  box-shadow: 0 0 0 1px rgba(46, 204, 113, 0.3);
+}
+
+.gh-visibility-card.selected.private {
+  background: rgba(88, 166, 255, 0.08);
+  border-color: #58a6ff;
+  box-shadow: 0 0 0 1px rgba(88, 166, 255, 0.3);
+}
+
+.gh-vis-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.gh-visibility-card.public .gh-vis-header {
+  color: #2ecc71;
+}
+
+.gh-visibility-card.private .gh-vis-header {
+  color: #58a6ff;
+}
+
+.gh-vis-desc {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.35;
+}
+
+/* Checkbox Row */
+.gh-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  user-select: none;
+}
+
+.gh-checkbox-row input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: #58a6ff;
+}
+
+/* Alert Boxes */
+.gh-alert-box {
+  padding: 8px 10px;
+  border-radius: 5px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.gh-alert-box.error {
+  background: rgba(231, 76, 60, 0.12);
+  border: 1px solid rgba(231, 76, 60, 0.35);
+  color: #ff6b6b;
+}
+
+.gh-alert-box.warning {
+  background: rgba(241, 196, 15, 0.12);
+  border: 1px solid rgba(241, 196, 15, 0.35);
+  color: #f1c40f;
+}
+
+.gh-alert-box.success {
+  background: rgba(46, 204, 113, 0.12);
+  border: 1px solid rgba(46, 204, 113, 0.35);
+  color: #2ecc71;
+}
+
+.gh-alert-box.info {
+  background: rgba(88, 166, 255, 0.12);
+  border: 1px solid rgba(88, 166, 255, 0.35);
+  color: #58a6ff;
+}
+
+/* Empty / Loading States */
+.gh-empty-state {
+  text-align: center;
+  padding: 30px 16px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.gh-empty-icon {
+  font-size: 32px;
+  color: rgba(255, 255, 255, 0.2);
+  margin-bottom: 10px;
+}
+
+/* Pull Requests / Issues Item */
+.gh-item-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.gh-item-card:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.gh-item-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.gh-item-title {
+  font-weight: 500;
+  font-size: 12px;
+  color: #ffffff;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gh-item-meta {
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.45);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

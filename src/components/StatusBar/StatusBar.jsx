@@ -72,7 +72,7 @@ function Menu({ title, children, anchorRef, onClose, position }) {
   );
 }
 
-export default function StatusBar({
+function StatusBar({
   pushNotification,
   activeTab,
   intelliSense,
@@ -550,7 +550,7 @@ export default function StatusBar({
                 )}
                 <div className="statusbar-item" title="RAM Usage" style={{ display: 'flex', alignItems: 'center', gap: '6px', opacity: 0.85, fontSize: '11px', background: 'rgba(255,255,255,0.06)', padding: '3px 8px', borderRadius: '4px' }}>
                   <span><i className="fa-solid fa-memory" style={{ color: '#34d399', fontSize: '12px' }}></i></span>
-                  <span>RAM {perf.ram} MB</span>
+                  <span>RAM {(perf.ram / 1024).toFixed(1)} GB</span>
                 </div>
               </div>
             )}
@@ -613,3 +613,5 @@ export default function StatusBar({
 }
 
 
+
+export default React.memo(StatusBar);

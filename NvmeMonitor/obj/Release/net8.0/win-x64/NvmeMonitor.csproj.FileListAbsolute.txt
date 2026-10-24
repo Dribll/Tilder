@@ -1,0 +1,15 @@
+D:\Tilder - Copy\desktop-app\NvmeMonitor\bin\Release\net8.0\win-x64\NvmeMonitor.exe
+D:\Tilder - Copy\desktop-app\NvmeMonitor\bin\Release\net8.0\win-x64\NvmeMonitor.deps.json
+D:\Tilder - Copy\desktop-app\NvmeMonitor\bin\Release\net8.0\win-x64\NvmeMonitor.runtimeconfig.json
+D:\Tilder - Copy\desktop-app\NvmeMonitor\bin\Release\net8.0\win-x64\NvmeMonitor.dll
+D:\Tilder - Copy\desktop-app\NvmeMonitor\bin\Release\net8.0\win-x64\NvmeMonitor.pdb
+D:\Tilder - Copy\desktop-app\NvmeMonitor\obj\Release\net8.0\win-x64\NvmeMonitor.GeneratedMSBuildEditorConfig.editorconfig
+D:\Tilder - Copy\desktop-app\NvmeMonitor\obj\Release\net8.0\win-x64\NvmeMonitor.AssemblyInfoInputs.cache
+D:\Tilder - Copy\desktop-app\NvmeMonitor\obj\Release\net8.0\win-x64\NvmeMonitor.AssemblyInfo.cs
+D:\Tilder - Copy\desktop-app\NvmeMonitor\obj\Release\net8.0\win-x64\NvmeMonitor.csproj.CoreCompileInputs.cache
+D:\Tilder - Copy\desktop-app\NvmeMonitor\obj\Release\net8.0\win-x64\NvmeMonitor.sourcelink.json
+D:\Tilder - Copy\desktop-app\NvmeMonitor\obj\Release\net8.0\win-x64\NvmeMonitor.dll
+D:\Tilder - Copy\desktop-app\NvmeMonitor\obj\Release\net8.0\win-x64\refint\NvmeMonitor.dll
+D:\Tilder - Copy\desktop-app\NvmeMonitor\obj\Release\net8.0\win-x64\NvmeMonitor.pdb
+D:\Tilder - Copy\desktop-app\NvmeMonitor\obj\Release\net8.0\win-x64\NvmeMonitor.genruntimeconfig.cache
+D:\Tilder - Copy\desktop-app\NvmeMonitor\obj\Release\net8.0\win-x64\ref\NvmeMonitor.dll

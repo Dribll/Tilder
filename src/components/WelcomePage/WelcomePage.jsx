@@ -45,7 +45,7 @@ function welcomePage(props) {
                                 </div>
                             </div>
                         </a>
-                        <a href="" className="linkto" target="_blank">
+                        <a href="https://github.com/Dribll" className="linkto" target="_blank" rel="noopener noreferrer">
                             <div className="link">
                                 <div className="link-icon">
                                 </div>

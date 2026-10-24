@@ -21,7 +21,7 @@ function truncatePreview(text, maxLen = 120) {
   return single.length > maxLen ? single.slice(0, maxLen) + '…' : single;
 }
 
-export default function Backpack({ ariaExpandedDisplayBackpack, onInsertSnippet, onSaveSelection, snippets = [], onChange }) {
+function Backpack({ ariaExpandedDisplayBackpack, onInsertSnippet, onSaveSelection, snippets = [], onChange }) {
   const [dragOverIndex, setDragOverIndex] = useState(null);
   const [renamingId, setRenamingId] = useState(null);
   const [renameValue, setRenameValue] = useState('');
@@ -399,3 +399,5 @@ export default function Backpack({ ariaExpandedDisplayBackpack, onInsertSnippet,
     </div>
   );
 }
+
+export default React.memo(Backpack);

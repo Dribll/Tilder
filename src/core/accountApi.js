@@ -136,9 +136,24 @@ export async function pullSyncedState() {
   return parseJson(response);
 }
 
-export async function fetchGitHubRepos() {
-  const response = await apiFetch('/api/github/repos');
+export async function fetchGitHubUser() {
+  const response = await apiFetch('/api/github/user');
+  return parseJson(response);
+}
 
+export async function fetchGitHubOrgs() {
+  const response = await apiFetch('/api/github/orgs');
+  return parseJson(response);
+}
+
+export async function fetchGitHubRepos(options = {}) {
+  const query = new URLSearchParams();
+  if (options.page) query.set('page', String(options.page));
+  if (options.per_page) query.set('per_page', String(options.per_page));
+  if (options.sort) query.set('sort', options.sort);
+  if (options.org) query.set('org', options.org);
+  const qs = query.toString();
+  const response = await apiFetch(`/api/github/repos${qs ? `?${qs}` : ''}`);
   return parseJson(response);
 }
 
@@ -150,7 +165,37 @@ export async function createGitHubRepo(payload) {
     },
     body: JSON.stringify(payload || {}),
   });
+  return parseJson(response);
+}
 
+export async function cloneGitHubRepo(payload) {
+  const response = await apiFetch('/api/github/clone', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload || {}),
+  });
+  return parseJson(response);
+}
+
+export async function fetchGitHubRepoTree(owner, repo, branch = 'main') {
+  const response = await apiFetch(`/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/tree?branch=${encodeURIComponent(branch)}`);
+  return parseJson(response);
+}
+
+export async function fetchGitHubRepoBlob(owner, repo, path, ref = 'main') {
+  const response = await apiFetch(`/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/blob?path=${encodeURIComponent(path)}&ref=${encodeURIComponent(ref)}`);
+  return parseJson(response);
+}
+
+export async function fetchGitHubPulls() {
+  const response = await apiFetch('/api/github/pulls');
+  return parseJson(response);
+}
+
+export async function fetchGitHubIssues() {
+  const response = await apiFetch('/api/github/issues');
   return parseJson(response);
 }
 

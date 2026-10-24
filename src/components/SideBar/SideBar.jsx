@@ -12,7 +12,7 @@ function normalizeSidebarOrder(savedOrder) {
   return Array.from(new Set([...savedOrder.filter((id) => DEFAULT_ORDER.includes(id)), ...DEFAULT_ORDER]));
 }
 
-export default function SideBar(props) {
+function SideBar(props) {
   const [order, setOrder] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(SIDEBAR_ORDER_KEY));
@@ -171,3 +171,5 @@ export default function SideBar(props) {
   );
 }
 
+
+export default React.memo(SideBar);

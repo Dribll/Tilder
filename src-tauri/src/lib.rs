@@ -34,6 +34,59 @@ struct DesktopRuntimeState {
     api_base_url: Mutex<Option<String>>,
 }
 
+// Filesystem watcher — kept alive in managed state so it isn't dropped.
+struct WatcherState(Mutex<Option<notify_debouncer_mini::Debouncer<notify::RecommendedWatcher>>>);
+impl Default for WatcherState {
+    fn default() -> Self {
+        Self(Mutex::new(None))
+    }
+}
+
+#[tauri::command]
+fn desktop_watch_dir(
+    path: String,
+    app: AppHandle,
+    state: tauri::State<WatcherState>,
+) -> Result<(), String> {
+    use notify::RecursiveMode;
+    use notify_debouncer_mini::{new_debouncer, DebounceEventResult};
+    use std::time::Duration;
+
+    let app_clone = app.clone();
+    let debouncer = new_debouncer(
+        Duration::from_millis(200),
+        move |res: DebounceEventResult| {
+            if let Ok(events) = res {
+                for event in events {
+                    let payload = serde_json::json!({
+                        "path": event.path.to_string_lossy(),
+                        "kind": "change"
+                    });
+                    let _ = app_clone.emit("tilder://fs-change", payload);
+                }
+            }
+        },
+    )
+    .map_err(|e| e.to_string())?;
+
+    // Register the path for watching BEFORE storing debouncer.
+    // We need a handle so temporarily get a mutable ref through Mutex.
+    {
+        let mut guard = state.0.lock().unwrap();
+        // Drop old watcher before creating new one
+        *guard = None;
+    }
+
+    let mut debouncer = debouncer;
+    debouncer
+        .watcher()
+        .watch(std::path::Path::new(&path), RecursiveMode::Recursive)
+        .map_err(|e| e.to_string())?;
+
+    *state.0.lock().unwrap() = Some(debouncer);
+    Ok(())
+}
+
 static WINDOW_COUNTER: AtomicU64 = AtomicU64::new(2);
 const DEFAULT_BACKEND_PORT: u16 = 33210;
 
@@ -55,27 +108,58 @@ fn spawn_backend(app: &AppHandle, port: u16) -> Result<(Child, Vec<String>), Box
     let app_root = normalize_for_child_process(resource_dir.join("app"));
     let server_entry = app_root.join("server.js");
 
+    let bundled_node = resource_dir.join("tilder-node.exe");
+    let node_bin = if bundled_node.exists() {
+        bundled_node
+    } else {
+        PathBuf::from("node")
+    };
+
     let mut log_lines = Vec::new();
     log_lines.push(format!("resource_dir={}", resource_dir.display()));
     log_lines.push(format!("app_root={}", app_root.display()));
     log_lines.push(format!("server_entry={}", server_entry.display()));
+    log_lines.push(format!("node_bin={}", node_bin.display()));
     log_lines.push(format!("port={port}"));
 
-    let child = Command::new("node")
-        .arg(server_entry.to_string_lossy().as_ref())
+    let log_file = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open("C:\\ProgramData\\Tilder\\backend.log")
+        .ok();
+
+    let mut cmd = Command::new(&node_bin);
+    cmd.arg(server_entry.to_string_lossy().as_ref())
         .current_dir(&app_root)
         .env("PORT", port.to_string())
         .env(
             "TILDER_RESOURCE_DIR",
             resource_dir.to_string_lossy().as_ref(),
-        )
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| {
-            log_lines.push(format!("spawn_error={e}"));
-            format!("Failed to spawn backend: {e}")
-        })?;
+        );
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        // CREATE_NO_WINDOW = 0x08000000 ensures no console pop-up behind Tilder
+        cmd.creation_flags(0x08000000);
+    }
+
+    if let Some(ref file) = log_file {
+        if let Ok(file_clone) = file.try_clone() {
+            cmd.stdout(Stdio::from(file_clone));
+        }
+        if let Ok(file_clone) = file.try_clone() {
+            cmd.stderr(Stdio::from(file_clone));
+        }
+    } else {
+        cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+
+    let child = cmd.spawn().map_err(|e| {
+        log_lines.push(format!("spawn_error={e}"));
+        format!("Failed to spawn backend: {e}")
+    })?;
 
     Ok((child, log_lines))
 }
@@ -347,10 +431,7 @@ fn read_tree_recursive(dir: &Path, recursive: bool) -> Result<Vec<DesktopTreeNod
         let path_str = entry.path().to_string_lossy().to_string();
         let is_dir = meta.is_dir();
 
-        // Skip hidden / build directories
-        if name.starts_with('.') || name == "node_modules" || name == "target" {
-            continue;
-        }
+        // Delegated to JS side filtering
 
         let children = if is_dir && recursive {
             Some(read_tree_recursive(&entry.path(), true).unwrap_or_default())
@@ -883,24 +964,36 @@ fn desktop_detect_runtimes() -> Result<serde_json::Value, String> {
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-fn desktop_execute_command(
+async fn desktop_execute_command(
     command: String,
     args: Vec<String>,
     cwd: Option<String>,
 ) -> Result<serde_json::Value, String> {
-    let mut cmd = Command::new(&command);
-    cmd.args(&args);
-    if let Some(dir) = &cwd {
-        cmd.current_dir(dir);
-    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut cmd = Command::new(&command);
+        cmd.args(&args);
+        cmd.stdin(std::process::Stdio::null());
+        cmd.env("GIT_TERMINAL_PROMPT", "0");
+        cmd.env("GIT_ASKPASS", "echo");
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+        if let Some(dir) = &cwd {
+            cmd.current_dir(dir);
+        }
 
-    let output = cmd.output().map_err(|e| e.to_string())?;
+        let output = cmd.output().map_err(|e| e.to_string())?;
 
-    Ok(serde_json::json!({
-        "stdout": String::from_utf8_lossy(&output.stdout).to_string(),
-        "stderr": String::from_utf8_lossy(&output.stderr).to_string(),
-        "exitCode": output.status.code().unwrap_or(-1),
-    }))
+        Ok(serde_json::json!({
+            "stdout": String::from_utf8_lossy(&output.stdout).to_string(),
+            "stderr": String::from_utf8_lossy(&output.stderr).to_string(),
+            "exitCode": output.status.code().unwrap_or(-1),
+        }))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 // ---------------------------------------------------------------------------
@@ -1010,16 +1103,17 @@ pub fn run() {
             enable_glass_theme,
             disable_glass_theme,
             jumplist::desktop_update_jump_list,
-            get_last_dropped_paths
+            get_last_dropped_paths,
+            desktop_watch_dir
         ])
         .manage(BackendState::default())
         .manage(DesktopRuntimeState::default())
+        .manage(WatcherState::default())
         .setup(|app| {
             let port = find_available_port(DEFAULT_BACKEND_PORT, 20)?;
             let (child, startup_log_lines) = spawn_backend(app.handle(), port)?;
             let api_base_url = format!("http://localhost:{port}");
-            let resource_dir = normalize_for_child_process(app.path().resource_dir()?);
-            let startup_log_path = resource_dir.join("startup.log");
+            let startup_log_path = PathBuf::from("C:\\ProgramData\\Tilder\\startup.log");
 
             {
                 let state = app.state::<BackendState>();

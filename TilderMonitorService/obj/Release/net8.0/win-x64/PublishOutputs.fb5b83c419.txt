@@ -1,0 +1,10 @@
+D:\Tilder - Copy\desktop-app\TilderMonitorService\publish_out\appsettings.Development.json
+D:\Tilder - Copy\desktop-app\TilderMonitorService\publish_out\appsettings.json
+D:\Tilder - Copy\desktop-app\TilderMonitorService\publish_out\publish_output\appsettings.Development.json
+D:\Tilder - Copy\desktop-app\TilderMonitorService\publish_out\publish_output\appsettings.json
+D:\Tilder - Copy\desktop-app\TilderMonitorService\publish_out\publish_output\TilderMonitorService.deps.json
+D:\Tilder - Copy\desktop-app\TilderMonitorService\publish_out\publish_output\TilderMonitorService.runtimeconfig.json
+D:\Tilder - Copy\desktop-app\TilderMonitorService\publish_out\TilderMonitorService.pdb
+D:\Tilder - Copy\desktop-app\TilderMonitorService\publish_out\MonoPosixHelper.dll
+D:\Tilder - Copy\desktop-app\TilderMonitorService\publish_out\libMonoPosixHelper.dll
+D:\Tilder - Copy\desktop-app\TilderMonitorService\publish_out\TilderMonitorService.exe

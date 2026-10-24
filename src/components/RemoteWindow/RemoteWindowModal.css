@@ -1,4 +1,4 @@
-/* ─── Remote Window QuickPick Modal (Glassmorphic Tahoe style) ─── */
+/* ─── Remote Window QuickPick Modal (Glassmorphic style) ─── */
 .remote-modal-backdrop {
   position: fixed;
   inset: 0;
@@ -60,7 +60,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s ease;
+  
 }
 
 .remote-modal-back-btn:hover {
@@ -114,7 +114,7 @@
   font-family: inherit;
   cursor: pointer;
   text-align: left;
-  transition: background 0.12s ease, color 0.12s ease;
+  
   width: 100%;
 }
 
@@ -228,7 +228,7 @@
   font-family: inherit;
   outline: none;
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  
 }
 
 .remote-modal-text-input::placeholder {
@@ -267,7 +267,7 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  transition: all 0.18s ease;
+  
 }
 
 .remote-modal-btn:hover:not(:disabled) {
@@ -317,3 +317,4 @@
   font-weight: 500;
   align-self: flex-start;
 }
+

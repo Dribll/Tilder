@@ -8,39 +8,503 @@ import Tabs from './components/Tabs/Tabs.jsx';
 import BreadcrumbsBar from './components/BreadcrumbsBar/BreadcrumbsBar.jsx';
 import Search from './components/SideBar/Main Components/Search/Search.jsx';
 import FilePioneer from './components/SideBar/Main Components/filePioneer/filePioneer.jsx';
-import GitHub from './components/SideBar/Main Components/GItHub/GitHub.jsx';
 import Terminal from './components/SideBar/Main Components/Terminal/Terminal.jsx';
-import Debug from './components/SideBar/Main Components/Debug/Debug.jsx';
-import TestRunner from './components/SideBar/Main Components/TestRunner/TestRunner.jsx';
-import CodeBlocks from './components/SideBar/Main Components/Code Blocks/CodeBlocks.jsx';
-import TrashView from './components/SideBar/Main Components/TrashView/TrashView.jsx';
-import HardwareManager from './components/SideBar/Main Components/HardwareManager/HardwareManager.jsx';
 import DefaultPage from './components/DefaultPage/DefaultPage.jsx';
 import WelcomePage from './components/WelcomePage/WelcomePage.jsx';
 import Info from './components/Info/Info.jsx';
 import Modal from './components/Modal/Modal.jsx';
 import ConfirmDialog from './components/ConfirmDialog/ConfirmDialog.jsx';
 import PromptDialog from './components/PromptDialog/PromptDialog.jsx';
-import UpdateModal from './components/UpdateModal/UpdateModal.jsx';
 import CommandPalette from './components/CommandPalette/CommandPalette.jsx';
-import RemoteWindowModal from './components/RemoteWindow/RemoteWindowModal.jsx';
-import ThemePicker from './components/ThemePicker/ThemePicker.jsx';
-import Settings from './components/Settings/Settings.jsx';
-import WorkspaceTrustModal from './components/WorkspaceTrustModal/WorkspaceTrustModal.jsx';
-import AILensModal from './components/AILensModal/AILensModal.jsx';
-import Extensions from './components/Extensions/Extensions.jsx';
-import Account from './components/Account/Account.jsx';
-import KeyboardShortcuts from './components/KeyboardShortcuts/KeyboardShortcuts.jsx';
-import SystemMonitor from './components/SystemMonitor/SystemMonitor.jsx';
 import MonacoEditor from './components/Editor/MonacoEditor.jsx';
-import OfficeEditor from './components/Editor/OfficeEditor.jsx';
 import MonacoDiffEditor from './components/Editor/MonacoDiffEditor.jsx';
-const isOfficeFile = (name) => /\.(docx|xlsx|csv|pptx)$/i.test(name || '');
 
-const isBinaryMediaFile = (name) => /\.(png|jpg|jpeg|gif|bmp|webp|svg|ico|pdf|mp4|mp3|wav|webm|mov|avi)$/i.test(name || '');
+// Lazy-loaded heavy components (sidebar panels, modals, editors) - improves startup time
+const GitHub = React.lazy(() => import('./components/SideBar/Main Components/GItHub/GitHub.jsx'));
+const Debug = React.lazy(() => import('./components/SideBar/Main Components/Debug/Debug.jsx'));
+const TestRunner = React.lazy(() => import('./components/SideBar/Main Components/TestRunner/TestRunner.jsx'));
+const CodeBlocks = React.lazy(() => import('./components/SideBar/Main Components/Code Blocks/CodeBlocks.jsx'));
+const TrashView = React.lazy(() => import('./components/SideBar/Main Components/TrashView/TrashView.jsx'));
+const HardwareManager = React.lazy(() => import('./components/SideBar/Main Components/HardwareManager/HardwareManager.jsx'));
+const RemoteWindowModal = React.lazy(() => import('./components/RemoteWindow/RemoteWindowModal.jsx'));
+const ThemePicker = React.lazy(() => import('./components/ThemePicker/ThemePicker.jsx'));
+const Settings = React.lazy(() => import('./components/Settings/Settings.jsx'));
+const WorkspaceTrustModal = React.lazy(() => import('./components/WorkspaceTrustModal/WorkspaceTrustModal.jsx'));
+const AILensModal = React.lazy(() => import('./components/AILensModal/AILensModal.jsx'));
+const Extensions = React.lazy(() => import('./components/Extensions/Extensions.jsx'));
+const Account = React.lazy(() => import('./components/Account/Account.jsx'));
+const KeyboardShortcuts = React.lazy(() => import('./components/KeyboardShortcuts/KeyboardShortcuts.jsx'));
+const SystemMonitor = React.lazy(() => import('./components/SystemMonitor/SystemMonitor.jsx'));
+const OfficeEditor = React.lazy(() => import('./components/Editor/OfficeEditor.jsx'));
+const JupyterEditor = React.lazy(() => import('./components/Editor/JupyterEditor.jsx'));
+const UpdateModal = React.lazy(() => import('./components/UpdateModal/UpdateModal.jsx'));
+const isOfficeFile = (name) => /\.(docx|xlsx|csv|pptx)$/i.test(name || '');
+const isJupyterNotebook = (name) => /\.ipynb$/i.test(name || '');
+
+const isBinaryMediaFile = (name) =>
+  /\.(png|jpg|jpeg|gif|bmp|webp|svg|ico|pdf|mp4|mp3|wav|webm|mov|avi|ogg|flac|aac|m4a|mkv)$/i.test(name || '');
 
 import { convertFileSrc } from '@tauri-apps/api/core';
+import { openExternalUrl } from './core/desktopFileApi.js';
+// ── helpers ──────────────────────────────────────────────────────────────────
+function fmtTime(s) {
+  if (!isFinite(s)) return '0:00';
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
 
+// ── Custom Audio Player ───────────────────────────────────────────────────────
+function AudioPlayer({ src, name, path: filePath }) {
+  const audioRef = useRef(null);
+  const canvasRef = useRef(null);
+  const progressRef = useRef(null);
+  const animFrameRef = useRef(null);
+  const analyserRef = useRef(null);
+  const ctxRef = useRef(null);
+  const sourceRef = useRef(null);
+
+  const [playing, setPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [current, setCurrent] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [muted, setMuted] = useState(false);
+  const [loop, setLoop] = useState(false);
+  const [speed, setSpeed] = useState(1);
+  const [showSpeed, setShowSpeed] = useState(false);
+  const [dragging, setDragging] = useState(false);
+
+  // Waveform visualizer
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !canvasRef.current) return;
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    try {
+      if (!ctxRef.current) ctxRef.current = new AudioContext();
+      const actx = ctxRef.current;
+      if (!analyserRef.current) {
+        analyserRef.current = actx.createAnalyser();
+        analyserRef.current.fftSize = 256;
+        analyserRef.current.connect(actx.destination);
+      }
+      if (!sourceRef.current) {
+        sourceRef.current = actx.createMediaElementSource(audio);
+        sourceRef.current.connect(analyserRef.current);
+      }
+    } catch (_) {}
+
+    const canvas = canvasRef.current;
+    const draw = () => {
+      animFrameRef.current = requestAnimationFrame(draw);
+      if (!analyserRef.current) return;
+      const bufLen = analyserRef.current.frequencyBinCount;
+      const dataArr = new Uint8Array(bufLen);
+      analyserRef.current.getByteFrequencyData(dataArr);
+      const { width, height } = canvas;
+      const dctx = canvas.getContext('2d');
+      dctx.clearRect(0, 0, width, height);
+      const barW = (width / bufLen) * 2.2;
+      let x = 0;
+      for (let i = 0; i < bufLen; i++) {
+        const barH = (dataArr[i] / 255) * height;
+        const hue = 240 + (i / bufLen) * 60;
+        const alpha = playing ? 0.85 : 0.3;
+        dctx.fillStyle = `hsla(${hue},70%,65%,${alpha})`;
+        dctx.beginPath();
+        dctx.roundRect(x, height - barH, barW - 1, barH, 2);
+        dctx.fill();
+        x += barW;
+      }
+    };
+    draw();
+    return () => cancelAnimationFrame(animFrameRef.current);
+  }, [src, playing]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e) => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      if (e.code === 'Space') { e.preventDefault(); playing ? audio.pause() : audio.play(); }
+      if (e.code === 'ArrowRight') audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 5);
+      if (e.code === 'ArrowLeft') audio.currentTime = Math.max(0, audio.currentTime - 5);
+      if (e.code === 'ArrowUp') { audio.volume = Math.min(1, audio.volume + 0.1); setVolume(audio.volume); }
+      if (e.code === 'ArrowDown') { audio.volume = Math.max(0, audio.volume - 0.1); setVolume(audio.volume); }
+      if (e.code === 'KeyM') { audio.muted = !audio.muted; setMuted(audio.muted); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [playing]);
+
+  const togglePlay = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (ctxRef.current?.state === 'suspended') ctxRef.current.resume();
+    playing ? audio.pause() : audio.play();
+  };
+
+  const seek = (e) => {
+    const audio = audioRef.current;
+    if (!audio || !progressRef.current) return;
+    const rect = progressRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    audio.currentTime = ratio * (audio.duration || 0);
+  };
+
+  const ext = (name || '').split('.').pop().toUpperCase();
+
+  return (
+    <div style={{
+      width: '100%', maxWidth: 600, background: 'rgba(14,12,26,0.82)',
+      border: '1px solid rgba(255,255,255,0.08)', borderRadius: 20,
+      backdropFilter: 'blur(24px)', boxShadow: '0 24px 64px rgba(0,0,0,0.7)',
+      overflow: 'hidden', userSelect: 'none',
+    }}>
+      {/* Header */}
+      <div style={{ padding: '20px 24px 0', display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{
+          width: 52, height: 52, borderRadius: 14, background: 'linear-gradient(135deg,#6d28d9,#312e81)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          boxShadow: '0 4px 16px rgba(109,40,217,0.5)',
+        }}>
+          <span><i className="fa-solid fa-music" style={{ fontSize: 22, color: '#fff' }}></i></span>
+        </div>
+        <div style={{ overflow: 'hidden', flex: 1 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>{ext} · {filePath}</div>
+        </div>
+      </div>
+
+      {/* Waveform Canvas */}
+      <div style={{ padding: '16px 24px 8px' }}>
+        <canvas ref={canvasRef} width={552} height={64} style={{ width: '100%', height: 64, borderRadius: 10, background: 'rgba(255,255,255,0.03)', display: 'block' }} />
+      </div>
+
+      {/* Seek bar */}
+      <div style={{ padding: '4px 24px' }}>
+        <div
+          ref={progressRef}
+          onClick={seek}
+          onMouseMove={(e) => dragging && seek(e)}
+          onMouseDown={(e) => { setDragging(true); seek(e); }}
+          onMouseUp={() => setDragging(false)}
+          onMouseLeave={() => setDragging(false)}
+          style={{ height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 99, cursor: 'pointer', position: 'relative' }}
+        >
+          <div style={{
+            position: 'absolute', left: 0, top: 0, bottom: 0,
+            width: `${duration ? (current / duration) * 100 : 0}%`,
+            background: 'linear-gradient(90deg,#7c3aed,#a855f7)',
+            borderRadius: 99, transition: dragging ? 'none' : 'width 0.1s linear',
+          }} />
+          <div style={{
+            position: 'absolute', top: '50%', transform: 'translate(-50%,-50%)',
+            left: `${duration ? (current / duration) * 100 : 0}%`,
+            width: 14, height: 14, borderRadius: '50%', background: '#a855f7',
+            boxShadow: '0 0 8px rgba(168,85,247,0.8)', border: '2px solid #fff',
+          }} />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
+          <span>{fmtTime(current)}</span>
+          <span>{fmtTime(duration)}</span>
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div style={{ padding: '8px 24px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        {/* Loop */}
+        <button onClick={() => { setLoop(!loop); if (audioRef.current) audioRef.current.loop = !loop; }}
+          title="Loop" style={{ ...mplayerBtn, color: loop ? '#a855f7' : 'rgba(255,255,255,0.5)' }}>
+          <span><i className="fa-solid fa-repeat"></i></span>
+        </button>
+
+        {/* Skip back 10s */}
+        <button onClick={() => { if (audioRef.current) audioRef.current.currentTime -= 10; }}
+          title="-10s" style={mplayerBtn}>
+          <span><i className="fa-solid fa-backward-step"></i></span>
+        </button>
+
+        {/* Play/Pause */}
+        <button onClick={togglePlay} title={playing ? 'Pause' : 'Play'} style={{
+          ...mplayerBtn, width: 52, height: 52, borderRadius: '50%', fontSize: 18,
+          background: 'linear-gradient(135deg,#7c3aed,#a855f7)',
+          boxShadow: '0 4px 20px rgba(139,92,246,0.5)',
+          color: '#fff', flexShrink: 0,
+        }}>
+          <span><i className={`fa-solid ${playing ? 'fa-pause' : 'fa-play'}`} style={{ marginLeft: playing ? 0 : 2 }}></i></span>
+        </button>
+
+        {/* Skip forward 10s */}
+        <button onClick={() => { if (audioRef.current) audioRef.current.currentTime += 10; }}
+          title="+10s" style={mplayerBtn}>
+          <span><i className="fa-solid fa-forward-step"></i></span>
+        </button>
+
+        {/* Volume */}
+        <button onClick={() => { const a = audioRef.current; if (!a) return; a.muted = !muted; setMuted(!muted); }}
+          title="Mute/Unmute" style={mplayerBtn}>
+          <span><i className={`fa-solid ${muted || volume === 0 ? 'fa-volume-xmark' : volume < 0.5 ? 'fa-volume-low' : 'fa-volume-high'}`}></i></span>
+        </button>
+        <input type="range" min={0} max={1} step={0.02} value={muted ? 0 : volume}
+          onChange={(e) => { const v = parseFloat(e.target.value); setVolume(v); setMuted(v === 0); if (audioRef.current) { audioRef.current.volume = v; audioRef.current.muted = v === 0; } }}
+          style={{ flex: 1, accentColor: '#a855f7', cursor: 'pointer' }} />
+
+        {/* Speed */}
+        <div style={{ position: 'relative' }}>
+          <button onClick={() => setShowSpeed(!showSpeed)} title="Playback Speed" style={{ ...mplayerBtn, fontSize: 10, fontWeight: 700, width: 'auto', padding: '0 10px', letterSpacing: '0.5px' }}>
+            {speed}x
+          </button>
+          {showSpeed && (
+            <div style={{
+              position: 'absolute', bottom: '110%', right: 0, background: 'rgba(20,16,40,0.98)',
+              border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: 6,
+              display: 'flex', flexDirection: 'column', gap: 2, zIndex: 99,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
+            }}>
+              {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map(s => (
+                <button key={s} onClick={() => { setSpeed(s); setShowSpeed(false); if (audioRef.current) audioRef.current.playbackRate = s; }}
+                  style={{ ...mplayerBtn, width: 64, fontSize: 12, height: 28, background: speed === s ? 'rgba(139,92,246,0.3)' : 'transparent', color: speed === s ? '#a855f7' : 'rgba(255,255,255,0.7)' }}>
+                  {s}x
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Hidden audio element */}
+      <audio ref={audioRef} src={src} loop={loop}
+        onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)}
+        onTimeUpdate={(e) => setCurrent(e.target.currentTime)}
+        onLoadedMetadata={(e) => setDuration(e.target.duration)}
+        onVolumeChange={(e) => { setVolume(e.target.volume); setMuted(e.target.muted); }}
+        style={{ display: 'none' }} preload="metadata"
+      />
+    </div>
+  );
+}
+
+// ── Custom Video Player ───────────────────────────────────────────────────────
+function VideoPlayer({ src, name, path: filePath }) {
+  const videoRef = useRef(null);
+  const containerRef = useRef(null);
+  const progressRef = useRef(null);
+
+  const [playing, setPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [current, setCurrent] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [muted, setMuted] = useState(false);
+  const [loop, setLoop] = useState(false);
+  const [speed, setSpeed] = useState(1);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const [showSpeed, setShowSpeed] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const hideTimer = useRef(null);
+
+  const resetHideTimer = () => {
+    setShowControls(true);
+    clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => { if (playing) setShowControls(false); }, 2500);
+  };
+
+  useEffect(() => () => clearTimeout(hideTimer.current), []);
+
+  const togglePlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    playing ? v.pause() : v.play();
+    resetHideTimer();
+  };
+
+  const seek = (e) => {
+    const v = videoRef.current;
+    if (!v || !progressRef.current) return;
+    const rect = progressRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    v.currentTime = ratio * (v.duration || 0);
+  };
+
+  const toggleFullscreen = () => {
+    const el = containerRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement) {
+      el.requestFullscreen?.().then(() => setFullscreen(true)).catch(() => {});
+    } else {
+      document.exitFullscreen?.().then(() => setFullscreen(false)).catch(() => {});
+    }
+  };
+
+  useEffect(() => {
+    const handler = (e) => {
+      const v = videoRef.current;
+      if (!v) return;
+      if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+      if (e.code === 'ArrowRight') { v.currentTime = Math.min(v.duration || 0, v.currentTime + 5); resetHideTimer(); }
+      if (e.code === 'ArrowLeft') { v.currentTime = Math.max(0, v.currentTime - 5); resetHideTimer(); }
+      if (e.code === 'KeyM') { v.muted = !v.muted; setMuted(v.muted); }
+      if (e.code === 'KeyF') toggleFullscreen();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [playing]);
+
+  const ext = (name || '').split('.').pop().toUpperCase();
+
+  return (
+    <div ref={containerRef}
+      onMouseMove={resetHideTimer}
+      style={{
+        position: 'relative', width: '100%', maxWidth: 900,
+        borderRadius: fullscreen ? 0 : 16, overflow: 'hidden',
+        background: '#000', boxShadow: '0 24px 64px rgba(0,0,0,0.8)',
+        border: '1px solid rgba(255,255,255,0.06)',
+      }}>
+      {/* Video */}
+      <video
+        ref={videoRef} src={src} loop={loop}
+        onClick={togglePlay}
+        onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)}
+        onTimeUpdate={(e) => setCurrent(e.target.currentTime)}
+        onLoadedMetadata={(e) => setDuration(e.target.duration)}
+        onVolumeChange={(e) => { setVolume(e.target.volume); setMuted(e.target.muted); }}
+        style={{ width: '100%', display: 'block', maxHeight: fullscreen ? '100vh' : '65vh', objectFit: 'contain', cursor: 'pointer' }}
+        preload="metadata"
+      />
+
+      {/* Big play overlay */}
+      {!playing && (
+        <div onClick={togglePlay} style={{
+          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.3)', cursor: 'pointer',
+        }}>
+          <div style={{
+            width: 72, height: 72, borderRadius: '50%', background: 'rgba(255,255,255,0.15)',
+            backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            border: '2px solid rgba(255,255,255,0.3)',
+          }}>
+            <span><i className="fa-solid fa-play" style={{ fontSize: 24, color: '#fff', marginLeft: 4 }}></i></span>
+          </div>
+        </div>
+      )}
+
+      {/* Controls bar */}
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        background: 'linear-gradient(transparent,rgba(0,0,0,0.85))',
+        padding: '32px 16px 14px', transition: 'opacity 0.25s',
+        opacity: showControls ? 1 : 0, pointerEvents: showControls ? 'auto' : 'none',
+      }}>
+        {/* Progress */}
+        <div
+          ref={progressRef}
+          onClick={seek}
+          onMouseMove={(e) => dragging && seek(e)}
+          onMouseDown={(e) => { setDragging(true); seek(e); }}
+          onMouseUp={() => setDragging(false)}
+          onMouseLeave={() => setDragging(false)}
+          style={{ height: 4, background: 'rgba(255,255,255,0.2)', borderRadius: 99, cursor: 'pointer', position: 'relative', marginBottom: 12 }}
+        >
+          <div style={{
+            position: 'absolute', left: 0, top: 0, bottom: 0,
+            width: `${duration ? (current / duration) * 100 : 0}%`,
+            background: 'linear-gradient(90deg,#7c3aed,#a855f7)',
+            borderRadius: 99, transition: dragging ? 'none' : 'width 0.1s linear',
+          }} />
+          <div style={{
+            position: 'absolute', top: '50%', transform: 'translate(-50%,-50%)',
+            left: `${duration ? (current / duration) * 100 : 0}%`,
+            width: 12, height: 12, borderRadius: '50%',
+            background: '#a855f7', border: '2px solid #fff',
+            boxShadow: '0 0 6px rgba(168,85,247,0.8)',
+          }} />
+        </div>
+
+        {/* Buttons row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Play/Pause */}
+          <button onClick={togglePlay} style={{ ...mplayerBtn, color: '#fff' }}>
+            <span><i className={`fa-solid ${playing ? 'fa-pause' : 'fa-play'}`}></i></span>
+          </button>
+
+          {/* Skip */}
+          <button onClick={() => { if (videoRef.current) videoRef.current.currentTime -= 10; }} style={{ ...mplayerBtn, color: '#fff' }} title="-10s">
+            <span><i className="fa-solid fa-backward-step"></i></span>
+          </button>
+          <button onClick={() => { if (videoRef.current) videoRef.current.currentTime += 10; }} style={{ ...mplayerBtn, color: '#fff' }} title="+10s">
+            <span><i className="fa-solid fa-forward-step"></i></span>
+          </button>
+
+          {/* Volume */}
+          <button onClick={() => { const v = videoRef.current; if (!v) return; v.muted = !muted; setMuted(!muted); }} style={{ ...mplayerBtn, color: '#fff' }}>
+            <span><i className={`fa-solid ${muted || volume === 0 ? 'fa-volume-xmark' : volume < 0.5 ? 'fa-volume-low' : 'fa-volume-high'}`}></i></span>
+          </button>
+          <input type="range" min={0} max={1} step={0.02} value={muted ? 0 : volume}
+            onChange={(e) => { const vv = parseFloat(e.target.value); setVolume(vv); setMuted(vv === 0); if (videoRef.current) { videoRef.current.volume = vv; videoRef.current.muted = vv === 0; } }}
+            style={{ width: 80, accentColor: '#a855f7', cursor: 'pointer' }} />
+
+          {/* Time */}
+          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', marginLeft: 4, whiteSpace: 'nowrap' }}>
+            {fmtTime(current)} / {fmtTime(duration)}
+          </span>
+
+          <div style={{ flex: 1 }} />
+
+          {/* Loop */}
+          <button onClick={() => { setLoop(!loop); if (videoRef.current) videoRef.current.loop = !loop; }}
+            style={{ ...mplayerBtn, color: loop ? '#a855f7' : 'rgba(255,255,255,0.6)' }} title="Loop">
+            <span><i className="fa-solid fa-repeat"></i></span>
+          </button>
+
+          {/* Speed */}
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => setShowSpeed(!showSpeed)} style={{ ...mplayerBtn, fontSize: 10, fontWeight: 700, width: 'auto', padding: '0 8px', color: '#fff' }}>
+              {speed}x
+            </button>
+            {showSpeed && (
+              <div style={{
+                position: 'absolute', bottom: '110%', right: 0,
+                background: 'rgba(20,16,40,0.98)', border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 10, padding: 6, display: 'flex', flexDirection: 'column',
+                gap: 2, zIndex: 99, boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
+              }}>
+                {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map(s => (
+                  <button key={s} onClick={() => { setSpeed(s); setShowSpeed(false); if (videoRef.current) videoRef.current.playbackRate = s; }}
+                    style={{ ...mplayerBtn, width: 64, fontSize: 12, height: 28, background: speed === s ? 'rgba(139,92,246,0.3)' : 'transparent', color: speed === s ? '#a855f7' : 'rgba(255,255,255,0.7)' }}>
+                    {s}x
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Fullscreen */}
+          <button onClick={toggleFullscreen} style={{ ...mplayerBtn, color: '#fff' }} title="Fullscreen">
+            <span><i className={`fa-solid ${fullscreen ? 'fa-compress' : 'fa-expand'}`}></i></span>
+          </button>
+        </div>
+
+        {/* File info */}
+        <div style={{ marginTop: 6, fontSize: 10, color: 'rgba(255,255,255,0.3)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+          {ext} · {filePath}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// shared button style
+const mplayerBtn = {
+  width: 36, height: 36, borderRadius: 8, border: 'none',
+  background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.8)',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  cursor: 'pointer', fontSize: 14, flexShrink: 0,
+  transition: 'background 0.12s ease, transform 0.1s ease',
+};
+
+// ── MediaViewer ───────────────────────────────────────────────────────────────
 function MediaViewer({ tab }) {
   const [src, setSrc] = useState(tab?.blobUrl || null);
 
@@ -59,17 +523,25 @@ function MediaViewer({ tab }) {
   const ext = (tab?.name || '').split('.').pop().toLowerCase();
   const isImage = /^(png|jpg|jpeg|gif|bmp|webp|svg|ico)$/.test(ext);
   const isPdf = ext === 'pdf';
-  const isVideo = /^(mp4|webm|mov|avi)$/.test(ext);
-  const isAudio = /^(mp3|wav|webm)$/.test(ext);
+  const isVideo = /^(mp4|webm|mov|avi|mkv)$/.test(ext);
+  const isAudio = /^(mp3|wav|ogg|flac|aac|m4a)$/.test(ext);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', background: 'var(--tilder-body-bg, #0f172a)', color: 'rgba(255,255,255,0.7)', gap: 16, padding: 24 }}>
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      height: '100%', background: 'var(--tilder-body-bg, #0f172a)',
+      color: 'rgba(255,255,255,0.7)', gap: 16, padding: 24, overflow: 'auto',
+    }}>
       {isImage && src && <img src={src} alt={tab.name} style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: 8, boxShadow: '0 4px 32px rgba(0,0,0,0.5)' }} />}
       {isPdf && src && <iframe src={src} title={tab.name} style={{ width: '100%', height: '80vh', border: 'none', borderRadius: 8 }} />}
-      {isVideo && src && <video src={src} controls style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: 8 }} />}
-      {isAudio && src && <audio src={src} controls style={{ width: '100%' }} />}
-      {!src && <div style={{ textAlign: 'center' }}><span><i className="fa-solid fa-file" style={{ fontSize: 48, opacity: 0.3 }} /></span><p style={{ marginTop: 12, opacity: 0.5 }}>Binary file - {tab?.name}</p></div>}
-      {src && <p style={{ fontSize: 11, opacity: 0.4, marginTop: 8 }}>{tab?.nativePath || tab?.path}</p>}
+      {isVideo && src && <VideoPlayer src={src} name={tab.name} path={tab.nativePath || tab.path} />}
+      {isAudio && src && <AudioPlayer src={src} name={tab.name} path={tab.nativePath || tab.path} />}
+      {!src && (
+        <div style={{ textAlign: 'center' }}>
+          <span><i className="fa-solid fa-file" style={{ fontSize: 48, opacity: 0.3 }} /></span>
+          <p style={{ marginTop: 12, opacity: 0.5 }}>Binary file — {tab?.name}</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -94,7 +566,7 @@ import { fetchExtensionMarketplace } from './core/extensionsMarketplaceApi.js';
 import { getEffectiveBinding, KEYBINDING_COMMANDS } from './core/keybindings.js';
 import { createLspBridge } from './core/lspBridge.js';
 import { disposeExtensionsRuntime, syncExtensionsRuntime } from './core/extensionsRuntime.js';
-import { openDesktopWindow, desktopUpdateJumpList, desktopWatchDirectory, desktopSetZoom } from './core/desktopFileApi.js';
+import { openDesktopWindow, desktopUpdateJumpList, desktopWatchDirectory, desktopSetZoom, desktopReadFile } from './core/desktopFileApi.js';
 import {
   broadcastZoom,
   subscribeWindowSync,
@@ -204,6 +676,13 @@ function collectMonacoCommandPaletteCommands(editor) {
     }));
 }
 
+function isRunnableFile(file) {
+  if (!file || !file.name) return false;
+  const ext = file.name.split('.').pop().toLowerCase();
+  const runnableExts = ['js', 'jsx', 'ts', 'tsx', 'py', 'java', 'c', 'cpp', 'rs', 'go', 'sh', 'bash', 'php', 'rb'];
+  return runnableExts.includes(ext);
+}
+
 function App() {
   const [backpackSnippets, setBackpackSnippets] = useState(() => {
     try {
@@ -215,10 +694,10 @@ function App() {
   const [syncLogsOpen, setSyncLogsOpen] = useState(false);
   const [syncHistoryOpen, setSyncHistoryOpen] = useState(false);
 
-  // Global UI Sound Hook for Tahoe Theme
+  // Global UI Sound Hook for Glass Theme
   useEffect(() => {
     const handleGlobalClick = (e) => {
-      if (document.body.dataset.theme !== 'tilder-tahoe') return;
+      if (document.body.dataset.theme !== 'tilder-glass' && document.body.dataset.theme !== 'tilder-tahoe') return;
       
       const target = e.target;
       
@@ -424,6 +903,7 @@ function App() {
   const [commandPaletteEditorNonce, setCommandPaletteEditorNonce] = useState(0);
   const saveTimersRef = useRef({});
   const editorRef = useRef(null);
+  const editorViewStatesRef = useRef(new Map()); // tabId -> ICodeEditorViewState
   const monacoRef = useRef(null);
   const editorListenersCleanupRef = useRef(() => {});
   const splitEditorRefs = useRef(new Map());
@@ -460,6 +940,7 @@ function App() {
   const lspBridgeCacheRef = useRef(new Map());
   const activeLspBridgeKeyRef = useRef('');
   const [activeLspBridge, setActiveLspBridge] = useState(null);
+  const lspDiagnosticsByUriRef = useRef(new Map());
   const goOverlayInputRef = useRef(null);
   const activeEditorPaneRef = useRef('primary');
   const editorSplitResizeRef = useRef({ index: 0, startX: 0, weights: [] });
@@ -544,9 +1025,27 @@ function App() {
   useEffect(() => {
     let unwatch = () => {};
     if (isDesktopRuntime() && workspace.rootSystemPath) {
-      desktopWatchDirectory(workspace.rootSystemPath, (eventPayload) => {
-        // Debounce or sync the workspace root when file changes occur
-        workspace.syncRoot().then(() => refresh());
+      desktopWatchDirectory(workspace.rootSystemPath, async (eventPayload) => {
+        // Reload file tree on any external change
+        await workspace.reloadTree();
+        // If the changed file is currently open in a tab, reload its content
+        if (eventPayload && eventPayload.path) {
+          const changedPath = String(eventPayload.path).replace(/\\/g, '/');
+          const openTabs = workspace.tabs || [];
+          for (const tab of openTabs) {
+            if (!tab || tab.isUntitled || tab.isGitDiff) continue;
+            const tabPath = tab.path ? String(tab.path).replace(/\\/g, '/') : '';
+            if (tabPath && changedPath.endsWith(tabPath)) {
+              try {
+                const result = await desktopReadFile(tab.path);
+                if (result && typeof result.content === 'string') {
+                  workspace.updateTabContent(tab.id, result.content);
+                }
+              } catch (_) { /* ignore reload errors for individual tabs */ }
+            }
+          }
+        }
+        refresh();
       }).then((cleanup) => {
         unwatch = cleanup;
       }).catch(err => {
@@ -587,10 +1086,10 @@ function App() {
   useEffect(() => {
     const exitTimer = window.setTimeout(() => {
       setStartupSplashPhase('exiting');
-    }, 400); // Reduced from 1100ms for much faster startup
+    }, 2000); // hold splash for 2 seconds before fading
     const hideTimer = window.setTimeout(() => {
       setStartupSplashPhase('hidden');
-    }, 700); // Reduced from 1550ms for much faster startup
+    }, 2600); // fully hidden after fade-out (0.6s transition)
 
     return () => {
       window.clearTimeout(exitTimer);
@@ -729,6 +1228,12 @@ function App() {
 
   // Intercept all external link clicks to open them in the external browser
   useEffect(() => {
+    const openUrlSafely = (url) => {
+      if (!url) return;
+      openExternalUrl(url);
+    };
+
+    // 1. Intercept standard <a> tags (e.g. GitHub panel, Ports list, Welcome page, Markdown previews)
     const handleGlobalClick = (e) => {
       const anchor = e.target.closest('a');
       if (anchor && anchor.href) {
@@ -736,17 +1241,25 @@ function App() {
         if (url.startsWith('http://') || url.startsWith('https://')) {
           e.preventDefault();
           e.stopPropagation();
-          apiFetch('/api/open-link', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url }),
-          }).catch(err => console.error('Failed to open link via API:', err));
+          openUrlSafely(url);
         }
       }
     };
     document.addEventListener('click', handleGlobalClick, true);
+
+    // 2. Intercept window.open (Monaco Editor Ctrl+Click, custom button handlers)
+    const originalWindowOpen = window.open;
+    window.open = function(url, target, features) {
+      if (typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
+        openUrlSafely(url);
+        return null; // Prevent default WebView / in-app navigation
+      }
+      return originalWindowOpen.apply(this, arguments);
+    };
+
     return () => {
       document.removeEventListener('click', handleGlobalClick, true);
+      window.open = originalWindowOpen;
     };
   }, []);
 
@@ -976,14 +1489,15 @@ function App() {
         }
 
         const sourceScope = goOverlay.mode === 'editor-symbol' ? 'open' : 'workspace';
+        const currentActiveTab = workspace.getActiveTab();
         const pool = getSearchPool(workspace, sourceScope)
           .filter((entry) =>
             matchesPathFilters(entry.path, '', goOverlay.mode === 'editor-symbol' ? '' : 'node_modules, dist')
           )
           .filter((entry) =>
             goOverlay.mode === 'editor-symbol'
-              ? activeTab
-                ? entry.path === activeTab.path || entry.path === activeTab.id
+              ? currentActiveTab
+                ? entry.path === currentActiveTab.path || entry.path === currentActiveTab.id
                 : false
               : true
           );
@@ -1255,6 +1769,37 @@ function App() {
       isDiff: true,
       originalTab: compareSource,
       modifiedTab: tab,
+      dirty: false,
+    };
+    workspace.openDiffTab(diffTab);
+    assignTabToFocusedGroup(diffTab.id, { preview: false });
+    refresh();
+  }
+
+  function handleOpenGitDiffTab({ path, fileName, language, originalContent, modifiedContent }) {
+    const resolvedName = fileName || path.split('/').pop() || path;
+    const resolvedLang = language || (workspace.getLanguage ? workspace.getLanguage(resolvedName) : 'plaintext');
+
+    const diffTab = {
+      id: `diff:git:${path}`,
+      name: `${resolvedName} (Working Tree)`,
+      isDiff: true,
+      isGitDiff: true,
+      path: path,
+      originalTab: {
+        id: `git-head:${path}`,
+        name: `${resolvedName} (HEAD)`,
+        content: originalContent ?? '',
+        language: resolvedLang,
+        readOnly: true,
+      },
+      modifiedTab: {
+        id: `git-wt:${path}`,
+        name: `${resolvedName} (Working Tree)`,
+        path: path,
+        content: modifiedContent ?? '',
+        language: resolvedLang,
+      },
       dirty: false,
     };
     workspace.openDiffTab(diffTab);
@@ -1935,24 +2480,74 @@ function App() {
     });
   }
 
+  const syncAllDiagnostics = useCallback(
+    (editorInstance = getPreferredEditor(), monacoInstance = getPreferredMonaco()) => {
+      const monaco = monacoInstance || monacoRef.current;
+      const allMarkers = [];
+
+      if (monaco?.editor?.getModelMarkers) {
+        try {
+          const currentTab = workspace.getActiveTab?.();
+          const monacoMarkers = monaco.editor.getModelMarkers({});
+          monacoMarkers.forEach((marker) => {
+            const rawPath = marker.resource?.fsPath || marker.resource?.path || '';
+            const normalizedPath = rawPath.replace(/\\/g, '/').replace(/^\/+/, '');
+            allMarkers.push({
+              ...marker,
+              filePath: normalizedPath || currentTab?.path || '',
+              fileName: normalizedPath.split('/').pop() || currentTab?.name || 'editor',
+              severity:
+                marker.severity === monaco.MarkerSeverity.Error
+                  ? 'error'
+                  : marker.severity === monaco.MarkerSeverity.Warning
+                    ? 'warning'
+                    : 'info',
+            });
+          });
+        } catch (_) {}
+      }
+
+      lspDiagnosticsByUriRef.current.forEach((diags, docUri) => {
+        (diags || []).forEach((diag) => {
+          const rawUri = String(docUri || '').replace(/\\/g, '/');
+          const normalizedPath = rawUri.replace(/^file:\/\/\/?/, '');
+          const startLine = (diag.range?.start?.line ?? 0) + 1;
+          const startCol = (diag.range?.start?.character ?? 0) + 1;
+          const endLine = (diag.range?.end?.line ?? 0) + 1;
+          const endCol = (diag.range?.end?.character ?? 0) + 1;
+
+          const alreadyInMonaco = allMarkers.some(
+            (m) => m.message === diag.message && m.startLineNumber === startLine
+          );
+
+          if (!alreadyInMonaco) {
+            allMarkers.push({
+              message: diag.message,
+              severity:
+                diag.severity === 1
+                  ? 'error'
+                  : diag.severity === 2
+                    ? 'warning'
+                    : 'info',
+              startLineNumber: startLine,
+              startColumn: startCol,
+              endLineNumber: endLine,
+              endColumn: endCol,
+              owner: diag.source || 'LSP',
+              filePath: normalizedPath,
+              fileName: normalizedPath.split('/').pop() || 'document',
+            });
+          }
+        });
+      });
+
+      setDebugDiagnostics(allMarkers);
+    },
+    [workspace.activeTabId]
+  );
+
   function updateDebugDiagnostics(editorInstance = getPreferredEditor(), monacoInstance = getPreferredMonaco()) {
-    const model = editorInstance?.getModel?.();
-    if (!model || !monacoInstance) {
-      setDebugDiagnostics([]);
-      return;
-    }
-
-    const markers = monacoInstance.editor.getModelMarkers({ resource: model.uri }).map((marker) => ({
-      ...marker,
-      severity:
-        marker.severity === monacoInstance.MarkerSeverity.Error
-          ? 'error'
-          : marker.severity === monacoInstance.MarkerSeverity.Warning
-            ? 'warning'
-            : 'info',
-    }));
-
-    setDebugDiagnostics(markers);
+    syncAllDiagnostics(editorInstance, monacoInstance);
   }
 
   function refreshBreakpointDecorations(
@@ -2535,35 +3130,44 @@ function App() {
     setModalOpen(true);
   }
 
-  async function handleCloneGitHubRepo(repoFullName) {
-    if (!isDesktopRuntime()) {
-      pushNotification('Cloning is only supported in the desktop app.', 'warning');
-      return;
-    }
-    
-    const targetFolder = await desktopPickFolder();
-    if (!targetFolder) {
-      return;
-    }
-
-    const repoName = repoFullName.split('/').pop();
-    const isWindows = navigator.userAgent.toLowerCase().includes('windows');
-    const cmd = isWindows
-      ? `cd "${targetFolder}"; git clone https://github.com/${repoFullName}.git`
-      : `cd "${targetFolder}" && git clone https://github.com/${repoFullName}.git`;
-
-    openBottomPanel('terminal');
-    setTerminalOpen(true);
-    pushNotification(`Cloning ${repoFullName} into ${targetFolder}...`, 'info');
-
-    if (terminalApiRef.current && terminalApiRef.current.createSession) {
-      terminalApiRef.current.createSession({
-        title: `Clone: ${repoName}`,
-        executeInitialCommand: cmd
+  async function handleOpenWorkspaceFolder(folderPath, folderName) {
+    if (!folderPath) return;
+    try {
+      await workspace.openFolderFromPath(folderPath, folderName);
+      workspace.setSelectedNode('root');
+      recordRecentWorkspace({
+        id: workspace.rootName || 'workspace',
+        name: workspace.rootName || workspace.getRootNode()?.name || 'Workspace',
       });
-      pushNotification(`Once cloning finishes, open the ${repoName} folder using Open Folder!`, 'info');
-    } else {
-      pushNotification('Terminal is not ready to execute clone command.', 'warning');
+      if (builtInFeatures.explorer) {
+        setActivePanel('filepioneer');
+      }
+      loadWorkspaceSettings();
+      pushNotification(`Opened workspace: ${workspace.rootName || 'Workspace'}.`, 'success');
+      refresh();
+    } catch (err) {
+      console.error('Failed to open workspace folder:', err);
+      pushNotification(err?.message || 'Failed to open workspace folder.', 'error');
+    }
+  }
+
+  async function handleCloneGitHubRepo(repoFullName, options = {}) {
+    try {
+      pushNotification(`Cloning ${repoFullName}...`, 'info');
+      const { cloneGitHubRepo } = await import('./core/accountApi.js');
+      const result = await cloneGitHubRepo({
+        repoFullName,
+        targetDir: options.targetDir || '',
+      });
+      if (result.localPath) {
+        pushNotification(result.message || `Cloned ${repoFullName}! Opening in Tilder...`, 'success');
+        await handleOpenWorkspaceFolder(result.localPath, result.repoName);
+      }
+      return result;
+    } catch (caughtError) {
+      const msg = caughtError instanceof Error ? caughtError.message : 'Unable to clone repository.';
+      pushNotification(msg, 'error');
+      throw caughtError;
     }
   }
 
@@ -2648,7 +3252,7 @@ function App() {
       : splitEditorOpen && activeEditorPane === 'secondary'
         ? focusedSplitTab
         : activeTab;
-  const showLivePreviewAction = builtInFeatures.livePreview && livePreviewContextTab?.language === 'html';
+  const showLivePreviewAction = builtInFeatures.livePreview && (livePreviewContextTab?.language === 'html' || livePreviewContextTab?.language === 'markdown');
   const previewColumnOpen = livePreviewOpen && livePreviewMode === 'split' && showLivePreviewAction;
   const breadcrumbsEnabled = settings.breadcrumbs?.enabled !== false;
   const editorSurfaceHeight = useMemo(() => {
@@ -3811,6 +4415,57 @@ function App() {
       intelliSenseTargetTab?.path,
   ]);
 
+  useEffect(() => {
+    if (!activeLspBridge || typeof activeLspBridge.onDiagnostics !== 'function') {
+      return undefined;
+    }
+
+    const unsubscribe = activeLspBridge.onDiagnostics((params) => {
+      if (!params || !params.uri) return;
+      const monaco = getPreferredMonaco() || monacoRef.current;
+
+      lspDiagnosticsByUriRef.current.set(params.uri, params.diagnostics || []);
+
+      if (monaco?.editor) {
+        try {
+          const parsedUri = monaco.Uri.parse(params.uri);
+          const model = monaco.editor.getModel(parsedUri);
+          if (model) {
+            const markers = (params.diagnostics || []).map((diag) => {
+              const severity =
+                diag.severity === 1
+                  ? monaco.MarkerSeverity.Error
+                  : diag.severity === 2
+                    ? monaco.MarkerSeverity.Warning
+                    : diag.severity === 3
+                      ? monaco.MarkerSeverity.Info
+                      : monaco.MarkerSeverity.Hint;
+              return {
+                severity,
+                message: diag.message,
+                startLineNumber: (diag.range?.start?.line ?? 0) + 1,
+                startColumn: (diag.range?.start?.character ?? 0) + 1,
+                endLineNumber: (diag.range?.end?.line ?? 0) + 1,
+                endColumn: (diag.range?.end?.character ?? 0) + 1,
+                source: diag.source || 'LSP',
+                code: diag.code ? String(diag.code) : undefined,
+              };
+            });
+            monaco.editor.setModelMarkers(model, 'lsp', markers);
+          }
+        } catch (_) {}
+      }
+
+      syncAllDiagnostics();
+    });
+
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
+  }, [activeLspBridge, syncAllDiagnostics]);
+
   const getEditorIntelliSense = useCallback(
     (tab) => {
       if (!tab?.id || tab.id !== intelliSenseTargetTab?.id) {
@@ -4198,6 +4853,16 @@ function App() {
     editorListenersCleanupRef.current();
     editorRef.current = editor;
     monacoRef.current = monaco;
+    // Restore saved view state for this tab
+    const _mountTabId = workspace.activeTabId;
+    if (_mountTabId) {
+      const _savedState = editorViewStatesRef.current.get(_mountTabId);
+      if (_savedState) {
+        requestAnimationFrame(() => {
+          editor.restoreViewState?.(_savedState);
+        });
+      }
+    }
     setCommandPaletteEditorNonce((current) => current + 1);
 
     const update = () => {
@@ -4208,6 +4873,15 @@ function App() {
     const listeners = [
       editor.onDidChangeCursorPosition(update),
       editor.onDidChangeCursorSelection(update),
+      editor.onDidScrollChange?.(() => {
+        const id = workspace.activeTabId;
+        if (id && editorRef.current) {
+          try {
+            const vs = editorRef.current.saveViewState?.();
+            if (vs) editorViewStatesRef.current.set(id, vs);
+          } catch (_) {}
+        }
+      }),
       model?.onDidChangeContent(update),
       model?.onDidChangeOptions(update),
       editor.onDidFocusEditorText(() => {
@@ -4841,7 +5515,7 @@ function App() {
       notifyExtensionDisabled('Live Preview Canvas');
       return;
     }
-    if (livePreviewContextTab?.language !== 'html') {
+    if ((livePreviewContextTab?.language !== 'html' && livePreviewContextTab?.language !== 'markdown')) {
       return;
     }
 
@@ -4858,7 +5532,7 @@ function App() {
       notifyExtensionDisabled('Live Preview Canvas');
       return false;
     }
-    if (livePreviewContextTab?.language !== 'html') {
+    if ((livePreviewContextTab?.language !== 'html' && livePreviewContextTab?.language !== 'markdown')) {
       return false;
     }
 
@@ -4954,7 +5628,7 @@ function App() {
   }
 
   async function buildLivePreviewDocument(tab) {
-    if (!tab || tab.language !== "html") {
+    if (!tab || (tab.language !== 'html' && tab.language !== 'markdown')) {
       return { document: "", url: "" };
     }
     const targetPath = tab.nativePath || tab.path;
@@ -4965,7 +5639,7 @@ function App() {
 
 
   function handleToggleLivePreview() {
-    if (livePreviewContextTab?.language !== 'html') {
+    if ((livePreviewContextTab?.language !== 'html' && livePreviewContextTab?.language !== 'markdown')) {
       return;
     }
 
@@ -5372,6 +6046,15 @@ function App() {
   }
 
   function handleTabClick(id) {
+    // Save current editor view state before switching
+    const currentTabId = workspace.activeTabId;
+    if (currentTabId && editorRef.current) {
+      try {
+        const vs = editorRef.current.saveViewState?.();
+        if (vs) editorViewStatesRef.current.set(currentTabId, vs);
+      } catch (_) {}
+    }
+
     if (id === '__welcome__') {
       workspace.activeTabId = null;
       setActiveEditorPane('primary');
@@ -5394,6 +6077,13 @@ function App() {
   }
 
   function handleSplitPaneTabClick(index, id) {
+    const currentTabId = workspace.activeTabId;
+    if (currentTabId && editorRef.current) {
+      try {
+        const vs = editorRef.current.saveViewState?.();
+        if (vs) editorViewStatesRef.current.set(currentTabId, vs);
+      } catch (_) {}
+    }
     setFocusedSplitPaneIndex(index);
     const groupId = splitPaneGroups[index]?.id;
     if (id === '__welcome__') {
@@ -5550,6 +6240,7 @@ function App() {
 
     if (globalClose) {
       delete saveTimersRef.current[id];
+      editorViewStatesRef.current.delete(id);
       if (tab && !shouldDiscardUntitled) {
         closedEditorStackRef.current = [{ id: tab.id, path: tab.path, name: tab.name }, ...closedEditorStackRef.current].slice(0, 50);
       }
@@ -5630,6 +6321,7 @@ function App() {
 
     if (!stillReferenced) {
       delete saveTimersRef.current[id];
+      editorViewStatesRef.current.delete(id);
       if (tab && !shouldDiscardUntitled) {
         closedEditorStackRef.current = [{ id: tab.id, path: tab.path, name: tab.name }, ...closedEditorStackRef.current].slice(0, 50);
       }
@@ -6397,8 +7089,8 @@ function App() {
   }, [activeTab?.id]);
 
   useEffect(() => {
-    if (!livePreviewOpen || livePreviewContextTab?.language !== 'html') {
-      if (livePreviewContextTab?.language !== 'html') {
+    if (!livePreviewOpen || (livePreviewContextTab?.language !== 'html' && livePreviewContextTab?.language !== 'markdown')) {
+      if ((livePreviewContextTab?.language !== 'html' && livePreviewContextTab?.language !== 'markdown')) {
         setLivePreviewDocument('');
         setLivePreviewUrl('');
         clearLivePreview();
@@ -6837,13 +7529,17 @@ function App() {
         onCancel={() => resolvePrompt(null)}
         onSubmit={(value) => resolvePrompt(value)}
       />
-      <RemoteWindowModal
-        isOpen={remoteWindowOpen}
-        onClose={() => setRemoteWindowOpen(false)}
-        workspace={workspace}
-        pushNotification={pushNotification}
-        refreshWorkspace={refresh}
-      />
+      {remoteWindowOpen ? (
+        <React.Suspense fallback={null}>
+          <RemoteWindowModal
+            isOpen={remoteWindowOpen}
+            onClose={() => setRemoteWindowOpen(false)}
+            workspace={workspace}
+            pushNotification={pushNotification}
+            refreshWorkspace={refresh}
+          />
+        </React.Suspense>
+      ) : null}
       <CommandPalette
         isOpen={commandPaletteOpen}
         commands={commandPaletteCommands}
@@ -6873,82 +7569,96 @@ function App() {
           }
         }}
       />
-      <ThemePicker
-        isOpen={themePickerOpen}
-        onClose={() => setThemePickerOpen(false)}
-        activeTheme={settings?.theme?.active || 'tilder-formal'}
-        onSelectTheme={(themeId) => {
-          updateSetting('theme.active', themeId);
-        }}
-      />
+      {themePickerOpen ? (
+        <React.Suspense fallback={null}>
+          <ThemePicker
+            isOpen={themePickerOpen}
+            onClose={() => setThemePickerOpen(false)}
+            activeTheme={settings?.theme?.active || 'tilder-formal'}
+            onSelectTheme={(themeId) => {
+              updateSetting('theme.active', themeId);
+            }}
+          />
+        </React.Suspense>
+      ) : null}
 
       {availableUpdate && (
-        <UpdateModal
-          update={availableUpdate}
-          currentVersion={APP_VERSION}
-          onClose={() => setAvailableUpdate(null)}
-        />
+        <React.Suspense fallback={null}>
+          <UpdateModal
+            update={availableUpdate}
+            currentVersion={APP_VERSION}
+            onClose={() => setAvailableUpdate(null)}
+          />
+        </React.Suspense>
       )}
       <Info triggerInfoClose={triggerInfoClose} InfoDisplay={infoDisplay} />
       {pendingTrustFolder && (
-        <WorkspaceTrustModal
-          folderName={pendingTrustFolder.name}
-          onTrust={() => {
-            const trustedWorkspaces = JSON.parse(localStorage.getItem('trustedWorkspaces') || '{}');
-            trustedWorkspaces[pendingTrustFolder.path] = true;
-            localStorage.setItem('trustedWorkspaces', JSON.stringify(trustedWorkspaces));
-            workspace.isTrusted = true;
-            setPendingTrustFolder(null);
-          }}
-          onDeny={() => {
-            workspace.isTrusted = false;
-            setPendingTrustFolder(null);
-          }}
-        />
+        <React.Suspense fallback={null}>
+          <WorkspaceTrustModal
+            folderName={pendingTrustFolder.name}
+            onTrust={() => {
+              const trustedWorkspaces = JSON.parse(localStorage.getItem('trustedWorkspaces') || '{}');
+              trustedWorkspaces[pendingTrustFolder.path] = true;
+              localStorage.setItem('trustedWorkspaces', JSON.stringify(trustedWorkspaces));
+              workspace.isTrusted = true;
+              setPendingTrustFolder(null);
+            }}
+            onDeny={() => {
+              workspace.isTrusted = false;
+              setPendingTrustFolder(null);
+            }}
+          />
+        </React.Suspense>
       )}
-      <AILensModal isOpen={!!aiLensTarget} onClose={() => setAiLensTarget(null)} targetFile={aiLensTarget} />
+      {aiLensTarget ? (
+        <React.Suspense fallback={null}>
+          <AILensModal isOpen={!!aiLensTarget} onClose={() => setAiLensTarget(null)} targetFile={aiLensTarget} />
+        </React.Suspense>
+      ) : null}
 
-      <Modal isOpen={modalOpen} closeModal={closeCurrentModal} title={modalType}>
-        {modalType === 'Settings' && (
-          <Settings modalType={modalType} settings={settings} setSettings={setSettings} systemFonts={systemFonts} extensionCatalog={extensionCatalog} pushNotification={pushNotification} />
-        )}
-        {modalType === 'Extensions' && (
-          <Extensions
-          modalType={modalType}
-          pushNotification={pushNotification}
-          extensionCatalog={extensionCatalog}
-          marketplacePublishers={marketplacePublishers}
-          authSession={authSession}
-          />
-        )}
-        {modalType === 'Account' && (
-          <Account
-          modalType={modalType}
-          authSession={authSession}
-          authServiceStatus={authServiceStatus}
-          authServiceMessage={authServiceMessage}
-          authBusyProvider={authBusyProvider}
-          syncBusy={syncBusy}
-          onStartOAuth={handleStartOAuth}
-          onDisconnectProvider={handleDisconnectProvider}
-          onSetSyncProvider={handleSetSyncProvider}
-          onToggleSyncPreference={handleToggleSyncPreference}
-          onPushSync={() => handlePushSync()}
-          onPullSync={handlePullSync}
-          />
-        )}
-        {modalType === 'Keyboard Shortcuts' && (
-          <KeyboardShortcuts
-          modalType={modalType}
-          commands={KEYBINDING_COMMANDS}
-          bindings={effectiveBindings}
-          onOpenSettings={() => toggleSettings(true)}
-          onUpdateBinding={updateKeybinding}
-          onResetBinding={resetKeybinding}
-          onResetAll={resetAllKeybindings}
-          />
-        )}
-        {modalType === 'System Monitor' && <SystemMonitor modalType={modalType} />}
+      <Modal key={modalType} isOpen={modalOpen} closeModal={closeCurrentModal} title={modalType}>
+        <React.Suspense fallback={<div style={{ padding: 24, color: 'var(--text-secondary)' }}>Loading...</div>}>
+          {modalType === 'Settings' && (
+            <Settings modalType={modalType} settings={settings} setSettings={setSettings} systemFonts={systemFonts} extensionCatalog={extensionCatalog} pushNotification={pushNotification} />
+          )}
+          {modalType === 'Extensions' && (
+            <Extensions
+            modalType={modalType}
+            pushNotification={pushNotification}
+            extensionCatalog={extensionCatalog}
+            marketplacePublishers={marketplacePublishers}
+            authSession={authSession}
+            />
+          )}
+          {modalType === 'Account' && (
+            <Account
+            modalType={modalType}
+            authSession={authSession}
+            authServiceStatus={authServiceStatus}
+            authServiceMessage={authServiceMessage}
+            authBusyProvider={authBusyProvider}
+            syncBusy={syncBusy}
+            onStartOAuth={handleStartOAuth}
+            onDisconnectProvider={handleDisconnectProvider}
+            onSetSyncProvider={handleSetSyncProvider}
+            onToggleSyncPreference={handleToggleSyncPreference}
+            onPushSync={() => handlePushSync()}
+            onPullSync={handlePullSync}
+            />
+          )}
+          {modalType === 'Keyboard Shortcuts' && (
+            <KeyboardShortcuts
+            modalType={modalType}
+            commands={KEYBINDING_COMMANDS}
+            bindings={effectiveBindings}
+            onOpenSettings={() => toggleSettings(true)}
+            onUpdateBinding={updateKeybinding}
+            onResetBinding={resetKeybinding}
+            onResetAll={resetAllKeybindings}
+            />
+          )}
+          {modalType === 'System Monitor' && <SystemMonitor modalType={modalType} />}
+        </React.Suspense>
       </Modal>
       <div id="mainProductivityArea" className={`${zenMode ? 'zen-mode' : ''} ${(centeredLayout || zenMode) ? 'centered-layout' : ''}`}>
         {showMenuBar && !zenMode ? (
@@ -7088,7 +7798,7 @@ function App() {
                     closeTab={handleCloseTab}
                     onRunCurrentFile={handleRunCurrentFile}
                     onOpenCommandPalette={openCommandPalette}
-                    showRunAction={!!activeTab}
+                    showRunAction={isRunnableFile(activeTab)}
                     showLivePreviewAction={showLivePreviewAction}
                     livePreviewOpen={livePreviewOpen}
                     livePreviewMode={livePreviewMode}
@@ -7220,7 +7930,7 @@ function App() {
                           closeTab={handleCloseTab}
                           onRunCurrentFile={handleRunCurrentFile}
                           onOpenCommandPalette={openCommandPalette}
-                          showRunAction={!!primaryPaneEditorTab || splitPrimaryWelcomeOpen}
+                          showRunAction={isRunnableFile(primaryPaneEditorTab)}
                           showLivePreviewAction={false}
                           livePreviewOpen={false}
                           livePreviewMode={livePreviewMode}
@@ -7244,14 +7954,29 @@ function App() {
                       ) : null}
                       {!splitEditorOpen && activeTab ? (
                           activeTab.isDiff ? (
-  <MonacoDiffEditor
-    tab={activeTab.modifiedTab}
-    originalTab={activeTab.originalTab}
-    settings={settings}
-    style={{ flex: 1, height: '100%' }}
-  />
+  <React.Suspense fallback={<div style={{ flex: 1, height: '100%', display: 'grid', placeItems: 'center', color: 'var(--text-secondary)' }}>Loading diff editor...</div>}>
+    <MonacoDiffEditor
+      tab={activeTab.modifiedTab}
+      originalTab={activeTab.originalTab}
+      settings={settings}
+      style={{ flex: 1, height: '100%' }}
+      onChange={(val) => {
+        if (activeTab.modifiedTab?.path) {
+          workspace.updateTabContent(activeTab.modifiedTab.path, val);
+          queueSave(activeTab.modifiedTab.path);
+          refresh();
+        }
+      }}
+    />
+  </React.Suspense>
 ) : isOfficeFile(activeTab.name) ? (
-  <OfficeEditor tab={activeTab} onChange={handleEditorChange} />
+  <React.Suspense fallback={<div style={{ flex: 1, height: '100%', display: 'grid', placeItems: 'center', color: 'var(--text-secondary)' }}>Loading document...</div>}>
+    <OfficeEditor tab={activeTab} onChange={handleEditorChange} />
+  </React.Suspense>
+) : isJupyterNotebook(activeTab.name) ? (
+  <React.Suspense fallback={<div style={{ flex: 1, height: '100%', display: 'grid', placeItems: 'center', color: 'var(--text-secondary)' }}>Loading notebook...</div>}>
+    <JupyterEditor tab={activeTab} onChange={handleEditorChange} settings={settings} />
+  </React.Suspense>
 ) : (
   <MonacoEditor
                             key={`${activeTab.id}:${activeTab.language}:${activeTab.name}`}
@@ -7280,8 +8005,30 @@ function App() {
 )
                       ) : null}
                       {splitEditorOpen && primaryPaneEditorTab ? (
-                          isOfficeFile(primaryPaneEditorTab.name) ? (
-  <OfficeEditor tab={primaryPaneEditorTab} onChange={handleEditorChange} />
+                          primaryPaneEditorTab.isDiff ? (
+                            <React.Suspense fallback={<div style={{ flex: 1, height: '100%', display: 'grid', placeItems: 'center', color: 'var(--text-secondary)' }}>Loading diff editor...</div>}>
+                              <MonacoDiffEditor
+                                tab={primaryPaneEditorTab.modifiedTab}
+                                originalTab={primaryPaneEditorTab.originalTab}
+                                settings={settings}
+                                style={{ flex: 1, height: '100%' }}
+                                onChange={(val) => {
+                                  if (primaryPaneEditorTab.modifiedTab?.path) {
+                                    workspace.updateTabContent(primaryPaneEditorTab.modifiedTab.path, val);
+                                    queueSave(primaryPaneEditorTab.modifiedTab.path);
+                                    refresh();
+                                  }
+                                }}
+                              />
+                            </React.Suspense>
+                          ) : isOfficeFile(primaryPaneEditorTab.name) ? (
+  <React.Suspense fallback={<div style={{ flex: 1, height: '100%', display: 'grid', placeItems: 'center', color: 'var(--text-secondary)' }}>Loading document...</div>}>
+    <OfficeEditor tab={primaryPaneEditorTab} onChange={handleEditorChange} />
+  </React.Suspense>
+) : isJupyterNotebook(primaryPaneEditorTab.name) ? (
+  <React.Suspense fallback={<div style={{ flex: 1, height: '100%', display: 'grid', placeItems: 'center', color: 'var(--text-secondary)' }}>Loading notebook...</div>}>
+    <JupyterEditor tab={primaryPaneEditorTab} onChange={handleEditorChange} settings={settings} />
+  </React.Suspense>
 ) : isBinaryMediaFile(primaryPaneEditorTab.name) ? (
     <MediaViewer tab={primaryPaneEditorTab} />
   ) : (
@@ -7370,7 +8117,7 @@ function App() {
                                 closeTab={handleCloseTab}
                                 onRunCurrentFile={handleRunCurrentFile}
                                 onOpenCommandPalette={openCommandPalette}
-                                showRunAction={!!paneTab || paneWelcomeOpen}
+                                showRunAction={isRunnableFile(paneTab)}
                                 showLivePreviewAction={false}
                                 livePreviewOpen={false}
                                 livePreviewMode={livePreviewMode}
@@ -7387,16 +8134,18 @@ function App() {
                               />
                               {paneTab ? (
                                   isOfficeFile(paneTab.name) ? (
-  <OfficeEditor tab={paneTab} onChange={(value) => { workspace.updateTabContent(paneTab.id, value ?? ''); refresh(); queueSave(paneTab.id); }} />
+  <React.Suspense fallback={<div style={{ flex: 1, height: '100%', display: 'grid', placeItems: 'center', color: 'var(--text-secondary)' }}>Loading document...</div>}>
+    <OfficeEditor tab={paneTab} onChange={(value) => handleSplitEditorChange(paneTab, value)} />
+  </React.Suspense>
+) : isJupyterNotebook(paneTab.name) ? (
+  <React.Suspense fallback={<div style={{ flex: 1, height: '100%', display: 'grid', placeItems: 'center', color: 'var(--text-secondary)' }}>Loading notebook...</div>}>
+    <JupyterEditor tab={paneTab} onChange={(value) => handleSplitEditorChange(paneTab, value)} settings={settings} />
+  </React.Suspense>
 ) : (
   <MonacoEditor
                                     key={`secondary-${paneIndex}-${paneTab.id}:${paneTab.language}:${paneTab.name}`}
                                     tab={paneTab}
-                                    onChange={(value) => {
-                                      workspace.updateTabContent(paneTab.id, value ?? '');
-                                    refresh();
-                                    queueSave(paneTab.id);
-                                  }}
+                                    onChange={(value) => handleSplitEditorChange(paneTab, value)}
                                   onMount={(editor, monaco) => onSplitEditorMount(editor, monaco, paneIndex, paneTab)}
                                     onFocusEditor={() => {
                                       setFocusedSplitPaneIndex(paneIndex);
@@ -7499,6 +8248,13 @@ function App() {
                 debugSession={debugSession}
                 onClearDebugConsole={() => setDebugConsoleEntries([])}
                 settings={settings}
+                onSelectProblem={(diag) => {
+                  if (diag.filePath) {
+                    handleOpenSearchResult({ path: diag.filePath, line: diag.startLineNumber, column: diag.startColumn || 1 });
+                  } else if (diag.startLineNumber) {
+                    handleGoToLine(diag.startLineNumber, diag.startColumn || 1);
+                  }
+                }}
               />
             </div>
           </div>
@@ -7511,7 +8267,11 @@ function App() {
                 title="Resize Sidebar"
               />
             ) : null}
-            <CodeBlocks ariaExpandedisplaycodeblocks={panelDisplay('codeblocks')} />
+            {activePanel === 'codeblocks' ? (
+              <React.Suspense fallback={null}>
+                <CodeBlocks ariaExpandedisplaycodeblocks={panelDisplay('codeblocks')} />
+              </React.Suspense>
+            ) : null}
             {activePanel === 'git' ? (
               <React.Suspense fallback={<div className="sidebarscontent d-flex"><div className="scm-loading-state">Loading Source Control…</div></div>}>
                 <SourceControlPanel
@@ -7522,51 +8282,65 @@ function App() {
                   pushNotification={pushNotification}
                   onWorkspaceMutated={refresh}
                   requestConfirmation={requestConfirmation}
+                  onOpenDiffTab={handleOpenGitDiffTab}
                 />
               </React.Suspense>
             ) : null}
-            <GitHub
-              ariaExpandedisplaygithub={panelDisplay('github')}
-              authSession={authSession}
-              openAccount={openAccount}
-              handleCloneGitHubRepo={handleCloneGitHubRepo}
-              workspace={workspace}
-              pushNotification={pushNotification}
-              onRemoveWatch={handleRemoveWatch}
-              settings={settings}
-              callStack={activeDebugStack}
-              variables={activeDebugVariables}
-              consoleEntries={debugConsoleEntries}
-              onEvaluate={handleEvaluateDebug}
-            />
-            <Debug
-              ariaExpandedisplaydebug={panelDisplay('debug')}
-              activeTab={activeTab}
-              debugSession={debugSession}
-              breakpoints={getActiveBreakpoints()}
-              callStack={debugCallStack}
-              variables={debugVariables}
-              watchValues={watchValues}
-              diagnostics={debugDiagnostics}
-              onStartDebugging={handleStartDebugging}
-              onRunWithoutDebugging={handleRunWithoutDebugging}
-              onPauseDebugging={handlePauseDebugging}
-              onContinueDebugging={handleContinueDebugging}
-              onStopDebugging={handleStopDebugging}
-              onRestartDebugging={handleRestartDebugging}
-              onRunCurrentFile={handleRunCurrentFile}
-              onAddBreakpointAtCursor={handleAddBreakpointAtCursor}
-              onClearBreakpoints={handleClearBreakpoints}
-              onRemoveBreakpoint={handleRemoveBreakpoint}
-              onSetBreakpointCondition={handleSetBreakpointCondition}
-              onAddWatch={handleAddWatch}
-              onRemoveWatch={handleRemoveWatch}
-              settings={settings}
-            />
-            <TestRunner
-              ariaExpandedisplaytestrunner={panelDisplay('testrunner')}
-              pushNotification={pushNotification}
-            />
+            {activePanel === 'github' ? (
+              <React.Suspense fallback={<div className="sidebarscontent d-flex"><div className="scm-loading-state">Loading GitHub…</div></div>}>
+                <GitHub
+                  ariaExpandedisplaygithub={panelDisplay('github')}
+                  authSession={authSession}
+                  openAccount={openAccount}
+                  handleCloneGitHubRepo={handleCloneGitHubRepo}
+                  onOpenWorkspaceFolder={handleOpenWorkspaceFolder}
+                  workspace={workspace}
+                  pushNotification={pushNotification}
+                  onRemoveWatch={handleRemoveWatch}
+                  settings={settings}
+                  callStack={activeDebugStack}
+                  variables={activeDebugVariables}
+                  consoleEntries={debugConsoleEntries}
+                  onEvaluate={handleEvaluateDebug}
+                />
+              </React.Suspense>
+            ) : null}
+            {activePanel === 'debug' ? (
+              <React.Suspense fallback={<div className="sidebarscontent d-flex"><div className="scm-loading-state">Loading Debug…</div></div>}>
+                <Debug
+                  ariaExpandedisplaydebug={panelDisplay('debug')}
+                  activeTab={activeTab}
+                  debugSession={debugSession}
+                  breakpoints={getActiveBreakpoints()}
+                  callStack={debugCallStack}
+                  variables={debugVariables}
+                  watchValues={watchValues}
+                  diagnostics={debugDiagnostics}
+                  onStartDebugging={handleStartDebugging}
+                  onRunWithoutDebugging={handleRunWithoutDebugging}
+                  onPauseDebugging={handlePauseDebugging}
+                  onContinueDebugging={handleContinueDebugging}
+                  onStopDebugging={handleStopDebugging}
+                  onRestartDebugging={handleRestartDebugging}
+                  onRunCurrentFile={handleRunCurrentFile}
+                  onAddBreakpointAtCursor={handleAddBreakpointAtCursor}
+                  onClearBreakpoints={handleClearBreakpoints}
+                  onRemoveBreakpoint={handleRemoveBreakpoint}
+                  onSetBreakpointCondition={handleSetBreakpointCondition}
+                  onAddWatch={handleAddWatch}
+                  onRemoveWatch={handleRemoveWatch}
+                  settings={settings}
+                />
+              </React.Suspense>
+            ) : null}
+            {activePanel === 'testrunner' ? (
+              <React.Suspense fallback={null}>
+                <TestRunner
+                  ariaExpandedisplaytestrunner={panelDisplay('testrunner')}
+                  pushNotification={pushNotification}
+                />
+              </React.Suspense>
+            ) : null}
             <Search
               ariaExpandedisplaysearch={panelDisplay('search')}
               workspace={workspace}
@@ -7611,10 +8385,19 @@ function App() {
               onSelectForCompare={handleSelectForCompare}
               onCompareWithSelected={handleCompareWithSelected}
             />
-            <HardwareManager
-              ariaExpandedisplayhardware={panelDisplay('hardware')}
-              pushNotification={pushNotification}
-            />
+            {activePanel === 'hardware' ? (
+              <React.Suspense fallback={null}>
+                <HardwareManager
+                  ariaExpandedisplayhardware={panelDisplay('hardware')}
+                  pushNotification={pushNotification}
+                />
+              </React.Suspense>
+            ) : null}
+            {activePanel === 'trashview' ? (
+              <React.Suspense fallback={null}>
+                <TrashView ariaExpandedisplaytrash={panelDisplay('trashview')} />
+              </React.Suspense>
+            ) : null}
             <Backpack
               ariaExpandedDisplayBackpack={panelDisplay('backpack')}
               onInsertSnippet={handleInsertSnippetIntoEditor}
