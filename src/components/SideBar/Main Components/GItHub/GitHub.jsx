@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   fetchGitHubRepos,
   createGitHubRepo,
@@ -9,6 +9,8 @@ import {
   fetchGitHubRepoBlob,
   fetchGitHubPulls,
   fetchGitHubIssues,
+  fetchGitHubIssueDetail,
+  fetchGitHubPRDetail,
 } from '../../../../core/accountApi.js';
 import { desktopPickFolder, desktopExecuteCommand, openExternalUrl } from '../../../../core/desktopFileApi.js';
 import { syncScm } from '../../../../core/scmApi.js';
@@ -62,6 +64,12 @@ function GitHub({
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+
+  // Issue / PR Detail Panel
+  const [selectedIssue, setSelectedIssue] = useState(null);   // { type: 'issue'|'pr', owner, repo, number, url }
+  const [issueDetail, setIssueDetail] = useState(null);        // full fetched detail
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [detailError, setDetailError] = useState('');
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -540,6 +548,83 @@ function GitHub({
     }
   }
 
+  // ── Issue / PR detail opener ────────────────────────────────
+  const openItemDetail = async (type, item) => {
+    // Parse owner/repo from repoFullName like "owner/repo"
+    // Fall back to parsing from the html_url if repoFullName is empty
+    let owner = '';
+    let repo = '';
+    const parts = (item.repoFullName || '').split('/');
+    if (parts.length >= 2 && parts[0] && parts[1]) {
+      owner = parts[0];
+      repo = parts[1];
+    } else {
+      // fallback: parse from URL  e.g. https://github.com/owner/repo/issues/42
+      const m = (item.url || '').match(/github\.com\/([^/]+)\/([^/]+)\//i);
+      if (m) { owner = m[1]; repo = m[2]; }
+    }
+
+    if (!owner || !repo) {
+      // Can't parse — just open externally
+      openExternalUrl(item.url);
+      return;
+    }
+
+    setSelectedIssue({ type, owner, repo, number: item.number, url: item.url });
+    setIssueDetail(null);
+    setDetailError('');
+    setLoadingDetail(true);
+
+    try {
+      const fetcher = type === 'pr' ? fetchGitHubPRDetail : fetchGitHubIssueDetail;
+      const data = await fetcher(owner, repo, item.number);
+      // Detect API error responses (e.g. { message: 'Not Found' })
+      if (!data || data.message || (!data.title && !data.number)) {
+        setDetailError(
+          (data?.message && data.message !== 'Not Found')
+            ? `GitHub API: ${data.message}`
+            : 'Could not load detail — click "Open in GitHub" to view it in your browser.'
+        );
+      } else {
+        setIssueDetail(data);
+      }
+    } catch {
+      setDetailError('Failed to load detail. Click "Open in GitHub" to view it in your browser.');
+    } finally {
+      setLoadingDetail(false);
+    }
+  };
+
+  const closeDetail = () => {
+    setSelectedIssue(null);
+    setIssueDetail(null);
+    setDetailError('');
+    setLoadingDetail(false);
+  };
+
+  // Very simple markdown → readable text renderer (no deps needed)
+  const renderBodyText = (body) => {
+    if (!body) return <span style={{ opacity: 0.4, fontStyle: 'italic' }}>No description provided.</span>;
+    // Split on double newline = paragraphs; render each paragraph
+    return body.split(/\n{2,}/).map((para, i) => {
+      // Code block
+      if (para.startsWith('```')) {
+        const code = para.replace(/^```[^\n]*\n?/, '').replace(/```$/, '');
+        return <pre key={i} className="gh-detail-code">{code}</pre>;
+      }
+      // Heading
+      const hMatch = para.match(/^(#{1,6})\s+(.*)/);
+      if (hMatch) {
+        return <p key={i} style={{ fontWeight: 600, fontSize: 13, margin: '6px 0 2px' }}>{hMatch[2]}</p>;
+      }
+      return (
+        <p key={i} style={{ margin: '4px 0', whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>
+          {para.replace(/`([^`]+)`/g, (_, c) => c)}
+        </p>
+      );
+    });
+  };
+
   return (
     <div id="githubarea" className={`gh-panel-root d-${ariaExpandedisplaygithub}`}>
       {/* ── Top Header ────────────────────────────────────── */}
@@ -583,6 +668,122 @@ function GitHub({
         </div>
       ) : (
         <>
+          {/* ═══════════════════════════════════════════════════════
+              ISSUE / PR DETAIL PANEL — overlays when selectedIssue
+          ═══════════════════════════════════════════════════════ */}
+          {selectedIssue && (
+            <div className="gh-detail-overlay">
+              {/* Back bar */}
+              <div className="gh-detail-topbar">
+                <button className="gh-detail-back-btn" onClick={closeDetail}>
+                  <i className="fa-solid fa-arrow-left" /> Back
+                </button>
+                <button
+                  className="gh-detail-external-btn"
+                  onClick={() => openExternalUrl(selectedIssue.url)}
+                  title="Open in GitHub"
+                >
+                  <i className="fa-solid fa-arrow-up-right-from-square" /> Open in GitHub
+                </button>
+              </div>
+
+              <div className="gh-detail-scroll">
+                {loadingDetail ? (
+                  <div className="gh-detail-loading">
+                    <i className="fa-solid fa-circle-notch fa-spin" style={{ fontSize: 20, color: 'rgba(255,255,255,0.4)' }} />
+                    <span>Loading detail…</span>
+                  </div>
+                ) : detailError ? (
+                  <div className="gh-detail-error">
+                    <i className="fa-solid fa-triangle-exclamation" style={{ color: '#f1c40f' }} />
+                    <span>{detailError}</span>
+                  </div>
+                ) : issueDetail ? (
+                  <>
+                    {/* Header */}
+                    <div className="gh-detail-header">
+                      <div className="gh-detail-number-badge">
+                        {selectedIssue.type === 'pr' ? (
+                          <i className="fa-solid fa-code-pull-request" style={{ color: issueDetail.merged ? '#8957e5' : issueDetail.state === 'closed' ? '#f85149' : '#2ecc71' }} />
+                        ) : (
+                          <i className="fa-regular fa-circle-dot" style={{ color: issueDetail.state === 'closed' ? '#f85149' : '#2ecc71' }} />
+                        )}
+                        <span className={`gh-state-badge gh-state-${issueDetail.state}`}>{issueDetail.merged ? 'merged' : issueDetail.state}</span>
+                        <span className="gh-detail-repo">{issueDetail.repoFullName}</span>
+                        <span className="gh-detail-num">#{issueDetail.number}</span>
+                      </div>
+                      <h2 className="gh-detail-title">{issueDetail.title}</h2>
+
+                      {/* Branch info for PRs */}
+                      {selectedIssue.type === 'pr' && issueDetail.headRef && (
+                        <div className="gh-detail-branch-row">
+                          <span className="gh-branch-pill">{issueDetail.headRef}</span>
+                          <i className="fa-solid fa-arrow-right" style={{ fontSize: 9, opacity: 0.5 }} />
+                          <span className="gh-branch-pill">{issueDetail.baseRef}</span>
+                        </div>
+                      )}
+
+                      {/* Labels */}
+                      {issueDetail.labels?.length > 0 && (
+                        <div className="gh-detail-labels">
+                          {issueDetail.labels.map((l) => (
+                            <span key={l.name} className="gh-label-pill" style={{ background: `#${l.color}22`, borderColor: `#${l.color}88`, color: `#${l.color}` }}>
+                              {l.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Meta row */}
+                      <div className="gh-detail-meta-row">
+                        {issueDetail.user?.avatarUrl && (
+                          <img src={issueDetail.user.avatarUrl} className="gh-detail-avatar" alt={issueDetail.user.login} />
+                        )}
+                        <span style={{ opacity: 0.6, fontSize: 11 }}>
+                          opened by <strong>{issueDetail.user?.login}</strong>
+                        </span>
+                        {issueDetail.assignees?.length > 0 && (
+                          <span style={{ opacity: 0.55, fontSize: 11, marginLeft: 8 }}>
+                            · assigned to {issueDetail.assignees.map((a) => a.login).join(', ')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Body */}
+                    <div className="gh-detail-body-section">
+                      <div className="gh-detail-body-label">
+                        <i className="fa-regular fa-file-lines" /> Description
+                      </div>
+                      <div className="gh-detail-body-content">
+                        {renderBodyText(issueDetail.body)}
+                      </div>
+                    </div>
+
+                    {/* Comments */}
+                    {issueDetail.comments?.length > 0 && (
+                      <div className="gh-detail-comments-section">
+                        <div className="gh-detail-body-label">
+                          <i className="fa-regular fa-comment" /> {issueDetail.comments.length} Comment{issueDetail.comments.length !== 1 ? 's' : ''}
+                        </div>
+                        {issueDetail.comments.map((c) => (
+                          <div key={c.id} className="gh-comment-card">
+                            <div className="gh-comment-header">
+                              {c.user?.avatarUrl && <img src={c.user.avatarUrl} className="gh-detail-avatar" alt={c.user.login} />}
+                              <strong style={{ fontSize: 11 }}>{c.user?.login}</strong>
+                              <span style={{ opacity: 0.45, fontSize: 10, marginLeft: 'auto' }}>{formatRelativeTime(c.createdAt)}</span>
+                            </div>
+                            <div className="gh-comment-body">{renderBodyText(c.body)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : null}
+              </div>
+            </div>
+          )}
+
           {/* ── Profile Summary Card ────────────────────────── */}
           <div className="gh-profile-card">
             <div className="gh-profile-main">
@@ -1186,24 +1387,25 @@ function GitHub({
                   </div>
                 ) : (
                   pullRequests.map((pr) => (
-                    <a
+                    <div
                       key={pr.id}
-                      href={pr.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="gh-item-card"
-                      style={{ display: 'block', textDecoration: 'none' }}
+                      className="gh-item-card gh-item-card--clickable"
+                      onClick={() => openItemDetail('pr', pr)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === 'Enter' && openItemDetail('pr', pr)}
                     >
                       <div className="gh-item-title-row">
                         <i className="fa-solid fa-code-pull-request" style={{ color: '#2ecc71', fontSize: 12 }} />
                         <span className="gh-item-title">{pr.title}</span>
+                        <i className="fa-solid fa-chevron-right gh-item-chevron" />
                       </div>
                       <div className="gh-item-meta">
                         <span>{pr.repoFullName}</span>
                         <span>#{pr.number}</span>
                         <span style={{ marginLeft: 'auto' }}>{formatRelativeTime(pr.updatedAt)}</span>
                       </div>
-                    </a>
+                    </div>
                   ))
                 )}
               </div>
@@ -1219,24 +1421,25 @@ function GitHub({
                   </div>
                 ) : (
                   issues.map((issue) => (
-                    <a
+                    <div
                       key={issue.id}
-                      href={issue.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="gh-item-card"
-                      style={{ display: 'block', textDecoration: 'none' }}
+                      className="gh-item-card gh-item-card--clickable"
+                      onClick={() => openItemDetail('issue', issue)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === 'Enter' && openItemDetail('issue', issue)}
                     >
                       <div className="gh-item-title-row">
                         <i className="fa-regular fa-circle-dot" style={{ color: '#2ecc71', fontSize: 12 }} />
                         <span className="gh-item-title">{issue.title}</span>
+                        <i className="fa-solid fa-chevron-right gh-item-chevron" />
                       </div>
                       <div className="gh-item-meta">
                         <span>{issue.repoFullName}</span>
                         <span>#{issue.number}</span>
                         <span style={{ marginLeft: 'auto' }}>{formatRelativeTime(issue.updatedAt)}</span>
                       </div>
-                    </a>
+                    </div>
                   ))
                 )}
               </div>

@@ -303,6 +303,7 @@ let embeddedCssProviderRegistered = false;
 let embeddedJavaScriptProviderRegistered = false;
 let embeddedCssPropertiesCache = null;
 const lspCompletionRegistrations = new Map();
+
 const lspFeatureRegistrations = new Map();
 const extensionCompletionRegistrations = new Map();
 const lspContextResolvers = new Map();
@@ -1629,18 +1630,31 @@ export default function MonacoEditor({
       });
     }
 
+    if (monaco.languages.json) {
+      monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
+        validate: true,
+        allowComments: true,
+      });
+    }
+
+    if (monaco.languages.css) {
+      monaco.languages.css.cssDefaults.setDiagnosticsOptions({
+        validate: true,
+      });
+    }
+
     registerEmmetProviders(monaco);
     registerHtmlLinkedTagProvider(monaco);
     registerEmbeddedCssProvider(monaco);
     registerEmbeddedJavaScriptProvider(monaco);
-    registerLspCompletionProvider(monaco, tab.language, () => activeLspContextRef.current);
+        registerLspCompletionProvider(monaco, tab.language, () => activeLspContextRef.current);
     registerLspFeatureProviders(monaco, tab.language, () => activeLspContextRef.current);
     activeLspContextRef.current =
       intelliSense?.providerType === 'lsp' && lspBridge
         ? {
             bridge: lspBridge,
             languageId: tab.language,
-            relativePath: tab.path === 'root' ? tab.name : tab.path,
+            relativePath: tab.nativePath || (tab.path === 'root' ? tab.name : tab.path),
             fileName: tab.name,
           }
         : null;
@@ -1909,7 +1923,7 @@ export default function MonacoEditor({
         ? {
             bridge: lspBridge,
             languageId: tab.language,
-            relativePath: tab.path === 'root' ? tab.name : tab.path,
+            relativePath: tab.nativePath || (tab.path === 'root' ? tab.name : tab.path),
             fileName: tab.name,
           }
         : null;
@@ -1937,7 +1951,7 @@ export default function MonacoEditor({
       const model = editorRef.current.getModel();
       if (model) {
         lspBridge.syncDocument({
-          relativePath: tab.path === 'root' ? tab.name : tab.path,
+          relativePath: tab.nativePath || (tab.path === 'root' ? tab.name : tab.path),
           fileName: tab.name,
           text: model.getValue(),
         }).catch(() => {});
@@ -1958,9 +1972,19 @@ export default function MonacoEditor({
         const model = editor.getModel();
         if (!model) return;
 
-        const currentUri = model.uri.toString();
-        const lspUri = params.uri;
-        if (currentUri !== lspUri && decodeURIComponent(currentUri) !== decodeURIComponent(lspUri)) {
+        const currentUri = decodeURIComponent(model.uri.toString()).toLowerCase().replace(/\\/g, '/');
+        const lspUri = decodeURIComponent(String(params.uri || '')).toLowerCase().replace(/\\/g, '/');
+        const tabName = String(tab?.name || '').toLowerCase();
+        const tabPath = String(tab?.path || '').toLowerCase().replace(/\\/g, '/');
+        const tabNative = String(tab?.nativePath || '').toLowerCase().replace(/\\/g, '/');
+
+        const isMatch =
+          currentUri === lspUri ||
+          (tabName && (lspUri.endsWith('/' + tabName) || currentUri.endsWith('/' + tabName))) ||
+          (tabNative && (lspUri.includes(tabNative) || tabNative.includes(lspUri))) ||
+          (tabPath && tabPath !== 'root' && (lspUri.endsWith(tabPath) || currentUri.endsWith(tabPath)));
+
+        if (!isMatch) {
           return;
         }
 
@@ -2006,8 +2030,8 @@ export default function MonacoEditor({
       : intelliSense?.providerType === 'basic'
         ? 'currentDocument'
       : intelliSense?.providerType === 'lsp' && intelliSense?.available
-        ? false
-        : false;
+        ? 'matchingDocuments'
+        : 'currentDocument';
   const editorOptions = React.useMemo(
     () => buildEditorOptions(settings, tab, wordBasedSuggestions),
     [settings, tab, wordBasedSuggestions]
@@ -2090,13 +2114,14 @@ export default function MonacoEditor({
       ) : (
         <Editor
           height="100%"
+          path={tab.nativePath || (tab.path && tab.path !== 'root' ? tab.path : tab.name)}
           theme={settings?.theme?.active || 'tilder-formal'}
           language={effectiveLanguage}
-            value={tab.content}
-            onChange={onChange}
-            onMount={handleMount}
-            options={editorOptions}
-          />
+          value={tab.content}
+          onChange={onChange}
+          onMount={handleMount}
+          options={editorOptions}
+        />
         )}
       </div>
   );

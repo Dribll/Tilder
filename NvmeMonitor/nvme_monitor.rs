@@ -33,6 +33,58 @@ extern "system" {
 
     fn CloseHandle(hObject: *mut std::ffi::c_void) -> i32;
     fn GetLogicalDrives() -> u32;
+
+    fn OpenFileMappingW(dwDesiredAccess: u32, bInheritHandle: i32, lpName: *const u16) -> *mut std::ffi::c_void;
+    fn MapViewOfFile(hEngine: *mut std::ffi::c_void, dwDesiredAccess: u32, dwFileOffsetHigh: u32, dwFileOffsetLow: u32, dwNumberOfBytesToMap: usize) -> *mut u8;
+    fn UnmapViewOfFile(lpBaseAddress: *const std::ffi::c_void) -> i32;
+}
+
+#[repr(C, packed)]
+struct CoreTempSharedData {
+    ui_load: [u32; 256],
+    ui_tj_max: [u32; 128],
+    ui_core_cnt: u32,
+    ui_cpu_cnt: u32,
+    f_temp: [f32; 256],
+    f_vid: f32,
+    f_cpu_speed: f32,
+    f_fsb_speed: f32,
+    f_multiplier: f32,
+    s_cpu_name: [u8; 100],
+    uc_fahrenheit: u8,
+    uc_delta_to_tj_max: u8,
+}
+
+fn query_coretemp_cpu() -> Option<i32> {
+    let names = ["CoreTempMappingObject\0", "Global\\CoreTempMappingObject\0", "Local\\CoreTempMappingObject\0"];
+    for name in names {
+        let wide: Vec<u16> = name.encode_utf16().collect();
+        unsafe {
+            let h = OpenFileMappingW(0x0004, 0, wide.as_ptr());
+            if !h.is_null() {
+                let ptr = MapViewOfFile(h, 0x0004, 0, 0, std::mem::size_of::<CoreTempSharedData>());
+                if !ptr.is_null() {
+                    let data = &*(ptr as *const CoreTempSharedData);
+                    let core_cnt = std::ptr::read_unaligned(std::ptr::addr_of!(data.ui_core_cnt));
+                    let mut max_temp = 0.0f32;
+                    if core_cnt > 0 && core_cnt <= 64 {
+                        for i in 0..core_cnt as usize {
+                            let t = std::ptr::read_unaligned(std::ptr::addr_of!(data.f_temp[i]));
+                            if t > max_temp { max_temp = t; }
+                        }
+                    }
+                    UnmapViewOfFile(ptr as *const _);
+                    CloseHandle(h);
+                    if max_temp > 10.0 && max_temp < 125.0 {
+                        return Some(max_temp.round() as i32);
+                    }
+                } else {
+                    CloseHandle(h);
+                }
+            }
+        }
+    }
+    None
 }
 
 const INVALID_HANDLE_VALUE: *mut std::ffi::c_void = -1isize as *mut std::ffi::c_void;
@@ -51,7 +103,41 @@ struct PhysicalDiskInfo {
     bus_type: u8,
     incurs_seek_penalty: bool,
     media_type: String,
-    nvme_temp: Option<i32>,
+    disk_temp: Option<i32>,
+}
+
+fn query_ata_smart_temp_on_handle(handle: *mut std::ffi::c_void) -> Option<i32> {
+    const IOCTL_STORAGE_PREDICT_FAILURE: u32 = 0x002D1100;
+    let mut out_buf = vec![0u8; 516];
+    let mut bytes_ret = 0u32;
+    let ok = unsafe {
+        DeviceIoControl(
+            handle,
+            IOCTL_STORAGE_PREDICT_FAILURE,
+            std::ptr::null(),
+            0,
+            out_buf.as_mut_ptr(),
+            516,
+            &mut bytes_ret,
+            std::ptr::null_mut(),
+        )
+    };
+    if ok != 0 && bytes_ret >= 516 {
+        let data = &out_buf[4..];
+        for i in 0..30 {
+            let entry_offset = 2 + i * 12;
+            if entry_offset + 12 > data.len() { break; }
+            let entry = &data[entry_offset..entry_offset + 12];
+            let id = entry[0];
+            if id == 194 || id == 190 {
+                let temp = entry[5] as i32;
+                if temp > 0 && temp < 100 {
+                    return Some(temp);
+                }
+            }
+        }
+    }
+    None
 }
 
 fn query_nvme_temp_on_handle(handle: *mut std::ffi::c_void) -> Option<i32> {
@@ -179,11 +265,12 @@ fn inspect_physical_disk(disk_num: u32) -> Option<PhysicalDiskInfo> {
         incurs_seek_penalty = seek_out[8] != 0;
     }
 
-    // 3. Try NVMe temperature query if bus is NVMe or as test
-    let nvme_temp = if bus_type == 17 {
-        query_nvme_temp_on_handle(handle)
+    // 3. Query temperature: try NVMe first, then ATA SMART (Attribute 194/190)
+    let nvme_temp = query_nvme_temp_on_handle(handle);
+    let disk_temp = if nvme_temp.is_some() {
+        nvme_temp
     } else {
-        query_nvme_temp_on_handle(handle)
+        query_ata_smart_temp_on_handle(handle)
     };
 
     unsafe { CloseHandle(handle) };
@@ -202,7 +289,7 @@ fn inspect_physical_disk(disk_num: u32) -> Option<PhysicalDiskInfo> {
         bus_type,
         incurs_seek_penalty,
         media_type,
-        nvme_temp,
+        disk_temp,
     })
 }
 
@@ -256,8 +343,8 @@ fn scan_all_drives() -> (Option<i32>, HashMap<String, (String, Option<i32>, bool
 
     for disk_num in 0..8 {
         if let Some(info) = inspect_physical_disk(disk_num) {
-            if primary_nvme_temp.is_none() && info.nvme_temp.is_some() {
-                primary_nvme_temp = info.nvme_temp;
+            if primary_nvme_temp.is_none() && info.disk_temp.is_some() && info.media_type.contains("NVMe") {
+                primary_nvme_temp = info.disk_temp;
             }
             physical_disks.insert(disk_num, info);
         }
@@ -273,7 +360,7 @@ fn scan_all_drives() -> (Option<i32>, HashMap<String, (String, Option<i32>, bool
                 if let Some(disk_info) = physical_disks.get(&disk_num) {
                     let key = format!("{}:", letter);
                     let is_nvme = disk_info.media_type.contains("NVMe");
-                    volume_map.insert(key, (disk_info.media_type.clone(), disk_info.nvme_temp, is_nvme));
+                    volume_map.insert(key, (disk_info.media_type.clone(), disk_info.disk_temp, is_nvme));
                 }
             }
         }
@@ -296,6 +383,7 @@ fn main() {
 
     loop {
         let (primary_temp, drive_map) = scan_all_drives();
+        let cpu_temp = query_coretemp_cpu();
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis();
 
         let mut drives_json = String::new();
@@ -318,9 +406,14 @@ fn main() {
             None => "null".to_string(),
         };
 
+        let cpu_temp_str = match cpu_temp {
+            Some(t) => t.to_string(),
+            None => "null".to_string(),
+        };
+
         let json = format!(
-            r#"{{"tempCelsius":{},"timestamp":{},"drives":{{{}}}}}"#,
-            primary_temp_str, now, drives_json
+            r#"{{"tempCelsius":{},"cpuTemp":{},"timestamp":{},"drives":{{{}}}}}"#,
+            primary_temp_str, cpu_temp_str, now, drives_json
         );
 
         let _ = std::fs::write(&tmp_file, &json);

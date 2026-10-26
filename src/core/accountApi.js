@@ -199,6 +199,16 @@ export async function fetchGitHubIssues() {
   return parseJson(response);
 }
 
+export async function fetchGitHubIssueDetail(owner, repo, number) {
+  const response = await apiFetch(`/api/github/issues/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${number}`);
+  return parseJson(response);
+}
+
+export async function fetchGitHubPRDetail(owner, repo, number) {
+  const response = await apiFetch(`/api/github/pulls/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${number}`);
+  return parseJson(response);
+}
+
 export async function fetchLocalBackpack(path = '') {
   const response = await apiFetch(`/api/backpack/local${path ? `?path=${encodeURIComponent(path)}` : ''}`);
   return parseJson(response);

@@ -7,6 +7,7 @@
   flex-direction: column;
   height: 100%;
   width: 100%;
+  position: relative;
   background: var(--sidebar-background, #181818);
   color: var(--foreground, #cccccc);
   font-family: inherit;
@@ -824,4 +825,280 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   ISSUE / PR DETAIL PANEL
+═══════════════════════════════════════════════════════════════ */
+
+/* Clickable item card variant — shows chevron */
+.gh-item-card--clickable {
+  display: block;
+  text-decoration: none;
+}
+
+.gh-item-chevron {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.25);
+  flex-shrink: 0;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.gh-item-card--clickable:hover .gh-item-chevron {
+  color: rgba(255, 255, 255, 0.6);
+  transform: translateX(2px);
+}
+
+/* Full overlay that covers the panel body */
+.gh-detail-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  background: rgba(14, 17, 23, 0.97);
+  backdrop-filter: blur(6px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Top action bar */
+.gh-detail-topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.gh-detail-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 11.5px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.gh-detail-back-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+.gh-detail-external-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(88, 166, 255, 0.1);
+  border: 1px solid rgba(88, 166, 255, 0.3);
+  border-radius: 5px;
+  color: #58a6ff;
+  font-size: 11.5px;
+  padding: 5px 10px;
+  cursor: pointer;
+  margin-left: auto;
+  transition: all 0.15s ease;
+}
+
+.gh-detail-external-btn:hover {
+  background: rgba(88, 166, 255, 0.18);
+  border-color: rgba(88, 166, 255, 0.55);
+  color: #79baff;
+}
+
+/* Scrollable content area */
+.gh-detail-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 12px 20px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.12) transparent;
+}
+
+.gh-detail-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.gh-detail-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.gh-detail-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.12);
+  border-radius: 2px;
+}
+
+/* Loading / error states inside detail */
+.gh-detail-loading,
+.gh-detail-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 20px;
+  color: rgba(255,255,255,0.5);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* Header section */
+.gh-detail-header {
+  margin-bottom: 14px;
+}
+
+.gh-detail-number-badge {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+
+.gh-state-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 10px;
+  text-transform: capitalize;
+}
+
+.gh-state-open   { background: rgba(46,204,113,0.15); color: #2ecc71; border: 1px solid rgba(46,204,113,0.35); }
+.gh-state-closed { background: rgba(248,81,73,0.15);  color: #f85149; border: 1px solid rgba(248,81,73,0.35); }
+.gh-state-merged { background: rgba(137,87,229,0.15); color: #8957e5; border: 1px solid rgba(137,87,229,0.35); }
+
+.gh-detail-repo {
+  color: rgba(255,255,255,0.45);
+  font-size: 10.5px;
+}
+
+.gh-detail-num {
+  color: rgba(255,255,255,0.3);
+  font-size: 10.5px;
+}
+
+.gh-detail-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.4;
+  margin: 0 0 8px 0;
+}
+
+/* Branch pills (PR only) */
+.gh-detail-branch-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.gh-branch-pill {
+  font-size: 10px;
+  font-family: monospace;
+  background: rgba(88,166,255,0.1);
+  border: 1px solid rgba(88,166,255,0.25);
+  color: #58a6ff;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+/* Labels */
+.gh-detail-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.gh-label-pill {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid;
+  font-weight: 500;
+}
+
+/* Meta row (author + assignees) */
+.gh-detail-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.6);
+}
+
+.gh-detail-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* Description / body section */
+.gh-detail-body-section,
+.gh-detail-comments-section {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 7px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.gh-detail-body-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.gh-detail-body-content {
+  font-size: 12px;
+  color: rgba(255,255,255,0.8);
+  line-height: 1.55;
+}
+
+.gh-detail-code {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 11px;
+  font-family: 'Fira Code', 'Cascadia Code', monospace;
+  color: #e6edf3;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-x: auto;
+  margin: 6px 0;
+}
+
+/* Comment cards */
+.gh-comment-card {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 7px;
+}
+
+.gh-comment-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.gh-comment-body {
+  font-size: 11.5px;
+  color: rgba(255,255,255,0.75);
+  line-height: 1.5;
 }

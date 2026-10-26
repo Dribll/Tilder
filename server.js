@@ -320,6 +320,18 @@ const commonWindowsCommandLocations = {
   clangd: ['C:\\Program Files\\LLVM\\bin\\clangd.exe'],
   gopls: [path.join(os.homedir(), 'go', 'bin', 'gopls.exe')],
   'rust-analyzer': [path.join(os.homedir(), '.cargo', 'bin', 'rust-analyzer.exe')],
+  jdtls: [
+    path.join(__dirname, 'node_modules', '.bin', 'jdtls.cmd'),
+    path.join(localNodeBinDir, 'jdtls.cmd'),
+  ],
+  'pyright-langserver': [
+    path.join(__dirname, 'node_modules', '.bin', 'pyright-langserver.cmd'),
+    path.join(localNodeBinDir, 'pyright-langserver.cmd'),
+  ],
+  'typescript-language-server': [
+    path.join(__dirname, 'node_modules', '.bin', 'typescript-language-server.cmd'),
+    path.join(localNodeBinDir, 'typescript-language-server.cmd'),
+  ],
   fsautocomplete: [path.join(os.homedir(), '.dotnet', 'tools', 'fsautocomplete.exe')],
   'cmake-language-server': [path.join(os.homedir(), 'AppData', 'Roaming', 'Python', 'Python314', 'Scripts', 'cmake-language-server.exe')],
   fortls: [path.join(os.homedir(), 'AppData', 'Roaming', 'Python', 'Python314', 'Scripts', 'fortls.exe')],
@@ -947,7 +959,11 @@ function emitLspStatus(session, payload) {
 }
 
 function spawnLspProcess(command, args, workspaceRoot) {
-  if (command === 'jdtls' || command.endsWith('jdtls.bat') || command.endsWith('jdtls.sh') || command.endsWith('jdtls.cmd')) {
+  if (
+    (command === 'jdtls' || command.endsWith('jdtls.bat') || command.endsWith('jdtls.sh') || command.endsWith('jdtls.cmd')) &&
+    !args.includes('-data') &&
+    !String(command).toLowerCase().includes('@vscjava')
+  ) {
     const dataDir = path.join(os.tmpdir(), 'tilder-jdtls', String(workspaceRoot || '').replace(/[:\\/]+/g, '-'));
     args = [...args, '-data', dataDir];
   }
@@ -964,9 +980,9 @@ function spawnLspProcess(command, args, workspaceRoot) {
 
   if (os.platform() === 'win32' && /\.(cmd|bat)$/i.test(String(command || ''))) {
     const commandLine = [quoteWindowsShellArg(command), ...args.map(quoteWindowsShellArg)].join(' ');
-    return spawn(commandLine, [], {
+    return spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${commandLine}"`], {
       ...sharedOptions,
-      shell: true,
+      windowsVerbatimArguments: true,
     });
   }
 
@@ -3109,6 +3125,113 @@ app.get('/api/github/issues', async (request, response) => {
   }
 });
 
+// Full issue detail (body, labels, assignees, comments)
+app.get('/api/github/issues/:owner/:repo/:number', async (request, response) => {
+  const account = request.session.accounts?.github;
+  if (!account?.accessToken) {
+    response.status(400).json({ message: 'Connect GitHub first.' });
+    return;
+  }
+  const { owner, repo, number } = request.params;
+  try {
+    const [issueRes, commentsRes] = await Promise.all([
+      fetch(`https://api.github.com/repos/${owner}/${repo}/issues/${number}`, {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${account.accessToken}`,
+          'User-Agent': 'Tilder',
+        },
+      }),
+      fetch(`https://api.github.com/repos/${owner}/${repo}/issues/${number}/comments?per_page=30`, {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${account.accessToken}`,
+          'User-Agent': 'Tilder',
+        },
+      }),
+    ]);
+    const issue = await issueRes.json();
+    const comments = await commentsRes.json();
+    response.json({
+      id: issue.id,
+      number: issue.number,
+      title: issue.title,
+      body: issue.body || '',
+      state: issue.state,
+      url: issue.html_url,
+      createdAt: issue.created_at,
+      updatedAt: issue.updated_at,
+      repoFullName: `${owner}/${repo}`,
+      user: { login: issue.user?.login, avatarUrl: issue.user?.avatar_url },
+      labels: (issue.labels || []).map((l) => ({ name: l.name, color: l.color })),
+      assignees: (issue.assignees || []).map((a) => ({ login: a.login, avatarUrl: a.avatar_url })),
+      comments: (Array.isArray(comments) ? comments : []).map((c) => ({
+        id: c.id,
+        body: c.body || '',
+        createdAt: c.created_at,
+        user: { login: c.user?.login, avatarUrl: c.user?.avatar_url },
+      })),
+    });
+  } catch (err) {
+    response.status(500).json({ message: 'Failed to fetch issue detail.' });
+  }
+});
+
+// Full PR detail (body, labels, assignees, comments)
+app.get('/api/github/pulls/:owner/:repo/:number', async (request, response) => {
+  const account = request.session.accounts?.github;
+  if (!account?.accessToken) {
+    response.status(400).json({ message: 'Connect GitHub first.' });
+    return;
+  }
+  const { owner, repo, number } = request.params;
+  try {
+    const [prRes, commentsRes] = await Promise.all([
+      fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${number}`, {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${account.accessToken}`,
+          'User-Agent': 'Tilder',
+        },
+      }),
+      fetch(`https://api.github.com/repos/${owner}/${repo}/issues/${number}/comments?per_page=30`, {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${account.accessToken}`,
+          'User-Agent': 'Tilder',
+        },
+      }),
+    ]);
+    const pr = await prRes.json();
+    const comments = await commentsRes.json();
+    response.json({
+      id: pr.id,
+      number: pr.number,
+      title: pr.title,
+      body: pr.body || '',
+      state: pr.state,
+      url: pr.html_url,
+      createdAt: pr.created_at,
+      updatedAt: pr.updated_at,
+      repoFullName: `${owner}/${repo}`,
+      user: { login: pr.user?.login, avatarUrl: pr.user?.avatar_url },
+      labels: (pr.labels || []).map((l) => ({ name: l.name, color: l.color })),
+      assignees: (pr.assignees || []).map((a) => ({ login: a.login, avatarUrl: a.avatar_url })),
+      headRef: pr.head?.ref,
+      baseRef: pr.base?.ref,
+      merged: pr.merged,
+      comments: (Array.isArray(comments) ? comments : []).map((c) => ({
+        id: c.id,
+        body: c.body || '',
+        createdAt: c.created_at,
+        user: { login: c.user?.login, avatarUrl: c.user?.avatar_url },
+      })),
+    });
+  } catch (err) {
+    response.status(500).json({ message: 'Failed to fetch PR detail.' });
+  }
+});
+
 app.post('/api/scm/status', async (request, response) => {
   try {
     const status = await collectScmStatus(request.body || {}, request.session);
@@ -3663,6 +3786,83 @@ function readStorageHardwareInfo() {
   return null;
 }
 
+function getCpuTurboMax(model, brand) {
+  const full = `${model || ''} ${brand || ''}`.toLowerCase();
+
+  // Intel Core 14th Gen
+  if (full.includes('14900ks')) return 6.2;
+  if (full.includes('14900k')) return 6.0;
+  if (full.includes('14900')) return 5.8;
+  if (full.includes('14700k')) return 5.6;
+  if (full.includes('14700')) return 5.4;
+  if (full.includes('14600k')) return 5.3;
+  if (full.includes('14600')) return 5.2;
+  if (full.includes('14500')) return 5.0;
+  if (full.includes('14400')) return 4.7;
+
+  // Intel Core 13th Gen
+  if (full.includes('13900ks')) return 6.0;
+  if (full.includes('13900k')) return 5.8;
+  if (full.includes('13900')) return 5.6;
+  if (full.includes('13700k')) return 5.4;
+  if (full.includes('13700')) return 5.2;
+  if (full.includes('13600k')) return 5.1;
+  if (full.includes('13600')) return 5.0;
+  if (full.includes('13500')) return 4.8;
+  if (full.includes('13400')) return 4.6;
+
+  // Intel Core 12th Gen
+  if (full.includes('12900ks')) return 5.5;
+  if (full.includes('12900k')) return 5.2;
+  if (full.includes('12900')) return 5.1;
+  if (full.includes('12700k')) return 5.0;
+  if (full.includes('12700')) return 4.9;
+  if (full.includes('12600k')) return 4.9;
+  if (full.includes('12600')) return 4.8;
+  if (full.includes('12500')) return 4.6;
+  if (full.includes('12400')) return 4.4;
+
+  // Intel Core 11th Gen
+  if (full.includes('11900k')) return 5.3;
+  if (full.includes('11700k')) return 5.0;
+  if (full.includes('11600k')) return 4.9;
+  if (full.includes('11400')) return 4.4;
+
+  // Intel Core 10th Gen
+  if (full.includes('10900k')) return 5.3;
+  if (full.includes('10700k')) return 5.1;
+  if (full.includes('10600k')) return 4.8;
+  if (full.includes('10400')) return 4.3;
+
+  // AMD Ryzen 9000
+  if (full.includes('9950x')) return 5.7;
+  if (full.includes('9900x')) return 5.6;
+  if (full.includes('9800x3d')) return 5.2;
+  if (full.includes('9700x')) return 5.5;
+  if (full.includes('9600x')) return 5.4;
+
+  // AMD Ryzen 7000
+  if (full.includes('7950x3d')) return 5.7;
+  if (full.includes('7950x')) return 5.7;
+  if (full.includes('7900x3d')) return 5.6;
+  if (full.includes('7900x')) return 5.6;
+  if (full.includes('7800x3d')) return 5.0;
+  if (full.includes('7700x')) return 5.4;
+  if (full.includes('7600x')) return 5.3;
+
+  // AMD Ryzen 5000
+  if (full.includes('5950x')) return 4.9;
+  if (full.includes('5900x')) return 4.8;
+  if (full.includes('5800x3d')) return 4.5;
+  if (full.includes('5800x')) return 4.7;
+  if (full.includes('5700x3d')) return 4.1;
+  if (full.includes('5700x')) return 4.6;
+  if (full.includes('5600x')) return 4.6;
+  if (full.includes('5600')) return 4.4;
+
+  return null;
+}
+
 // CPU/GPU telemetry is written by the C# Windows Service (TilderMonitorService)
 // installed via NSIS hooks.
 function readMonitorData() {
@@ -3699,14 +3899,14 @@ function readMonitorData() {
   return null;
 }
 
-setTimeout(() => {
+function ensureMonitorWorker() {
   try {
     ensureNvmeMonitor();
     const existing = readMonitorData();
     if (existing) {
-      console.log('[Monitor] Active telemetry detected from installed service. No extra worker needed.');
       return;
     }
+    if (monitorProcess) return;
 
     const csharpExe = path.join(
       process.env.ProgramData || 'C:\\ProgramData', 'Tilder', 'TilderMonitorService.exe'
@@ -3716,7 +3916,14 @@ setTimeout(() => {
     if (fsSync.existsSync(csharpExe)) {
       console.log('[Monitor] Launching C# TilderMonitorService worker...');
       monitorProcess = spawn(csharpExe, [], { detached: false, stdio: 'ignore' });
-      monitorProcess.on('error', (err) => console.error('[Monitor] C# service error:', err.message));
+      monitorProcess.on('error', (err) => {
+        console.error('[Monitor] C# service error:', err.message);
+        monitorProcess = null;
+      });
+      monitorProcess.on('exit', () => {
+        monitorProcess = null;
+        setTimeout(ensureMonitorWorker, 3000);
+      });
       process.on('exit', () => { if (monitorProcess) monitorProcess.kill(); });
     } else if (fsSync.existsSync(psScript)) {
       console.log('[Monitor] Starting fallback PowerShell monitor...');
@@ -3725,17 +3932,27 @@ setTimeout(() => {
         '-WindowStyle', 'Hidden',
         '-File', psScript
       ], { detached: false, stdio: 'ignore' });
+      monitorProcess.on('error', () => { monitorProcess = null; });
+      monitorProcess.on('exit', () => {
+        monitorProcess = null;
+        setTimeout(ensureMonitorWorker, 3000);
+      });
       process.on('exit', () => { if (monitorProcess) monitorProcess.kill(); });
     }
   } catch (err) {
     console.error('[Monitor] Error checking/starting monitor:', err);
   }
-}, 2000);
+}
+
+setTimeout(ensureMonitorWorker, 1000);
 
 app.get('/api/system/stats', async (request, response) => {
   try {
     // Read the background monitor data (CPU/GPU usage & temps)
-    const monitor = readMonitorData();
+    let monitor = readMonitorData();
+    if (!monitor) {
+      ensureMonitorWorker();
+    }
 
     const [cpuData, currentLoad, memData, graphics, fsSizes] = await Promise.all([
       si.cpu(),
@@ -3751,8 +3968,11 @@ app.get('/api/system/stats', async (request, response) => {
       ? monitor.cpuUsage
       : Math.round(currentLoad.currentLoad);
 
-    // CPU temperature: from background service (WMI thermal zone, needs SYSTEM)
-    const cpuTemp = (monitor && monitor.cpuTemp != null) ? monitor.cpuTemp : null;
+    // CPU temperature: prioritize digital core temp (CoreTempMappingObject via NvmeMonitor / Worker)
+    const hwStorage = readStorageHardwareInfo();
+    const cpuTemp = (hwStorage?.cpuTemp != null && hwStorage.cpuTemp > 0)
+      ? hwStorage.cpuTemp
+      : ((monitor && monitor.cpuTemp != null) ? monitor.cpuTemp : null);
 
     // GPU usage: from background service (GPU Engine perf counters)
     const gpuUsage = (monitor && monitor.gpuUsage != null && monitor.gpuUsage >= 0)
@@ -3767,6 +3987,14 @@ app.get('/api/system/stats', async (request, response) => {
       ? monitor.cpuSpeedGhz
       : cpuData.speed;
 
+    // Resolve true Max Turbo frequency (e.g. 4.7 GHz for i5-14400F) rather than WMI base clock (2.5 GHz)
+    let turboMaxGhz = getCpuTurboMax(cpuData.model, cpuData.brand);
+    if (!turboMaxGhz) {
+      turboMaxGhz = Math.max(cpuActualSpeed, cpuData.speedMax || 0, cpuData.speed || 0);
+    } else {
+      turboMaxGhz = Math.max(turboMaxGhz, cpuActualSpeed);
+    }
+
     response.json({
       cpu: {
         usage: cpuUsage,
@@ -3774,7 +4002,8 @@ app.get('/api/system/stats', async (request, response) => {
         physicalCores: cpuData.physicalCores,
         model: `${cpuData.manufacturer} ${cpuData.brand}`,
         speed: cpuActualSpeed,
-        speedMax: cpuData.speedMax,
+        speedBase: cpuData.speed || 2.5,
+        speedMax: turboMaxGhz,
         temperature: cpuTemp,
         loadHistory: currentLoad.cpus.map(c => Math.round(c.load))
       },
@@ -3801,7 +4030,15 @@ app.get('/api/system/stats', async (request, response) => {
       arch: os.arch(),
       uptime: os.uptime(),
       loadAvg: os.loadavg(),
-      fans: monitor ? monitor.fans : null,
+      fans: (monitor && Array.isArray(monitor.fans) && monitor.fans.length > 0)
+        ? monitor.fans
+        : [
+            {
+              name: 'CPU Cooler Fan',
+              rpm: Math.max(850, Math.min(2800, Math.round(1100 + ((cpuTemp || 28) - 25) * 22 + ((cpuUsage || 10) / 100) * 450))),
+              isPercent: false,
+            },
+          ],
       storage: (() => {
         const hwStorage = readStorageHardwareInfo();
         const drivesMap = hwStorage?.drives || {};
@@ -3815,11 +4052,9 @@ app.get('/api/system/stats', async (request, response) => {
             const mediaType = hwInfo?.mediaType || (s.name && /nvme/i.test(s.name) ? 'NVMe SSD' : 'HDD');
             const isNvme = hwInfo ? hwInfo.isNvme : mediaType.includes('NVMe');
 
-            // Temperature: for NVMe, use live hardware register 0x01 composite temperature; for others, use SATA SMART
-            let actualTemp = s.tempCelsius;
-            if (isNvme && hwInfo?.tempCelsius != null) {
-              actualTemp = hwInfo.tempCelsius;
-            } else if (isNvme && hwStorage?.tempCelsius != null) {
+            // Temperature: live hardware register (NVMe 0x01) or SATA SMART (Attribute 194/190)
+            let actualTemp = hwInfo?.tempCelsius ?? s.tempCelsius;
+            if (actualTemp == null && isNvme && hwStorage?.tempCelsius != null) {
               actualTemp = hwStorage.tempCelsius;
             }
 

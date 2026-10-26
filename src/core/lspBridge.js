@@ -7,6 +7,10 @@ function toFileUri(filePath) {
     return '';
   }
 
+  if (normalized.startsWith('file://')) {
+    return normalized;
+  }
+
   if (/^[A-Za-z]:/.test(normalized)) {
     return encodeURI(`file:///${normalized}`);
   }
@@ -15,11 +19,22 @@ function toFileUri(filePath) {
 }
 
 function buildDocumentUri(workspaceRoot, relativePath, fallbackName = 'untitled.txt') {
+  const raw = String(relativePath || fallbackName || '').replace(/\\/g, '/');
+  if (raw.startsWith('file://')) {
+    return raw;
+  }
+  if (/^[A-Za-z]:/.test(raw) || (raw.startsWith('/') && !workspaceRoot)) {
+    return toFileUri(raw);
+  }
+
   const normalizedRoot = String(workspaceRoot || '').replace(/\\/g, '/').replace(/\/+$/, '');
-  const normalizedRelativePath = String(relativePath || fallbackName)
+  const normalizedRelativePath = raw
     .replace(/^root\/?/, '')
-    .replace(/^\/+/, '')
-    .replace(/\\/g, '/');
+    .replace(/^\/+/, '');
+
+  if (/^[A-Za-z]:/.test(normalizedRelativePath)) {
+    return toFileUri(normalizedRelativePath);
+  }
 
   return toFileUri(normalizedRelativePath ? `${normalizedRoot}/${normalizedRelativePath}` : normalizedRoot);
 }
@@ -283,6 +298,21 @@ export function createLspBridge({
       rootUri: toFileUri(workspaceRoot),
       capabilities: {
         textDocument: {
+          synchronization: {
+            dynamicRegistration: true,
+            willSave: false,
+            willSaveWaitUntil: false,
+            didSave: true,
+          },
+          publishDiagnostics: {
+            relatedInformation: true,
+            versionSupport: true,
+            tagSupport: {
+              valueSet: [1, 2],
+            },
+            codeDescriptionSupport: true,
+            dataSupport: true,
+          },
           completion: {
             contextSupport: true,
             completionItem: {

@@ -103,3 +103,13 @@ D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Debug\net8.0\runtimes\osx-
 D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Debug\net8.0\runtimes\osx-x64\native\libSystem.IO.Ports.Native.dylib
 D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Debug\net8.0\runtimes\unix\lib\net8.0\System.IO.Ports.dll
 D:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Debug\net8.0\runtimes\win\lib\net8.0\System.IO.Ports.dll
+d:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Debug\net8.0\publish_output\appsettings.Development.json
+d:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Debug\net8.0\publish_output\appsettings.json
+d:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Debug\net8.0\publish_output\TilderMonitorService.deps.json
+d:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Debug\net8.0\publish_output\TilderMonitorService.runtimeconfig.json
+d:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Debug\net8.0\publish_out\appsettings.Development.json
+d:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Debug\net8.0\publish_out\appsettings.json
+d:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Debug\net8.0\publish_out\publish_output\appsettings.Development.json
+d:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Debug\net8.0\publish_out\publish_output\appsettings.json
+d:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Debug\net8.0\publish_out\publish_output\TilderMonitorService.deps.json
+d:\Tilder - Copy\desktop-app\TilderMonitorService\bin\Debug\net8.0\publish_out\publish_output\TilderMonitorService.runtimeconfig.json

@@ -4429,7 +4429,15 @@ function App() {
       if (monaco?.editor) {
         try {
           const parsedUri = monaco.Uri.parse(params.uri);
-          const model = monaco.editor.getModel(parsedUri);
+          let model = monaco.editor.getModel(parsedUri);
+          if (!model) {
+            const models = monaco.editor.getModels();
+            const decodedLsp = decodeURIComponent(params.uri).toLowerCase().replace(/\\/g, '/');
+            model = models.find((m) => {
+              const mUri = decodeURIComponent(m.uri.toString()).toLowerCase().replace(/\\/g, '/');
+              return mUri === decodedLsp || (m.uri.path && decodedLsp.endsWith(m.uri.path.toLowerCase()));
+            }) || (models.length === 1 ? models[0] : null);
+          }
           if (model) {
             const markers = (params.diagnostics || []).map((diag) => {
               const severity =

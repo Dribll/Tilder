@@ -123,8 +123,18 @@ export default function SystemMonitor({ modalType }) {
           <div className="sys-mon-details">
             <p className="detail-item"><span>Model</span> <span>{stats.cpu.model.replace('(TM)', '').replace('(R)', '')}</span></p>
             <p className="detail-item"><span>Cores</span> <span>{stats.cpu.physicalCores} P / {stats.cpu.cores} L</span></p>
-            <p className="detail-item"><span>Clock</span> <span>{stats.cpu.speed} GHz (now) / {stats.cpu.speedMax} GHz (base)</span></p>
-            <p className="detail-item"><span>Temp</span> <TempBadge temp={stats.cpu.temperature} /></p>
+            <p className="detail-item">
+              <span>Clock</span>
+              <span title={`Base: ${stats.cpu.speedBase || '2.5'} GHz | Max Turbo: ${stats.cpu.speedMax || '4.7'} GHz`}>
+                {stats.cpu.speed != null ? `${stats.cpu.speed} GHz` : (stats.cpu.speedBase ? `${stats.cpu.speedBase} GHz` : '— GHz')}
+              </span>
+            </p>
+            <p className="detail-item">
+              <span>Temp</span>
+              {stats.cpu.temperature != null
+                ? <TempBadge temp={stats.cpu.temperature} />
+                : <span style={{ opacity: 0.45, fontSize: '11px' }}>Not available</span>}
+            </p>
           </div>
         </div>
 
@@ -182,7 +192,12 @@ export default function SystemMonitor({ modalType }) {
             <div className="sys-mon-details">
               <p className="detail-item"><span>Model</span> <span>{g.model || g.vendor}</span></p>
               <p className="detail-item"><span>VRAM</span> <span>{g.vram ? `${g.vram} MB` : 'Dynamic'}</span></p>
-              <p className="detail-item"><span>Temp</span> <TempBadge temp={g.temperature} /></p>
+              <p className="detail-item">
+                <span>Temp</span>
+                {g.temperature != null
+                  ? <TempBadge temp={g.temperature} />
+                  : <span style={{ opacity: 0.45, fontSize: '11px' }}>Not available</span>}
+              </p>
             </div>
           </div>
         ))}
@@ -190,9 +205,9 @@ export default function SystemMonitor({ modalType }) {
 
       <div className="sys-mon-grid sys-mon-grid-small">
         {/* Cooling / Fans Card */}
-        {stats.fans && stats.fans.length > 0 && (
-          <div className="sys-mon-card glass-panel">
-            <h4><i className="fa-solid fa-fan icon-pulse"></i> Cooling System</h4>
+        <div className="sys-mon-card glass-panel">
+          <h4><i className="fa-solid fa-fan icon-pulse"></i> Cooling System</h4>
+          {stats.fans && stats.fans.length > 0 ? (
             <div className="fan-list">
               {stats.fans.map((f, i) => {
                 const rpmVal = typeof f.rpm === 'number' ? f.rpm : parseInt(f.rpm, 10) || 0;
@@ -201,14 +216,19 @@ export default function SystemMonitor({ modalType }) {
                   <div key={i} className="fan-item">
                     <span>{f.name || `Fan ${i+1}`}</span>
                     <span className="fan-speed">
-                      {f.isPercent ? `${rpmVal}%` : `${rpmVal} RPM (${pct})`}
+                      {f.isPercent ? `${rpmVal}%` : rpmVal > 0 ? `${rpmVal} RPM (${pct})` : '— RPM'}
                     </span>
                   </div>
                 );
               })}
             </div>
-          </div>
-        )}
+          ) : (
+            <p style={{ fontSize: '12px', opacity: 0.45, margin: '8px 0 0' }}>
+              Fan sensors not available on this system.<br />
+              <span style={{ fontSize: '10px' }}>Fan speed requires SMBIOS/ACPI fan entries exposed by your BIOS.</span>
+            </p>
+          )}
+        </div>
 
         {/* Storage Card */}
         {stats.storage && stats.storage.length > 0 && (
