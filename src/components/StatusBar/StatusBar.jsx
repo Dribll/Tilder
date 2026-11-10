@@ -258,19 +258,39 @@ function StatusBar({
       return (
         <Menu title="Notifications" anchorRef={notificationButtonRef} onClose={() => setOpenMenu(null)}>
           <div className="statusbar-menu-actions">
-            <button type="button" className="statusbar-menu-action" onClick={onClearNotifications}>
+            <button type="button" className="statusbar-menu-action" onClick={() => { onMarkNotificationsRead?.(); onClearNotifications(); }}>
               Clear All
             </button>
           </div>
           {notifications.length ? (
-            notifications.map((entry) => (
-              <div key={entry.id} className={`statusbar-notification-item ${entry.read ? '' : 'unread'}`}>
-                <div className="statusbar-notification-text">{entry.message}</div>
-                <div className="statusbar-notification-time">{entry.time}</div>
-              </div>
-            ))
+            notifications
+              .slice()
+              .sort((a, b) => {
+                const order = { warning: 0, error: 0, info: 1 };
+                return (order[a.tone] ?? 2) - (order[b.tone] ?? 2);
+              })
+              .map((entry) => {
+                const toneIcon =
+                  entry.tone === 'warning' || entry.tone === 'error'
+                    ? 'fa-solid fa-triangle-exclamation'
+                    : 'fa-solid fa-circle-info';
+                const toneColor =
+                  entry.tone === 'warning' || entry.tone === 'error' ? '#f59e0b' : '#60a5fa';
+                return (
+                  <div key={entry.id} className={`statusbar-notification-item `} style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                    <i className={toneIcon} style={{ color: toneColor, marginTop: 2, flexShrink: 0, fontSize: 11 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="statusbar-notification-text">{entry.message}</div>
+                      <div className="statusbar-notification-time">{entry.time}</div>
+                    </div>
+                  </div>
+                );
+              })
           ) : (
-            <div className="statusbar-notification-empty">No notifications</div>
+            <div className="statusbar-notification-empty">
+              <i className="fa-solid fa-bell-slash" style={{ opacity: 0.4, marginRight: 6 }} />
+              No notifications
+            </div>
           )}
         </Menu>
       );

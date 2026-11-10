@@ -35,7 +35,13 @@ function MenuBar(props) {
   };
 
   const closeWindow = (e) => {
-    e.stopPropagation();
+    e?.stopPropagation?.();
+    try {
+      const url = `${window.__TILDER_API_BASE_URL__ || ''}/api/ports/cleanup`;
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(url);
+      }
+    } catch (_) {}
     if (isDesktopRuntime()) {
       invoke('window_close').catch(console.error);
     } else {

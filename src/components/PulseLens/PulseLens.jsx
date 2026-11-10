@@ -6,6 +6,8 @@ function normalizePath(p) {
   if (!p) return '';
   return String(p)
     .replace(/^file:\/\/\/?/i, '')
+    .replace(/^\/live\//i, '')
+    .replace(/^live\//i, '')
     .replace(/^\/([a-zA-Z]:)/, '$1')
     .replace(/\\/g, '/')
     .toLowerCase();
@@ -109,9 +111,21 @@ export default function PulseLens({ editorRef, monacoRef, currentFilePath, socke
     const targetUrl =
       socketUrl ||
       resolvedApiUrl ||
-      (typeof window !== 'undefined' && window.location.hostname
-        ? `${window.location.protocol}//${window.location.hostname}:33210`
-        : 'http://localhost:33210');
+      (typeof window !== 'undefined' && window.location.origin
+        ? window.location.origin
+        : 'http://localhost:3210');
+
+    // Fetch recent logs on mount
+    fetch(targetUrl + '/api/pulse-lens/logs')
+      .then((res) => res.json())
+      .then((items) => {
+        if (Array.isArray(items)) {
+          items.forEach((item) => {
+            pushLog(item.path, item.line, item.isError ? 'error' : (item.method || 'log'), item.msg);
+          });
+        }
+      })
+      .catch(() => {});
 
     try {
       sock = io(targetUrl, { transports: ['websocket', 'polling'] });

@@ -15,10 +15,12 @@ import {
   syncScm,
   stashScm,
   stashPopScm,
+  buildGitAuthArgs,
 } from '../../../../core/scmApi.js';
 import { isDesktopRuntime } from '../../../../core/runtime.js';
 import { desktopExecuteCommand } from '../../../../core/desktopFileApi.js';
 import { createGitHubRepo } from '../../../../core/accountApi.js';
+import { apiFetch } from '../../../../core/apiBase.js';
 
 /**
  * Memoized file row – re-renders only when its own file path/status changes.
@@ -66,7 +68,22 @@ const ScmFileRow = React.memo(function ScmFileRow({ file, onOpen, onStage, onUns
 ));
 
 function toFriendlyError(error, fallback) {
-  const message = error instanceof Error ? error.message : fallback;
+  const message = error instanceof Error ? error.message : (error || fallback);
+  const lowerMsg = String(message).toLowerCase();
+
+  if (
+    lowerMsg.includes('cannot prompt because user interactivity has been disabled') ||
+    lowerMsg.includes('unable to get password from user') ||
+    lowerMsg.includes('could not read username') ||
+    lowerMsg.includes('terminal prompts disabled') ||
+    lowerMsg.includes('authentication failed') ||
+    lowerMsg.includes('bad credentials') ||
+    lowerMsg.includes('401 unauthorized') ||
+    (lowerMsg.includes('permission to') && lowerMsg.includes('denied'))
+  ) {
+    return 'GitHub authentication required to sync or push. Please connect your GitHub account or Personal Access Token in the GitHub tab.';
+  }
+
   if (message.includes('Failed to fetch')) {
     return isDesktopRuntime()
       ? 'Source control operation could not be completed. Please ensure Git is installed.'
@@ -77,7 +94,7 @@ function toFriendlyError(error, fallback) {
     return 'This workspace is too large to mirror as-is for Source Control. Tilder now skips generated folders like node_modules, dist, build, and target. Refresh Source Control and try again.';
   }
 
-  if (message.includes('not a git repository') || message.includes('no such file or directory') || message.toLowerCase().includes('enoent') || message.toLowerCase().includes('no such file')) {
+  if (message.includes('not a git repository') || message.includes('no such file or directory') || lowerMsg.includes('enoent')) {
     return 'Not a Git repository. Click "Initialize Repository" to create one, or open a folder that already has a .git directory.';
   }
 
@@ -85,7 +102,7 @@ function toFriendlyError(error, fallback) {
     return 'No commits yet. Stage your changes and make your first commit.';
   }
 
-  if (message.includes('No configured push destination') || message.includes('no configured push destination')) {
+  if (message.includes('No configured push destination') || lowerMsg.includes('no remote configured') || lowerMsg.includes('no configured push destination')) {
     return 'No remote configured. Click "Publish to GitHub" to publish this repository.';
   }
 
@@ -196,6 +213,13 @@ export default function Git({
   }, [scmState?.branch]);
 
   async function buildPayload() {
+    const githubAccount = authSession?.accounts?.github;
+    const microsoftAccount = authSession?.accounts?.microsoft;
+    const authorName = githubAccount?.displayName || githubAccount?.username || microsoftAccount?.displayName || 'Tilder User';
+    const authorEmail = githubAccount?.email || (githubAccount?.username ? `${githubAccount.username}@users.noreply.github.com` : 'tilder@local');
+    const githubUsername = githubAccount?.username || '';
+    const githubToken = githubAccount?.accessToken || null;
+
     // Fast path: On desktop with an open folder, git operates directly on disk.
     // Avoid reading every file into memory and sending massive JSON payloads!
     const rootPath = workspace?.rootSystemPath || workspace?.roots?.[0]?.systemPath || (isDesktopRuntime() ? (workspace?.getRootNode()?.path || workspace?.rootPath) : null);
@@ -203,11 +227,21 @@ export default function Git({
       return {
         workspaceRoot: rootPath,
         rootName: workspace.rootName || 'workspace',
+        authorName,
+        authorEmail,
+        githubUsername,
+        githubToken,
       };
     }
     const base = (await workspace.getSyncPayload({ includeGeneratedDirectories: false })) || workspace.getStructureSnapshot();
     if (isDesktopRuntime() && workspace?.rootSystemPath && base) {
       base.workspaceRoot = workspace.rootSystemPath;
+    }
+    if (base) {
+      base.authorName = authorName;
+      base.authorEmail = authorEmail;
+      base.githubUsername = githubUsername;
+      base.githubToken = githubToken;
     }
     return base;
   }
@@ -300,21 +334,36 @@ export default function Git({
       });
 
       const repo = createRes?.repository;
-      const authedUrl = `https://${username}@github.com/${username}/${cleanRepoName}.git`;
+      const cleanRemoteUrl = `https://github.com/${username}/${cleanRepoName}.git`;
 
       // 4. Configure remote origin and credentials
       if (isDesktopRuntime() && workspace?.rootSystemPath) {
         await desktopExecuteCommand('git', ['remote', 'remove', 'origin'], workspace.rootSystemPath).catch(() => {});
-        await desktopExecuteCommand('git', ['remote', 'add', 'origin', authedUrl], workspace.rootSystemPath);
+        await desktopExecuteCommand('git', ['remote', 'add', 'origin', cleanRemoteUrl], workspace.rootSystemPath);
 
-        // Configure credential username and disable interactive GUI popups
-        await desktopExecuteCommand('git', ['config', 'credential.https://github.com.username', username], workspace.rootSystemPath);
-        await desktopExecuteCommand('git', ['config', 'credential.interactive', 'never'], workspace.rootSystemPath);
+        // Configure credential username and authorization header
+        await desktopExecuteCommand('git', ['config', 'credential.https://github.com.username', username], workspace.rootSystemPath).catch(() => {});
 
-        // 5. Push to GitHub with -u origin HEAD
+        // Retrieve real token if sanitized
+        let token = githubAccount?.accessToken;
+        if (!token) {
+          try {
+            const tokenRes = await apiFetch('/api/scm/token').then(r => r.json()).catch(() => null);
+            token = tokenRes?.token;
+          } catch (_) {}
+        }
+
+        // Clean up any stale extraheaders to avoid duplicate header errors
+        try {
+          await desktopExecuteCommand('git', ['config', '--local', '--unset-all', 'http.https://github.com/.extraheader'], workspace.rootSystemPath);
+          await desktopExecuteCommand('git', ['config', '--local', '--unset-all', 'http.extraheader'], workspace.rootSystemPath);
+        } catch (_) {}
+
+        // 5. Push to GitHub with -u origin HEAD using non-interactive Basic Auth args
+        const credentialArgs = buildGitAuthArgs(token, username);
+
         const pushRes = await desktopExecuteCommand('git', [
-          '-c', 'credential.interactive=never',
-          '-c', `credential.https://github.com.username=${username}`,
+          ...credentialArgs,
           'push', '-u', 'origin', 'HEAD'
         ], workspace.rootSystemPath);
 
@@ -609,7 +658,7 @@ export default function Git({
                            runScmAction(
                              (payload) => commitScm({ ...payload, message }),
                              { busyKey: 'commit', successMessage: 'Changes committed.' }
-                           ).then(() => setCommitMessage(''));
+                           ).then((success) => { if (success) setCommitMessage(''); });
                          }
                        }
                     }}

@@ -48,6 +48,11 @@ pub async fn tilder_search_workspace(
             if let Ok(entry) = result {
                 if entry.file_type().map_or(false, |ft| ft.is_file()) {
                     let path = entry.path();
+                    if let Ok(meta) = entry.metadata() {
+                        if meta.len() > 2 * 1024 * 1024 {
+                            return ignore::WalkState::Continue;
+                        }
+                    }
                     if let Ok(content) = std::fs::read_to_string(path) {
                         for (i, line) in content.lines().enumerate() {
                             if regex.is_match(line) {

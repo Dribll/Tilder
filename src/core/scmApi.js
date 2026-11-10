@@ -364,9 +364,49 @@ export async function commitScm(payload) {
   const message = payload?.message || '';
   if (isDesktopRuntime() && root && message) {
     const { desktopExecuteCommand } = await import('./desktopFileApi.js');
+
+    // 1. Ensure user identity is configured in Git before committing
+    try {
+      const nameRes = await desktopExecuteCommand('git', ['config', 'user.name'], root);
+      if (!nameRes || nameRes.exitCode !== 0 || !nameRes.stdout?.trim()) {
+        const userName = payload.authorName || payload.githubUsername || 'Tilder User';
+        await desktopExecuteCommand('git', ['config', 'user.name', userName], root);
+      }
+    } catch (_) {}
+
+    try {
+      const emailRes = await desktopExecuteCommand('git', ['config', 'user.email'], root);
+      if (!emailRes || emailRes.exitCode !== 0 || !emailRes.stdout?.trim()) {
+        const userEmail = payload.authorEmail || (payload.githubUsername ? `${payload.githubUsername}@users.noreply.github.com` : 'tilder@local');
+        await desktopExecuteCommand('git', ['config', 'user.email', userEmail], root);
+      }
+    } catch (_) {}
+
+    // 2. Check if anything is staged. If nothing is staged, auto-stage all changes (VS Code behavior)
+    let hasStaged = false;
+    try {
+      const diffCached = await desktopExecuteCommand('git', ['diff', '--cached', '--name-only'], root);
+      hasStaged = Boolean(diffCached?.exitCode === 0 && diffCached?.stdout?.trim());
+    } catch (_) {}
+
+    if (!hasStaged) {
+      await desktopExecuteCommand('git', ['add', '-A'], root);
+    }
+
+    // 3. Execute the commit
     const res = await desktopExecuteCommand('git', ['commit', '-m', message], root);
     if (res && res.exitCode !== 0) {
-      throw new Error(res.stderr || res.stdout || 'Git commit failed.');
+      const err = res.stderr || res.stdout || 'Git commit failed.';
+      // If nothing changed / already clean, don't throw fatal error
+      if (err.includes('nothing to commit') || err.includes('working tree clean')) {
+        return await fetchScmStatus(payload);
+      }
+      // If desktop commit failed, try server fallback before throwing
+      try {
+        return await post('/api/scm/commit', payload);
+      } catch (_) {
+        throw new Error(err);
+      }
     }
     return await fetchScmStatus(payload);
   }
@@ -399,6 +439,27 @@ export async function checkoutScmBranch(payload) {
     return await fetchScmStatus(payload);
   }
   return post('/api/scm/checkout-branch', payload);
+}
+
+export function buildGitAuthArgs(token, username) {
+  if (!token) {
+    return [
+      '-c', 'credential.helper=',
+      '-c', 'credential.interactive=never',
+      '-c', 'core.askPass=echo',
+    ];
+  }
+  const user = username || 'x-access-token';
+  const authBase64 = typeof btoa === 'function'
+    ? btoa(`${user}:${token}`)
+    : Buffer.from(`${user}:${token}`).toString('base64');
+
+  return [
+    '-c', 'credential.helper=',
+    '-c', 'credential.interactive=never',
+    '-c', 'core.askPass=echo',
+    '-c', `http.extraheader=AUTHORIZATION: basic ${authBase64}`,
+  ];
 }
 
 export async function syncScm(payload) {
@@ -438,37 +499,84 @@ export async function syncScm(payload) {
       try {
         const statusRes = await desktopExecuteCommand('git', ['status', '--porcelain'], root);
         if (statusRes?.exitCode === 0 && statusRes?.stdout?.trim()) {
+          // Ensure git user identity before commit
+          const userName = payload.authorName || payload.githubUsername || 'Tilder User';
+          const userEmail = payload.authorEmail || (payload.githubUsername ? `${payload.githubUsername}@users.noreply.github.com` : 'tilder@local');
+          await desktopExecuteCommand('git', ['config', 'user.name', userName], root).catch(() => {});
+          await desktopExecuteCommand('git', ['config', 'user.email', userEmail], root).catch(() => {});
           await desktopExecuteCommand('git', ['add', '-A'], root);
           await desktopExecuteCommand('git', ['commit', '-m', 'Update from Tilder'], root);
         }
       } catch (_) {}
 
-      // Non-interactive credential settings
-      const credentialArgs = [
-        '-c', 'credential.interactive=never',
-        '-c', 'core.askPass=echo',
-      ];
+      // Fetch git auth token from server if available
+      let gitToken = payload?.githubToken || null;
+      let gitUser = payload?.githubUsername || null;
+      if (!gitToken) {
+        try {
+          const authRes = await apiFetch('/api/scm/token').then(r => r.json()).catch(() => null);
+          if (authRes?.token) {
+            gitToken = authRes.token;
+            gitUser = gitUser || authRes.username;
+          }
+        } catch (_) {}
+      }
+
+      // Clean up any stale extraheader in local repo config to prevent "Duplicate header: Authorization" errors
+      try {
+        await desktopExecuteCommand('git', ['config', '--local', '--unset-all', 'http.https://github.com/.extraheader'], root);
+        await desktopExecuteCommand('git', ['config', '--local', '--unset-all', 'http.extraheader'], root);
+        await desktopExecuteCommand('git', ['config', '--local', '--unset', 'credential.interactive'], root);
+      } catch (_) {}
+
+      if (gitUser) {
+        try {
+          await desktopExecuteCommand('git', ['config', 'credential.https://github.com.username', gitUser], root);
+        } catch (_) {}
+      }
+
+      if (!gitToken) {
+        throw new Error('GitHub authentication required to sync or push. Please connect your GitHub account or Personal Access Token in the GitHub tab.');
+      }
+
+      // Build non-interactive credential arguments using Basic Auth with Base64 encoding.
+      // Setting -c credential.helper= ensures Git Credential Manager GUI never pops up.
+      const credentialArgs = buildGitAuthArgs(gitToken, gitUser);
 
       // 4. Pull latest changes with rebase
       try {
         await desktopExecuteCommand('git', [...credentialArgs, 'pull', '--rebase', remoteName, currentBranch], root);
-      } catch (_) {}
+      } catch (_) {
+        try {
+          await desktopExecuteCommand('git', [...credentialArgs, 'pull', remoteName, currentBranch], root);
+        } catch (_) {}
+      }
 
       // 5. Push and establish upstream tracking
       const pushRes = await desktopExecuteCommand('git', [...credentialArgs, 'push', '-u', remoteName, currentBranch], root);
       if (pushRes?.exitCode !== 0) {
         const fallbackRes = await desktopExecuteCommand('git', [...credentialArgs, 'push', '-u', remoteName, 'HEAD'], root);
         if (fallbackRes?.exitCode !== 0) {
-          const err = fallbackRes?.stderr || fallbackRes?.stdout || pushRes?.stderr || pushRes?.stdout || 'Git push failed.';
-          throw new Error(err);
+          const rawErr = fallbackRes?.stderr || fallbackRes?.stdout || pushRes?.stderr || pushRes?.stdout || 'Git push failed.';
+          // Try server fallback before failing
+          try {
+            return await post('/api/scm/sync', payload);
+          } catch (serverErr) {
+            const errToThrow = serverErr?.message || rawErr;
+            throw new Error(errToThrow);
+          }
         }
       }
 
       return await fetchScmStatus(payload);
     } catch (err) {
       console.warn('Desktop syncScm error:', err);
-      if (err.message && !err.message.includes('Failed to fetch') && !err.message.includes('NetworkError')) {
-        throw err;
+      // Try server fallback before giving up
+      try {
+        return await post('/api/scm/sync', payload);
+      } catch (fallbackErr) {
+        const finalMsg = fallbackErr?.message || err?.message || 'Git sync failed.';
+        throw new Error(finalMsg);
       }
     }
   }

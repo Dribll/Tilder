@@ -30,7 +30,7 @@
       "nsis": {
         "installMode": "perMachine",
         "installerHooks": "windows/installer.nsh",
-        "compression": "none"
+        "compression": "lzma"
       }
     },
     "externalBin": [
@@ -42,13 +42,13 @@
       "resources/app/localRunner.js": "app/localRunner.js",
       "resources/app/package.json": "app/package.json",
       "resources/app/package-lock.json": "app/package-lock.json",
-      "resources/app/tilder_monitor_service.ps1": "app/tilder_monitor_service.ps1",
       "resources/app/dist/": "app/dist/",
       "resources/app/server/": "app/server/",
       "resources/app/shared/": "app/shared/",
       "resources/app/src/": "app/src/",
       "resources/app/node_modules/": "app/node_modules/",
-      "windows/monitor_bin/": "monitor_bin/"
+      "windows/monitor_bin/": "monitor_bin/",
+      "windows/bin/": "bin/"
     },
     "icon": [
       "icons/32x32.png",

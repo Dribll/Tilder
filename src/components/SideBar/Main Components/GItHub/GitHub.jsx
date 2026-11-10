@@ -11,10 +11,13 @@ import {
   fetchGitHubIssues,
   fetchGitHubIssueDetail,
   fetchGitHubPRDetail,
+  connectGitHubWithToken,
+  disconnectProvider,
 } from '../../../../core/accountApi.js';
 import { desktopPickFolder, desktopExecuteCommand, openExternalUrl } from '../../../../core/desktopFileApi.js';
-import { syncScm } from '../../../../core/scmApi.js';
+import { syncScm, buildGitAuthArgs } from '../../../../core/scmApi.js';
 import { isDesktopRuntime } from '../../../../core/runtime.js';
+import { apiFetch } from '../../../../core/apiBase.js';
 import './GitHub.css';
 
 // Language color mapping for GitHub languages
@@ -64,6 +67,28 @@ function GitHub({
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+
+  const isAuthError = useMemo(() => {
+    if (!error) return false;
+    const lower = String(error).toLowerCase();
+    return (
+      lower.includes('credential') ||
+      lower.includes('401') ||
+      lower.includes('unauthorized') ||
+      lower.includes('token') ||
+      lower.includes('connect github')
+    );
+  }, [error]);
+
+  // Personal Access Token (PAT) State
+  const [showPatModal, setShowPatModal] = useState(false);
+  const [patInput, setPatInput] = useState('');
+  const [patConnecting, setPatConnecting] = useState(false);
+  const [patError, setPatError] = useState('');
+  const [patSuccess, setPatSuccess] = useState('');
+
+  // Subtab filter for PRs and Issues: 'all' | 'current'
+  const [filterItemRepo, setFilterItemRepo] = useState('all');
 
   // Issue / PR Detail Panel
   const [selectedIssue, setSelectedIssue] = useState(null);   // { type: 'issue'|'pr', owner, repo, number, url }
@@ -164,6 +189,81 @@ function GitHub({
     return null;
   }, [workspaceRemoteRepo, repositories, workspace?.rootName, suggestedRepoName]);
 
+  // Connect GitHub via Personal Access Token
+  async function handleDirectReconnect() {
+    setLoading(true);
+    setError('');
+    try {
+      const { beginOAuth, openDesktopOAuthUrl, pollDesktopOAuth } = await import('../../../../core/accountApi.js');
+      const res = await beginOAuth('github');
+      if (res?.mode === 'desktop' && res.authorizeUrl) {
+        await openDesktopOAuthUrl(res.authorizeUrl);
+        const pollTimer = setInterval(async () => {
+          try {
+            const status = await pollDesktopOAuth(res.desktopSessionId);
+            if (status?.connected || status?.account) {
+              clearInterval(pollTimer);
+              setError('');
+              window.dispatchEvent(new CustomEvent('tilder:auth-changed'));
+              pushNotification?.('GitHub reconnected successfully!', 'success');
+              await loadAllGitHubData(true);
+            }
+          } catch (_) {}
+        }, 1500);
+        setTimeout(() => clearInterval(pollTimer), 120000);
+      } else if (openAccount) {
+        openAccount();
+      }
+    } catch (err) {
+      if (openAccount) openAccount();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleConnectPat(e) {
+    if (e) e.preventDefault();
+    const token = patInput.trim();
+    if (!token) {
+      setPatError('Please enter a GitHub Personal Access Token.');
+      return;
+    }
+    setPatConnecting(true);
+    setPatError('');
+    setPatSuccess('');
+    try {
+      await connectGitHubWithToken(token);
+      setPatSuccess('Connected successfully!');
+      pushNotification?.('GitHub connected via Personal Access Token.', 'success');
+      setPatInput('');
+      setShowPatModal(false);
+      setError('');
+      window.dispatchEvent(new CustomEvent('tilder:auth-changed'));
+      await loadAllGitHubData(true);
+    } catch (err) {
+      setPatError(err instanceof Error ? err.message : 'Invalid token or bad credentials.');
+    } finally {
+      setPatConnecting(false);
+    }
+  }
+
+  // Disconnect GitHub account cleanly
+  async function handleDisconnectGitHub() {
+    try {
+      await disconnectProvider('github');
+      pushNotification?.('GitHub account disconnected.', 'info');
+      setUserProfile(null);
+      setOrganizations([]);
+      setRepositories([]);
+      setPullRequests([]);
+      setIssues([]);
+      setError('');
+      window.dispatchEvent(new CustomEvent('tilder:auth-changed'));
+    } catch (err) {
+      pushNotification?.(err instanceof Error ? err.message : 'Failed to disconnect.', 'error');
+    }
+  }
+
   // Sync / Push changes for connected repository
   async function handleSyncWorkspaceRemote() {
     if (syncingWorkspace) return;
@@ -174,23 +274,50 @@ function GitHub({
         const username = githubAccount?.username || matchedRepo?.owner || '';
         const targetRepo = workspaceRemoteRepo || matchedRepo;
 
-        // Ensure remote origin exists
-        const remoteCheck = await desktopExecuteCommand('git', ['remote', 'get-url', 'origin'], workspace.rootSystemPath);
-        if (remoteCheck?.exitCode !== 0 && targetRepo?.cloneUrl) {
-          const statusCheck = await desktopExecuteCommand('git', ['status'], workspace.rootSystemPath);
-          if (statusCheck?.exitCode !== 0) {
-            await desktopExecuteCommand('git', ['init'], workspace.rootSystemPath);
-          }
-          await desktopExecuteCommand('git', ['remote', 'add', 'origin', targetRepo.cloneUrl], workspace.rootSystemPath);
-        }
-
-        // Configure local git repo with credential settings to avoid GUI prompts
-        if (username) {
+        // Retrieve real token if sanitized in authSession
+        let token = githubAccount?.accessToken;
+        if (!token) {
           try {
-            await desktopExecuteCommand('git', ['config', 'credential.https://github.com.username', username], workspace.rootSystemPath);
-            await desktopExecuteCommand('git', ['config', 'credential.interactive', 'never'], workspace.rootSystemPath);
+            const tokenRes = await apiFetch('/api/scm/token').then(r => r.json()).catch(() => null);
+            token = tokenRes?.token;
           } catch (_) {}
         }
+
+        if (!token) {
+          pushNotification?.('Please connect your GitHub account or Personal Access Token in the GitHub tab.', 'warning');
+          setSyncingWorkspace(false);
+          return;
+        }
+
+        // Ensure remote origin exists
+        const remoteCheck = await desktopExecuteCommand('git', ['remote', 'get-url', 'origin'], workspace.rootSystemPath);
+        if (targetRepo?.fullName) {
+          const cleanRemoteUrl = `https://github.com/${targetRepo.fullName}.git`;
+          if (remoteCheck?.exitCode !== 0) {
+            const statusCheck = await desktopExecuteCommand('git', ['status'], workspace.rootSystemPath);
+            if (statusCheck?.exitCode !== 0) {
+              await desktopExecuteCommand('git', ['init'], workspace.rootSystemPath);
+            }
+            await desktopExecuteCommand('git', ['remote', 'add', 'origin', cleanRemoteUrl], workspace.rootSystemPath);
+          } else if (remoteCheck?.stdout && remoteCheck.stdout.includes('@github.com')) {
+            // Clean up old embedded username in origin URL so it doesn't conflict with bearer auth
+            await desktopExecuteCommand('git', ['remote', 'set-url', 'origin', cleanRemoteUrl], workspace.rootSystemPath).catch(() => {});
+          }
+        }
+
+        // Ensure git user identity and authorization header in local config
+        const userName = githubAccount?.displayName || username || 'Tilder User';
+        const userEmail = githubAccount?.email || (username ? `${username}@users.noreply.github.com` : 'tilder@local');
+        try {
+          await desktopExecuteCommand('git', ['config', 'user.name', userName], workspace.rootSystemPath);
+          await desktopExecuteCommand('git', ['config', 'user.email', userEmail], workspace.rootSystemPath);
+          if (username) {
+            await desktopExecuteCommand('git', ['config', 'credential.https://github.com.username', username], workspace.rootSystemPath);
+          }
+          // Clean up any stale extraheaders
+          await desktopExecuteCommand('git', ['config', '--local', '--unset-all', 'http.https://github.com/.extraheader'], workspace.rootSystemPath);
+          await desktopExecuteCommand('git', ['config', '--local', '--unset-all', 'http.extraheader'], workspace.rootSystemPath);
+        } catch (_) {}
 
         // Auto-stage & commit if there are pending uncommitted changes
         try {
@@ -201,11 +328,8 @@ function GitHub({
           }
         } catch (_) {}
 
-        // Non-interactive credential parameters to bypass GCM account picker dialogs
-        const credentialArgs = [
-          '-c', 'credential.interactive=never',
-          ...(username ? ['-c', `credential.https://github.com.username=${username}`] : []),
-        ];
+        // Non-interactive credential parameters using Basic Auth
+        const credentialArgs = buildGitAuthArgs(token, username);
 
         // Pull with rebase
         try {
@@ -224,6 +348,9 @@ function GitHub({
           checkWorkspaceRemote();
         } else {
           const errText = pushRes.stderr || pushRes.stdout || 'Git push returned non-zero code.';
+          if (errText.includes('Authentication failed') || errText.includes('401') || errText.includes('Bad credentials')) {
+            setError('GitHub credentials expired or bad credentials. Please reconnect or enter a Personal Access Token.');
+          }
           pushNotification?.(`Push notice: ${errText.slice(0, 150)}`, 'warning');
         }
       } else {
@@ -339,6 +466,21 @@ function GitHub({
         return timeB - timeA;
       });
   }, [repositories, searchQuery, filterVisibility, filterOwner, sortBy]);
+
+  // Filtered PRs and Issues by repository
+  const displayedPullRequests = useMemo(() => {
+    if (filterItemRepo === 'current' && matchedRepo?.fullName) {
+      return pullRequests.filter((pr) => pr.repoFullName?.toLowerCase() === matchedRepo.fullName.toLowerCase());
+    }
+    return pullRequests;
+  }, [pullRequests, filterItemRepo, matchedRepo?.fullName]);
+
+  const displayedIssues = useMemo(() => {
+    if (filterItemRepo === 'current' && matchedRepo?.fullName) {
+      return issues.filter((issue) => issue.repoFullName?.toLowerCase() === matchedRepo.fullName.toLowerCase());
+    }
+    return issues;
+  }, [issues, filterItemRepo, matchedRepo?.fullName]);
 
   // 1-Click "Open in Tilder" (Clone and Immediately Switch Workspace)
   async function handleOpenInTilder(repo, customFolder = null) {
@@ -490,10 +632,25 @@ function GitHub({
 
           if (isDesktopRuntime()) {
             try {
+              let token = githubAccount?.accessToken;
+              if (!token) {
+                try {
+                  const tokenRes = await apiFetch('/api/scm/token').then(r => r.json()).catch(() => null);
+                  token = tokenRes?.token;
+                } catch (_) {}
+              }
+
               const checkGit = await desktopExecuteCommand('git', ['status'], workspace.rootSystemPath);
               if (checkGit?.exitCode !== 0) {
                 await desktopExecuteCommand('git', ['init'], workspace.rootSystemPath);
               }
+
+              // Ensure git user identity
+              const userName = githubAccount?.displayName || username || 'Tilder User';
+              const userEmail = githubAccount?.email || (username ? `${username}@users.noreply.github.com` : 'tilder@local');
+              await desktopExecuteCommand('git', ['config', 'user.name', userName], workspace.rootSystemPath).catch(() => {});
+              await desktopExecuteCommand('git', ['config', 'user.email', userEmail], workspace.rootSystemPath).catch(() => {});
+
               await desktopExecuteCommand('git', ['add', '-A'], workspace.rootSystemPath);
               await desktopExecuteCommand('git', ['commit', '-m', 'Initial commit from Tilder'], workspace.rootSystemPath).catch(() => {});
               await desktopExecuteCommand('git', ['remote', 'remove', 'origin'], workspace.rootSystemPath).catch(() => {});
@@ -501,12 +658,14 @@ function GitHub({
 
               if (username) {
                 await desktopExecuteCommand('git', ['config', 'credential.https://github.com.username', username], workspace.rootSystemPath);
-                await desktopExecuteCommand('git', ['config', 'credential.interactive', 'never'], workspace.rootSystemPath);
               }
+              // Clean up any stale extraheaders
+              await desktopExecuteCommand('git', ['config', '--local', '--unset-all', 'http.https://github.com/.extraheader'], workspace.rootSystemPath).catch(() => {});
+              await desktopExecuteCommand('git', ['config', '--local', '--unset-all', 'http.extraheader'], workspace.rootSystemPath).catch(() => {});
 
+              const pushCredentialArgs = buildGitAuthArgs(token, username);
               await desktopExecuteCommand('git', [
-                '-c', 'credential.interactive=never',
-                ...(username ? ['-c', `credential.https://github.com.username=${username}`] : []),
+                ...pushCredentialArgs,
                 'push', '-u', 'origin', 'HEAD'
               ], workspace.rootSystemPath).catch(() => {});
             } catch (_) {}
@@ -635,20 +794,27 @@ function GitHub({
         </div>
         <div className="gh-header-actions">
           {githubAccount && (
-            <>
-              <button
-                className="gh-icon-btn"
-                onClick={() => loadAllGitHubData(true)}
-                title="Refresh Repositories"
-                disabled={refreshing}
-              >
-                <i className={`fa-solid fa-arrows-rotate ${refreshing ? 'fa-spin' : ''}`} />
-              </button>
-              <button className="gh-icon-btn" onClick={openAccount} title="GitHub Account Settings">
-                <i className="fa-solid fa-gear" />
-              </button>
-            </>
+            <button
+              className="gh-icon-btn"
+              onClick={() => setShowPatModal(true)}
+              title="Connect or Update Personal Access Token (PAT)"
+            >
+              <i className="fa-solid fa-key" />
+            </button>
           )}
+          {githubAccount && (
+            <button
+              className="gh-icon-btn"
+              onClick={() => loadAllGitHubData(true)}
+              title="Refresh Repositories"
+              disabled={refreshing}
+            >
+              <i className={`fa-solid fa-arrows-rotate ${refreshing ? 'fa-spin' : ''}`} />
+            </button>
+          )}
+          <button className="gh-icon-btn" onClick={openAccount} title="GitHub Account Settings">
+            <i className="fa-solid fa-gear" />
+          </button>
         </div>
       </div>
 
@@ -658,12 +824,48 @@ function GitHub({
           <div className="gh-empty-state">
             <i className="fa-brands fa-github gh-empty-icon" style={{ fontSize: 48 }} />
             <h4 style={{ color: '#ffffff', margin: '0 0 6px 0', fontSize: 14 }}>Connect with GitHub</h4>
-            <p style={{ fontSize: 11.5, marginBottom: 16, lineHeight: 1.4 }}>
-              Sign in with your GitHub account to access all your repositories, create public and private repos, and open codebases directly in Tilder.
+            <p style={{ fontSize: 11.5, marginBottom: 12, lineHeight: 1.4 }}>
+              Paste a GitHub Personal Access Token to sign in instantly — no browser redirect needed.
             </p>
-            <button className="gh-btn-primary" onClick={openAccount} style={{ padding: '8px 16px', margin: '0 auto' }}>
-              <i className="fa-brands fa-github" style={{ marginRight: 6 }} /> Open Account Center
-            </button>
+            {/* Inline PAT entry — seamless, no external modal */}
+            <div className="gh-inline-pat-box">
+              <input
+                type="password"
+                className="gh-input"
+                placeholder="ghp_... or github_pat_..."
+                value={patInput}
+                onChange={(e) => setPatInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleConnectPat()}
+                autoComplete="off"
+              />
+              <button
+                className="gh-btn-primary"
+                onClick={handleConnectPat}
+                disabled={patConnecting || !patInput.trim()}
+                style={{ marginTop: 8, width: '100%' }}
+              >
+                {patConnecting ? (
+                  <><i className="fa-solid fa-spinner fa-spin" /> Connecting...</>
+                ) : (
+                  <><i className="fa-solid fa-link" style={{ marginRight: 6 }} /> Connect Token</>
+                )}
+              </button>
+              {patError && (
+                <div className="gh-alert-box error" style={{ marginTop: 8 }}>
+                  <i className="fa-solid fa-circle-exclamation" />
+                  <span>{patError}</span>
+                </div>
+              )}
+              <a
+                className="gh-pat-link"
+                style={{ display: 'block', textAlign: 'center', marginTop: 8, fontSize: 11 }}
+                href="https://github.com/settings/tokens/new?scopes=repo,read:org,workflow"
+                onClick={(e) => { e.preventDefault(); openExternalUrl('https://github.com/settings/tokens/new?scopes=repo,read:org,workflow'); }}
+              >
+                <i className="fa-solid fa-arrow-up-right-from-square" style={{ marginRight: 4 }} />
+                Generate a token on GitHub
+              </a>
+            </div>
           </div>
         </div>
       ) : (
@@ -874,13 +1076,33 @@ function GitHub({
 
           {/* ── Scrollable Body Content ─────────────────────── */}
           <div className="gh-body">
-            {/* Global Error Notice */}
-            {error && (
+            {/* Global Error Notice or Recovery Card */}
+            {isAuthError ? (
+              <div className="gh-auth-expired-card">
+                <div className="gh-auth-expired-header">
+                  <i className="fa-solid fa-triangle-exclamation" style={{ color: '#ff6b6b', fontSize: 16, marginTop: 2 }} />
+                  <div>
+                    <h4 style={{ margin: '0 0 4px 0', color: '#ffffff', fontSize: 12.5, fontWeight: 600 }}>GitHub Credentials Expired</h4>
+                    <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.7)', lineHeight: 1.4 }}>
+                      Your GitHub credentials have expired or are invalid (Bad credentials). Reconnect via browser or enter a Personal Access Token (PAT).
+                    </p>
+                  </div>
+                </div>
+                <div className="gh-auth-expired-actions">
+                  <button className="gh-btn-primary" onClick={() => setShowPatModal(true)} style={{ padding: '6px 12px', fontSize: 11.5 }}>
+                    <i className="fa-solid fa-key" style={{ marginRight: 6 }} /> Reconnect via Token
+                  </button>
+                  <button className="gh-btn-ghost" onClick={handleDisconnectGitHub}>
+                    <i className="fa-solid fa-arrow-right-from-bracket" style={{ marginRight: 6 }} /> Disconnect
+                  </button>
+                </div>
+              </div>
+            ) : error ? (
               <div className="gh-alert-box error">
                 <i className="fa-solid fa-triangle-exclamation" style={{ marginTop: 2 }} />
                 <span>{error}</span>
               </div>
-            )}
+            ) : null}
 
             {/* ═════════ TAB 1: REPOSITORIES ═════════ */}
             {activeTab === 'repos' && (
@@ -1380,13 +1602,32 @@ function GitHub({
             {/* ═════════ TAB 3: PULL REQUESTS ═════════ */}
             {activeTab === 'pulls' && (
               <div>
-                {pullRequests.length === 0 ? (
+                {/* Repository Filter */}
+                <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+                  <button
+                    className={`gh-filter-pill ${filterItemRepo === 'all' ? 'active' : ''}`}
+                    onClick={() => setFilterItemRepo('all')}
+                  >
+                    All Repos ({pullRequests.length})
+                  </button>
+                  {matchedRepo && (
+                    <button
+                      className={`gh-filter-pill ${filterItemRepo === 'current' ? 'active' : ''}`}
+                      onClick={() => setFilterItemRepo('current')}
+                      title={`Filter to ${matchedRepo.fullName}`}
+                    >
+                      Workspace: {matchedRepo.name}
+                    </button>
+                  )}
+                </div>
+
+                {displayedPullRequests.length === 0 ? (
                   <div className="gh-empty-state">
                     <i className="fa-solid fa-code-pull-request gh-empty-icon" />
-                    <p>No open pull requests involving you.</p>
+                    <p>{filterItemRepo === 'current' ? `No open PRs in ${matchedRepo?.name || 'current workspace'}.` : 'No open pull requests involving you.'}</p>
                   </div>
                 ) : (
-                  pullRequests.map((pr) => (
+                  displayedPullRequests.map((pr) => (
                     <div
                       key={pr.id}
                       className="gh-item-card gh-item-card--clickable"
@@ -1398,6 +1639,16 @@ function GitHub({
                       <div className="gh-item-title-row">
                         <i className="fa-solid fa-code-pull-request" style={{ color: '#2ecc71', fontSize: 12 }} />
                         <span className="gh-item-title">{pr.title}</span>
+                        <button
+                          className="gh-item-ext-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openExternalUrl(pr.url);
+                          }}
+                          title="Open in GitHub.com"
+                        >
+                          <i className="fa-solid fa-arrow-up-right-from-square" />
+                        </button>
                         <i className="fa-solid fa-chevron-right gh-item-chevron" />
                       </div>
                       <div className="gh-item-meta">
@@ -1414,13 +1665,32 @@ function GitHub({
             {/* ═════════ TAB 4: ISSUES ═════════ */}
             {activeTab === 'issues' && (
               <div>
-                {issues.length === 0 ? (
+                {/* Repository Filter */}
+                <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+                  <button
+                    className={`gh-filter-pill ${filterItemRepo === 'all' ? 'active' : ''}`}
+                    onClick={() => setFilterItemRepo('all')}
+                  >
+                    All Repos ({issues.length})
+                  </button>
+                  {matchedRepo && (
+                    <button
+                      className={`gh-filter-pill ${filterItemRepo === 'current' ? 'active' : ''}`}
+                      onClick={() => setFilterItemRepo('current')}
+                      title={`Filter to ${matchedRepo.fullName}`}
+                    >
+                      Workspace: {matchedRepo.name}
+                    </button>
+                  )}
+                </div>
+
+                {displayedIssues.length === 0 ? (
                   <div className="gh-empty-state">
                     <i className="fa-regular fa-circle-dot gh-empty-icon" />
-                    <p>No open issues assigned to you.</p>
+                    <p>{filterItemRepo === 'current' ? `No open issues in ${matchedRepo?.name || 'current workspace'}.` : 'No open issues assigned to you.'}</p>
                   </div>
                 ) : (
-                  issues.map((issue) => (
+                  displayedIssues.map((issue) => (
                     <div
                       key={issue.id}
                       className="gh-item-card gh-item-card--clickable"
@@ -1432,6 +1702,16 @@ function GitHub({
                       <div className="gh-item-title-row">
                         <i className="fa-regular fa-circle-dot" style={{ color: '#2ecc71', fontSize: 12 }} />
                         <span className="gh-item-title">{issue.title}</span>
+                        <button
+                          className="gh-item-ext-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openExternalUrl(issue.url);
+                          }}
+                          title="Open in GitHub.com"
+                        >
+                          <i className="fa-solid fa-arrow-up-right-from-square" />
+                        </button>
                         <i className="fa-solid fa-chevron-right gh-item-chevron" />
                       </div>
                       <div className="gh-item-meta">
@@ -1446,6 +1726,82 @@ function GitHub({
             )}
           </div>
         </>
+      )}
+
+      {/* ── PAT Connection Modal ────────────────────────────── */}
+      {showPatModal && (
+        <div className="gh-pat-overlay" onClick={() => setShowPatModal(false)}>
+          <div className="gh-pat-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="gh-pat-dialog-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <i className="fa-solid fa-key" style={{ color: '#58a6ff' }} />
+                <h3>Connect GitHub Personal Access Token</h3>
+              </div>
+              <button className="gh-icon-btn" onClick={() => setShowPatModal(false)}>
+                <i className="fa-solid fa-xmark" />
+              </button>
+            </div>
+            <div className="gh-pat-dialog-body">
+              <p className="gh-pat-hint">
+                Connect your account instantly with a Classic (<code>repo</code> scope) or Fine-Grained token. Your token is stored securely in your local Tilder session.
+              </p>
+              <div className="gh-form-group">
+                <label className="gh-form-label">
+                  <span>Personal Access Token</span>
+                  <a
+                    href="https://github.com/settings/tokens/new?scopes=repo,read:org,workflow"
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      openExternalUrl('https://github.com/settings/tokens/new?scopes=repo,read:org,workflow');
+                    }}
+                    className="gh-pat-link"
+                  >
+                    Generate token on GitHub <i className="fa-solid fa-arrow-up-right-from-square" style={{ fontSize: 10 }} />
+                  </a>
+                </label>
+                <input
+                  type="password"
+                  className="gh-input"
+                  placeholder="ghp_... or github_pat_..."
+                  value={patInput}
+                  onChange={(e) => setPatInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleConnectPat()}
+                  autoFocus
+                />
+              </div>
+              {patError && (
+                <div className="gh-alert-box error" style={{ margin: '8px 0' }}>
+                  <i className="fa-solid fa-circle-exclamation" />
+                  <span>{patError}</span>
+                </div>
+              )}
+              {patSuccess && (
+                <div className="gh-alert-box success" style={{ margin: '8px 0' }}>
+                  <i className="fa-solid fa-check" />
+                  <span>{patSuccess}</span>
+                </div>
+              )}
+            </div>
+            <div className="gh-pat-dialog-footer">
+              <button className="gh-btn-ghost" onClick={() => setShowPatModal(false)} disabled={patConnecting}>
+                Cancel
+              </button>
+              <button className="gh-btn-primary" onClick={handleConnectPat} disabled={patConnecting || !patInput.trim()}>
+                {patConnecting ? (
+                  <>
+                    <i className="fa-solid fa-spinner fa-spin" /> Connecting...
+                  </>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-link" /> Connect Token
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

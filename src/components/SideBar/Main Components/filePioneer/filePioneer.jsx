@@ -1184,6 +1184,17 @@ export default function FilePioneer({
   }
 
   /* ── Context menu ── */
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setContextMenu(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [contextMenu]);
+
   function openContextMenu(e, node) {
     setContextMenu({ x: e.clientX, y: e.clientY, node });
   }
@@ -1729,6 +1740,11 @@ export default function FilePioneer({
             onDragOver={e => {
               e.preventDefault();
               setDropTarget('root');
+            }}
+            onDragLeave={e => {
+              if (!e.currentTarget.contains(e.relatedTarget)) {
+                setDropTarget(null);
+              }
             }}
             onDrop={async e => {
               e.preventDefault();

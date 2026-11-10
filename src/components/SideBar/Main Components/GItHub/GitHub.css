@@ -721,6 +721,21 @@
   line-height: 1.35;
 }
 
+/* Inline PAT entry box (unauthenticated state) */
+.gh-inline-pat-box {
+  width: 100%;
+  max-width: 240px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.gh-inline-pat-box .gh-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 /* Checkbox Row */
 .gh-checkbox-row {
   display: flex;
@@ -734,7 +749,6 @@
 
 .gh-checkbox-row input[type="checkbox"] {
   cursor: pointer;
-  accent-color: #58a6ff;
 }
 
 /* Alert Boxes */
@@ -1101,4 +1115,181 @@
   font-size: 11.5px;
   color: rgba(255,255,255,0.75);
   line-height: 1.5;
+}
+
+/* ── Auth Expired Card ─────────────────────────────── */
+.gh-auth-expired-card {
+  background: rgba(231, 76, 60, 0.08);
+  border: 1px solid rgba(231, 76, 60, 0.35);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.gh-auth-expired-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.gh-auth-expired-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gh-btn-secondary {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.gh-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.gh-btn-ghost {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.65);
+  border: 1px solid transparent;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.gh-btn-ghost:hover {
+  color: #ff6b6b;
+  background: rgba(231, 76, 60, 0.1);
+}
+
+/* ── PAT Dialog Overlay ────────────────────────────── */
+.gh-pat-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(2px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+}
+
+.gh-pat-dialog {
+  background: var(--sidebar-background, #1e1e1e);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  width: 100%;
+  max-width: 360px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: gh-fade-in 0.15s ease-out;
+}
+
+.gh-pat-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.gh-pat-dialog-header h3 {
+  font-size: 12.5px;
+  font-weight: 600;
+  margin: 0;
+  color: #ffffff;
+}
+
+.gh-pat-dialog-body {
+  padding: 14px;
+}
+
+.gh-pat-hint {
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.65);
+  margin: 0 0 12px 0;
+  line-height: 1.45;
+}
+
+.gh-pat-link {
+  color: #58a6ff;
+  font-size: 11px;
+  text-decoration: none;
+}
+
+.gh-pat-link:hover {
+  text-decoration: underline;
+}
+
+.gh-pat-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.15);
+}
+
+/* ── Quick External Link Button on Item Cards ────────── */
+.gh-item-ext-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 3px;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  transition: all 0.12s ease;
+}
+
+.gh-item-ext-btn:hover {
+  color: #58a6ff;
+  background: rgba(88, 166, 255, 0.15);
+}
+
+.gh-filter-pill {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.7);
+  border-radius: 12px;
+  padding: 3px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.gh-filter-pill.active {
+  background: rgba(88, 166, 255, 0.18);
+  border-color: #58a6ff;
+  color: #ffffff;
+}
+
+@keyframes gh-fade-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
 }

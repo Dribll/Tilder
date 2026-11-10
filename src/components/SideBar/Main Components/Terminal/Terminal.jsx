@@ -474,13 +474,14 @@ function ProblemsView({ diagnostics, onSelectProblem }) {
   );
 }
 
-function PortsView({ ports, onForwardPort, onRemovePort, onOpenBrowser, onUpdatePort, editingPortId, setEditingPortId }) {
+function PortsView({ ports, onForwardPort, onRemovePort, onCleanupAllPorts, onOpenBrowser, onUpdatePort, editingPortId, setEditingPortId }) {
   const [showInput, setShowInput] = React.useState(false);
   const [portInput, setPortInput] = React.useState('');
   const [descInput, setDescInput] = React.useState('');
   const [showCredentials, setShowCredentials] = React.useState(false);
   const [customUser, setCustomUser] = React.useState('tilder');
   const [customPass, setCustomPass] = React.useState('tilder');
+  const [copiedPort, setCopiedPort] = React.useState(null);
 
   function handleSubmit(e) {
     e.preventDefault();
@@ -494,7 +495,7 @@ function PortsView({ ports, onForwardPort, onRemovePort, onOpenBrowser, onUpdate
 
   return (
     <div className="ports-view">
-      <div className="ports-toolbar">
+      <div className="ports-toolbar" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <button
           type="button"
           className="ports-action-btn"
@@ -503,6 +504,17 @@ function PortsView({ ports, onForwardPort, onRemovePort, onOpenBrowser, onUpdate
         >
           <span><i className="fa-solid fa-plus"></i></span> Forward a Port
         </button>
+        {ports && ports.length > 0 && (
+          <button
+            type="button"
+            className="ports-action-btn"
+            onClick={onCleanupAllPorts}
+            title="Force close all forwarded ports"
+            style={{ color: '#ff6b6b', borderColor: 'rgba(255, 107, 107, 0.35)' }}
+          >
+            <span><i className="fa-solid fa-power-off"></i></span> Stop All Ports
+          </button>
+        )}
       </div>
       {showInput && (
         <form className="ports-add-form" onSubmit={handleSubmit}>
@@ -586,9 +598,36 @@ function PortsView({ ports, onForwardPort, onRemovePort, onOpenBrowser, onUpdate
                 <td className="ports-cell-local">localhost:{entry.port}</td>
                 <td className="ports-cell-forwarded">
                   {entry.url ? (
-                    <a href={entry.url} target="_blank" rel="noreferrer" className="ports-url">
-                      {entry.url}
-                    </a>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <a
+                        href={entry.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="ports-url"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          onOpenBrowser?.(entry.url);
+                        }}
+                      >
+                        {entry.url}
+                      </a>
+                      {entry.status === 'propagating' && (
+                        <span
+                          style={{
+                            fontSize: 10,
+                            color: '#ffa726',
+                            background: 'rgba(255, 167, 38, 0.12)',
+                            border: '1px solid rgba(255, 167, 38, 0.28)',
+                            padding: '1px 5px',
+                            borderRadius: 3,
+                            lineHeight: 1.2,
+                          }}
+                          title="Cloudflare is publishing this domain to global DNS (~5-10s). Avoid clicking too quickly to prevent DNS caching."
+                        >
+                          propagating (~5-10s)
+                        </span>
+                      )}
+                    </div>
                   ) : (
                     <span className="ports-url-pending">
                       {entry.status === 'connecting' ? 'Connecting...' : '—'}
@@ -636,7 +675,27 @@ function PortsView({ ports, onForwardPort, onRemovePort, onOpenBrowser, onUpdate
                 </td>
                 <td className="ports-cell-status">
                   <span className={`ports-status-badge ports-status-${entry.status}`}>
-                    {entry.status === 'connecting' ? '⏳ Connecting' : entry.status === 'active' ? '✓ Active' : '✗ Error'}
+                    {entry.status === 'connecting' ? (
+                      <>
+                        <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 5 }}></i>
+                        Connecting
+                      </>
+                    ) : entry.status === 'propagating' ? (
+                      <>
+                        <i className="fa-solid fa-satellite-dish fa-fade" style={{ marginRight: 5, color: '#ffa726' }}></i>
+                        Propagating DNS...
+                      </>
+                    ) : entry.status === 'active' ? (
+                      <>
+                        <i className="fa-solid fa-check" style={{ marginRight: 5 }}></i>
+                        Active
+                      </>
+                    ) : (
+                      <>
+                        <i className="fa-solid fa-circle-exclamation" style={{ marginRight: 5 }}></i>
+                        Error
+                      </>
+                    )}
                   </span>
                 </td>
                 <td className="ports-cell-actions">
@@ -644,8 +703,26 @@ function PortsView({ ports, onForwardPort, onRemovePort, onOpenBrowser, onUpdate
                     <button
                       type="button"
                       className="ports-icon-btn"
+                      title={copiedPort === entry.port ? 'Copied URL!' : 'Copy Forwarded URL'}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(entry.url);
+                        setCopiedPort(entry.port);
+                        setTimeout(() => setCopiedPort(null), 1500);
+                      }}
+                    >
+                      <span><i className={copiedPort === entry.port ? 'fa-solid fa-check' : 'fa-regular fa-copy'}></i></span>
+                    </button>
+                  )}
+                  {entry.url && (
+                    <button
+                      type="button"
+                      className="ports-icon-btn"
                       title="Open in Browser"
-                      onClick={() => onOpenBrowser?.(entry.url)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenBrowser?.(entry.url);
+                      }}
                     >
                       <span><i className="fa-solid fa-arrow-up-right-from-square"></i></span>
                     </button>
@@ -654,7 +731,12 @@ function PortsView({ ports, onForwardPort, onRemovePort, onOpenBrowser, onUpdate
                     type="button"
                     className="ports-icon-btn danger"
                     title="Stop Forwarding"
-                    onClick={() => onRemovePort?.(entry.port)}
+                    style={{ cursor: 'pointer' }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onRemovePort?.(entry.port);
+                    }}
                   >
                     <span><i className="fa-solid fa-xmark"></i></span>
                   </button>
@@ -1221,6 +1303,7 @@ function Terminal({
   onEvaluateDebug,
   debugSession,
   onClearDebugConsole,
+  onClearOutput,
   settings,
   requestPrompt,
   onSelectProblem,
@@ -1234,6 +1317,7 @@ function Terminal({
   const [sessionMeta, setSessionMeta] = useState({});
   const [forwardedPorts, setForwardedPorts] = useState([]);
   const [editingPortId, setEditingPortId] = useState(null);
+  const deletingPortsRef = useRef(new Set());
   const sessionApisRef = useRef(new Map());
   const workspaceSnapshot = workspace.getStructureSnapshot?.() || null;
   const desktopNativeTerminal = isDesktopRuntime();
@@ -1274,7 +1358,7 @@ function Terminal({
   }, []);
 
   // Poll for status updates when Ports view is open or a tunnel is connecting
-  const hasConnecting = forwardedPorts.some(p => p.status === 'connecting');
+  const hasConnecting = forwardedPorts.some(p => p.status === 'connecting' || p.status === 'propagating');
   useEffect(() => {
     const shouldPoll = activeView === 'ports' || hasConnecting;
     if (!shouldPoll) return;
@@ -1284,7 +1368,8 @@ function Terminal({
         .then((res) => res.json())
         .then((data) => {
           if (Array.isArray(data)) {
-            setForwardedPorts(data);
+            // Filter out any ports that are being deleted
+            setForwardedPorts(data.filter((p) => !deletingPortsRef.current.has(Number(p.port))));
           }
         })
         .catch((err) => console.error('[Ports] Polling error:', err));
@@ -1334,12 +1419,46 @@ function Terminal({
     startTunnel(port, description, visibility, username, password);
   }
 
-  function handleRemovePort(port) {
-    setForwardedPorts((prev) => prev.filter((e) => e.port !== port));
+  async function handleRemovePort(port) {
+    const portNum = Number(port);
+    if (!portNum) return;
 
-    apiFetch(`/api/ports/${port}`, {
-      method: 'DELETE',
-    }).catch((err) => console.error('[Ports] Failed to delete tunnel:', err));
+    // Immediately remove from UI and prevent background poller from restoring it
+    deletingPortsRef.current.add(portNum);
+    setForwardedPorts((prev) => prev.filter((e) => Number(e.port) !== portNum));
+
+    try {
+      // 1. Send DELETE
+      let res = await apiFetch(`/api/ports/${portNum}`, { method: 'DELETE' }).catch(() => null);
+      // 2. Fallback to POST /api/ports/:port/delete if DELETE failed
+      if (!res || !res.ok) {
+        res = await apiFetch(`/api/ports/${portNum}/delete`, { method: 'POST' }).catch(() => null);
+      }
+      // 3. Fallback to POST /api/ports/stop
+      if (!res || !res.ok) {
+        res = await apiFetch('/api/ports/stop', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ port: portNum }),
+        }).catch(() => null);
+      }
+    } catch (err) {
+      console.error('[Ports] Failed to stop tunnel:', err);
+    } finally {
+      setTimeout(() => {
+        deletingPortsRef.current.delete(portNum);
+      }, 5000);
+    }
+  }
+
+  async function handleCleanupAllPorts() {
+    deletingPortsRef.current.clear();
+    setForwardedPorts([]);
+    try {
+      await apiFetch('/api/ports/cleanup', { method: 'POST' }).catch(() => null);
+    } catch (err) {
+      console.error('[Ports] Failed to cleanup tunnels:', err);
+    }
   }
 
   function handleOpenBrowser(url) {
@@ -1754,7 +1873,7 @@ function Terminal({
                   type="button"
                   className="terminal-toolbar-btn"
                   title="Clear Output"
-                  onClick={() => { if (window.pushNotification) window.pushNotification('Clear output not implemented in mock.', 'info'); }}
+                  onClick={() => onClearOutput?.()}
                 >
                   <span><i className="fa-solid fa-ban"></i></span>
                 </button>
@@ -1822,6 +1941,7 @@ function Terminal({
               ports={forwardedPorts}
               onForwardPort={handleForwardPort}
               onRemovePort={handleRemovePort}
+              onCleanupAllPorts={handleCleanupAllPorts}
               onOpenBrowser={handleOpenBrowser}
               onUpdatePort={(updatedPorts) => setForwardedPorts(updatedPorts)}
               editingPortId={editingPortId}

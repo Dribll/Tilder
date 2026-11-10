@@ -11,6 +11,7 @@ import {
   readSearchContent,
 } from '../../../../core/searchUtils.js';
 import { invoke } from '@tauri-apps/api/core';
+import { isDesktopRuntime } from '../../../../core/runtime.js';
 
 function Search({
   ariaExpandedisplaysearch,
@@ -281,7 +282,7 @@ function Search({
         const contentResults = [];
         let totalMatches = 0;
         const rootSys = (workspace.roots?.[0]?.systemPath || workspace.rootSystemPath || '').replace(/\\/g, '/').replace(/\/+$/, '');
-        const isDesktop = workspace.adapter === 'tauri' || (typeof window !== 'undefined' && Boolean(window.__TAURI__));
+        const isDesktop = isDesktopRuntime();
 
         let searchedWithNative = false;
         if (isDesktop && rootSys) {

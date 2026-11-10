@@ -345,14 +345,16 @@ fn set_window_zoom(window: WebviewWindow, scale: f64) -> Result<(), String> {
 fn list_system_fonts() -> Result<Vec<String>, String> {
     #[cfg(target_os = "windows")]
     {
-        let output = Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-Command",
-                "[System.Reflection.Assembly]::LoadWithPartialName('System.Drawing') | Out-Null; (New-Object System.Drawing.Text.InstalledFontCollection).Families | ForEach-Object { $_.Name }",
-            ])
-            .output()
-            .map_err(|e| e.to_string())?;
+        use std::os::windows::process::CommandExt;
+        let mut cmd = Command::new("powershell");
+        cmd.args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "[System.Reflection.Assembly]::LoadWithPartialName('System.Drawing') | Out-Null; (New-Object System.Drawing.Text.InstalledFontCollection).Families | ForEach-Object { $_.Name }",
+        ]);
+        cmd.creation_flags(0x08000000);
+        let output = cmd.output().map_err(|e| e.to_string())?;
         let text = String::from_utf8_lossy(&output.stdout);
         let fonts: Vec<String> = text
             .lines()
@@ -431,9 +433,15 @@ fn read_tree_recursive(dir: &Path, recursive: bool) -> Result<Vec<DesktopTreeNod
         let path_str = entry.path().to_string_lossy().to_string();
         let is_dir = meta.is_dir();
 
-        // Delegated to JS side filtering
+        // Prune massive dependency and build folders during recursive scan for extreme speed
+        let is_heavy_dir = if is_dir {
+            let lower = name.to_ascii_lowercase();
+            matches!(lower.as_str(), "node_modules" | ".git" | "target" | "dist" | "build" | ".next" | ".cache" | "bin" | "obj" | ".vs")
+        } else {
+            false
+        };
 
-        let children = if is_dir && recursive {
+        let children = if is_dir && recursive && !is_heavy_dir {
             Some(read_tree_recursive(&entry.path(), true).unwrap_or_default())
         } else if is_dir {
             Some(Vec::new())
@@ -771,7 +779,13 @@ async fn spawn_debug_process(
 
         let port = find_available_port(5005, 20)?;
 
-        let mut child = Command::new("java")
+        let mut cmd = Command::new("java");
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000);
+        }
+        let mut child = cmd
             .arg(format!(
                 "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:{port}"
             ))
@@ -824,9 +838,23 @@ async fn spawn_debug_process(
     let executable = customExecutable.unwrap_or_else(|| runtime.clone());
 
     let mut command = Command::new(&executable);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000);
+    }
 
     if runtime == "node" {
         command.arg(format!("--inspect-brk={port}"));
+    } else if runtime == "python" {
+        command.arg("-u");
+    }
+
+    let file_path = Path::new(&path);
+    if let Some(parent) = file_path.parent() {
+        if parent.exists() && parent != Path::new("") {
+            command.current_dir(parent);
+        }
     }
 
     let mut child = command
@@ -876,10 +904,11 @@ async fn spawn_debug_process(
 async fn kill_process(pid: u32) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        Command::new("taskkill")
-            .args(["/F", "/PID", &pid.to_string()])
-            .output()
-            .map_err(|e| e.to_string())?;
+        use std::os::windows::process::CommandExt;
+        let mut cmd = Command::new("taskkill");
+        cmd.args(["/F", "/PID", &pid.to_string()]);
+        cmd.creation_flags(0x08000000);
+        cmd.output().map_err(|e| e.to_string())?;
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -896,64 +925,60 @@ async fn kill_process(pid: u32) -> Result<(), String> {
 // Runtime detection
 // ---------------------------------------------------------------------------
 
+fn run_silent_version_check(bin: &str, arg: &str) -> Option<String> {
+    let mut cmd = Command::new(bin);
+    cmd.arg(arg);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    if let Ok(output) = cmd.output() {
+        if output.status.success() {
+            let out = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let err = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            let res = if !out.is_empty() { out } else { err };
+            if !res.is_empty() {
+                return Some(res);
+            }
+        }
+    }
+    None
+}
+
 #[tauri::command]
 fn desktop_detect_runtimes() -> Result<serde_json::Value, String> {
     let mut runtimes = serde_json::Map::new();
 
     // Node.js
-    if let Ok(output) = Command::new("node").arg("--version").output() {
-        if output.status.success() {
-            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            runtimes.insert(
-                "node".to_string(),
-                serde_json::json!({ "version": version }),
-            );
-        }
+    if let Some(version) = run_silent_version_check("node", "--version") {
+        runtimes.insert("node".to_string(), serde_json::json!({ "version": version }));
     }
 
     // Python
     for cmd in &["python3", "python"] {
-        if let Ok(output) = Command::new(cmd).arg("--version").output() {
-            if output.status.success() {
-                let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                runtimes.insert(
-                    "python".to_string(),
-                    serde_json::json!({ "version": version, "command": cmd }),
-                );
-                break;
-            }
+        if let Some(version) = run_silent_version_check(cmd, "--version") {
+            runtimes.insert(
+                "python".to_string(),
+                serde_json::json!({ "version": version, "command": cmd }),
+            );
+            break;
         }
     }
 
     // Java
-    if let Ok(output) = Command::new("java").arg("-version").output() {
-        // Java outputs version to stderr
-        let version = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        if !version.is_empty() {
-            runtimes.insert(
-                "java".to_string(),
-                serde_json::json!({ "version": version }),
-            );
-        }
+    if let Some(version) = run_silent_version_check("java", "-version") {
+        runtimes.insert("java".to_string(), serde_json::json!({ "version": version }));
     }
 
     // Go
-    if let Ok(output) = Command::new("go").arg("version").output() {
-        if output.status.success() {
-            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            runtimes.insert("go".to_string(), serde_json::json!({ "version": version }));
-        }
+    if let Some(version) = run_silent_version_check("go", "version") {
+        runtimes.insert("go".to_string(), serde_json::json!({ "version": version }));
     }
 
     // Rust
-    if let Ok(output) = Command::new("rustc").arg("--version").output() {
-        if output.status.success() {
-            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            runtimes.insert(
-                "rust".to_string(),
-                serde_json::json!({ "version": version }),
-            );
-        }
+    if let Some(version) = run_silent_version_check("rustc", "--version") {
+        runtimes.insert("rust".to_string(), serde_json::json!({ "version": version }));
     }
 
     Ok(serde_json::Value::Object(runtimes))
@@ -981,7 +1006,10 @@ async fn desktop_execute_command(
             cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
         }
         if let Some(dir) = &cwd {
-            cmd.current_dir(dir);
+            let trimmed = dir.trim();
+            if !trimmed.is_empty() && std::path::Path::new(trimmed).exists() {
+                cmd.current_dir(trimmed);
+            }
         }
 
         let output = cmd.output().map_err(|e| e.to_string())?;
@@ -1149,6 +1177,30 @@ pub fn run() {
                         escaped
                     ));
                     i += 1;
+                } else if !args[i].starts_with('-') {
+                    // Support positional arguments like `tilder .` or `tilder <path>`
+                    let raw = &args[i];
+                    let target_path = if raw == "." {
+                        env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+                    } else {
+                        PathBuf::from(raw)
+                    };
+                    if let Ok(canon) = target_path.canonicalize() {
+                        let normalized = canon.to_string_lossy().to_string();
+                        let clean = normalized.strip_prefix(r"\\?\").unwrap_or(&normalized);
+                        let escaped = clean.replace("\\", "\\\\");
+                        if canon.is_dir() {
+                            init_script.push_str(&format!(
+                                "window.__TILDER_STARTUP_WORKSPACE__ = '{}';",
+                                escaped
+                            ));
+                        } else if canon.is_file() {
+                            init_script.push_str(&format!(
+                                "window.__TILDER_STARTUP_FILE__ = '{}';",
+                                escaped
+                            ));
+                        }
+                    }
                 }
                 i += 1;
             }

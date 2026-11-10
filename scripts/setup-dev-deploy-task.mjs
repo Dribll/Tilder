@@ -40,7 +40,7 @@ sc.exe start TilderMonitorService
 // Register script — creates the scheduled task
 const registerPs1 = path.join(os.tmpdir(), 'tilder_register_task.ps1');
 fs.writeFileSync(registerPs1, `
-$action    = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-WindowStyle Hidden -ExecutionPolicy Bypass -File "${helperScript}"'
+$action    = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-NonInteractive -NoProfile -ExecutionPolicy Bypass -File "${helperScript}"'
 $settings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 3) -MultipleInstances IgnoreNew
 $principal = New-ScheduledTaskPrincipal -UserId 'S-1-5-18' -RunLevel Highest
 Register-ScheduledTask -Force -TaskName 'TilderDevDeploy' -Action $action -Settings $settings -Principal $principal | Out-Null
@@ -48,7 +48,7 @@ Write-Host 'TASK_CREATED'
 `.trim(), 'utf8');
 
 try {
-  const result = execSync(`powershell -ExecutionPolicy Bypass -File "${registerPs1}"`, { encoding: 'utf8' });
+  const result = execSync(`powershell -NonInteractive -NoProfile -ExecutionPolicy Bypass -File "${registerPs1}"`, { encoding: 'utf8' });
 
   if (result.includes('TASK_CREATED')) {
     console.log('\n✅  Scheduled task "TilderDevDeploy" created successfully.');

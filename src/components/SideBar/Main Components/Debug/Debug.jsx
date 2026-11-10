@@ -1,162 +1,168 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import CodeViz from '../../../CodeViz/CodeViz.jsx';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { debugApi } from '../../../../core/debugApi.js';
-import { desktopExecuteCommand } from '../../../../core/desktopFileApi.js';
 
-// ─── Section Wrapper ─────────────────────────────────────────────────────────
+// ─── SVG Icons ────────────────────────────────────────────────────────────────
+const PlayIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M4.5 3a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .8.4l7-4.5a.5.5 0 0 0 0-.8l-7-4.5A.5.5 0 0 0 4.5 3z" />
+  </svg>
+);
+const PauseIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z" />
+  </svg>
+);
+const StepOverIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M11 3.5a.5.5 0 0 1 .5.5v1.5a2.5 2.5 0 0 1-2.5 2.5H4.207l1.354 1.354a.5.5 0 0 1-.708.708l-2.2-2.2a.5.5 0 0 1 0-.708l2.2-2.2a.5.5 0 0 1 .708.708L4.207 7H9a1.5 1.5 0 0 0 1.5-1.5V4a.5.5 0 0 1 .5-.5z"/>
+  </svg>
+);
+const StepIntoIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M8 1a.5.5 0 0 1 .5.5v8.793l2.146-2.147a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 1 1 .708-.708L7.5 10.293V1.5A.5.5 0 0 1 8 1zm-6 13.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z"/>
+  </svg>
+);
+const StepOutIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M8 15a.5.5 0 0 1-.5-.5V5.707L5.354 7.854a.5.5 0 1 1-.708-.708l3-3a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 5.707V14.5a.5.5 0 0 1-.5.5zm-6-13.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z"/>
+  </svg>
+);
+const RestartIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+    <path d="M8 4.5a.5.5 0 0 1 .5-.5V1a.5.5 0 0 1 1 0v3a.5.5 0 0 1-.5.5z"/>
+    <path d="M6 3.5a.5.5 0 0 1-.5-.5V2a.5.5 0 0 1 1 0v1a.5.5 0 0 1-.5.5z"/>
+  </svg>
+);
+const StopIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
+    <rect x="3" y="3" width="10" height="10" rx="1.5" />
+  </svg>
+);
+const GearIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M9.1 4.4L8.6 2H7.4l-.5 2.4-.7.3-2-1.3-.9.8 1.3 2-.2.7-2.5.5v1.2l2.5.5.3.8-1.4 1.9.8.8 2-1.4.7.3.5 2.4h1.2l.5-2.4.7-.3 2 1.3.8-.8-1.3-2 .3-.7 2.4-.5V7.6l-2.4-.5-.3-.7 1.3-2-.8-.8-1.9 1.4-.8-.3zM8 10a2 2 0 1 1 0-4 2 2 0 0 1 0 4z" />
+  </svg>
+);
+const PlusIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2z" />
+  </svg>
+);
+const ClearIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+  </svg>
+);
+const EditIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/>
+  </svg>
+);
+const ChevronIcon = ({ open }) => (
+  <svg
+    width="12" height="12" viewBox="0 0 16 16"
+    style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease', flexShrink: 0 }}
+    fill="none"
+  >
+    <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
 
-function Section({ title, children, actions = null, defaultOpen = true }) {
+// ─── Custom Glass Checkbox ─────────────────────────────────────────────────────
+function GlassCheckbox({ checked, onChange, title }) {
+  return (
+    <div
+      className={`dbg-checkbox${checked ? ' dbg-checkbox--on' : ''}`}
+      onClick={(e) => { e.stopPropagation(); onChange?.(e); }}
+      role="checkbox"
+      aria-checked={checked}
+      title={title}
+      tabIndex={0}
+      onKeyDown={(e) => e.key === ' ' && onChange?.(e)}
+    >
+      {checked && (
+        <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+          <path d="M1.5 5l2.5 2.5 4.5-5" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      )}
+    </div>
+  );
+}
+
+// ─── Collapsible Section ───────────────────────────────────────────────────────
+function Section({ title, defaultOpen = true, count, actions, children }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <section className="debug-section">
-      <div className="debug-section-header" onClick={() => setOpen(v => !v)} style={{ cursor: 'pointer' }}>
-        <div className="debug-section-title">
-          <span className="debug-section-chevron">{open ? '▾' : '▸'}</span>
-          {title}
+    <section className="dbg-section">
+      <div className="dbg-section-header" onClick={() => setOpen(v => !v)}>
+        <div className="dbg-section-title">
+          <ChevronIcon open={open} />
+          <span className="dbg-section-label">{title}</span>
+          {count != null && count > 0 && <span className="dbg-section-count">{count}</span>}
         </div>
-        {actions && <div onClick={e => e.stopPropagation()}>{actions}</div>}
+        {actions && (
+          <div className="dbg-section-actions" onClick={e => e.stopPropagation()}>
+            {actions}
+          </div>
+        )}
       </div>
-      {open ? <div className="debug-section-body">{children}</div> : null}
+      {open && <div className="dbg-section-body">{children}</div>}
     </section>
   );
 }
 
-// ─── Variable Tree (recursive) ────────────────────────────────────────────────
+// ─── Variable Value Renderer ───────────────────────────────────────────────────
+function VarValue({ value, type }) {
+  if (value === undefined || value === null) return <span className="dbg-val-nil">None</span>;
+  const str = String(value);
+  if (type === 'string' || str.startsWith('"') || str.startsWith("'")) {
+    const formatted = (str.startsWith('"') || str.startsWith("'")) ? str : `"${str}"`;
+    return <span className="dbg-val-string">{formatted}</span>;
+  }
+  if (type === 'number' || (!isNaN(Number(str)) && str.trim() !== '')) return <span className="dbg-val-number">{str}</span>;
+  if (type === 'boolean' || str === 'true' || str === 'false') return <span className="dbg-val-bool">{str}</span>;
+  if (str.startsWith('[') || str.startsWith('{')) return <span className="dbg-val-object">{str}</span>;
+  if (str.includes('function') || str.includes('=>')) return <span className="dbg-val-fn">{str}</span>;
+  return <span className="dbg-val-default">{str}</span>;
+}
 
-function VariableRow({ variable, depth = 0 }) {
+// ─── Variable Tree Node ────────────────────────────────────────────────────────
+function VarNode({ variable, depth = 0 }) {
   const [expanded, setExpanded] = useState(false);
-  const [children, setChildren] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const canExpand = !!variable.objectId;
-
-  const toggle = async () => {
-    if (!canExpand) return;
-    if (!expanded && !children) {
-      setLoading(true);
-      try {
-        const props = await debugApi.getProperties(variable.objectId);
-        setChildren(props);
-      } catch {
-        setChildren([]);
-      }
-      setLoading(false);
-    }
-    setExpanded(v => !v);
-  };
-
-  const typeColor = {
-    string: 'var(--debug-var-string)',
-    number: 'var(--debug-var-number)',
-    boolean: 'var(--debug-var-boolean)',
-    object: 'var(--debug-var-object)',
-    function: 'var(--debug-var-function)',
-    undefined: 'var(--debug-var-undefined)',
-  };
-
+  const hasChildren = variable.children && variable.children.length > 0;
   return (
-    <div>
+    <div className="dbg-var-node" style={{ paddingLeft: depth * 12 }}>
       <div
-        className={`debug-var-row ${canExpand ? 'expandable' : ''}`}
-        style={{ paddingLeft: `${depth * 14 + 6}px` }}
-        onClick={toggle}
+        className={`dbg-var-row${hasChildren ? ' dbg-var-row--expandable' : ''}`}
+        onClick={() => hasChildren && setExpanded(v => !v)}
       >
-        <span className="debug-var-arrow">
-          {canExpand ? (loading ? '…' : expanded ? '▾' : '▸') : ' '}
-        </span>
-        <span className="debug-var-name">{variable.name}</span>
-        <span className="debug-var-equals">: </span>
-        <span
-          className="debug-var-value"
-          style={{ color: typeColor[variable.type] || 'inherit' }}
-        >
-          {variable.description || variable.value}
-        </span>
-        <span className="debug-var-type">{variable.type}</span>
+        <span className="dbg-var-arrow">{hasChildren ? (expanded ? '▾' : '▸') : ''}</span>
+        <span className="dbg-var-name">{variable.name}</span>
+        <span className="dbg-var-sep">:</span>
+        <span className="dbg-var-val"><VarValue value={variable.value} type={variable.type} /></span>
+        {variable.type && <span className="dbg-var-type">{variable.type}</span>}
       </div>
-      {expanded && children && children.map(child => (
-        <VariableRow key={child.name} variable={child} depth={depth + 1} />
-      ))}
+      {expanded && hasChildren && (
+        <div className="dbg-var-children">
+          {variable.children.map((child, i) => (
+            <VarNode key={`${child.name}-${i}`} variable={child} depth={depth + 1} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-// ─── Debug Console ────────────────────────────────────────────────────────────
-
-function DebugConsole({ entries, onEvaluate }) {
-  const [input, setInput] = useState('');
-  const [history, setHistory] = useState([]);
-  const [historyIdx, setHistoryIdx] = useState(-1);
-  const bottomRef = useRef(null);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [entries]);
-
-  const submit = async () => {
-    const expr = input.trim();
-    if (!expr) return;
-    setHistory(h => [expr, ...h.slice(0, 49)]);
-    setHistoryIdx(-1);
-    setInput('');
-    await onEvaluate(expr);
-  };
-
-  const handleKey = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
-    if (e.key === 'ArrowUp') {
-      const idx = Math.min(historyIdx + 1, history.length - 1);
-      setHistoryIdx(idx);
-      setInput(history[idx] || '');
-    }
-    if (e.key === 'ArrowDown') {
-      const idx = Math.max(historyIdx - 1, -1);
-      setHistoryIdx(idx);
-      setInput(idx >= 0 ? history[idx] : '');
-    }
-  };
-
-  return (
-    <div className="debug-console">
-      <div className="debug-console-output">
-        {entries.map((entry, i) => (
-          <div key={i} className={`debug-console-entry debug-console-${entry.type}`}>
-            {entry.type === 'input' ? (
-              <><span className="debug-console-prompt">&gt;</span> {entry.text}</>
-            ) : entry.type === 'result' ? (
-              <><span className="debug-console-prompt debug-console-result-arrow">←</span> {entry.text}</>
-            ) : (
-              <span>{entry.text}</span>
-            )}
-          </div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
-      <div className="debug-console-input-row">
-        <span className="debug-console-prompt">&gt;</span>
-        <input
-          className="debug-console-input"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={handleKey}
-          placeholder="Evaluate expression…"
-          spellCheck={false}
-          autoComplete="off"
-        />
-        <button type="button" className="debug-console-run-btn" onClick={submit}>Run</button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Main Debug Panel ─────────────────────────────────────────────────────────
-
+// ─── Main Debug Component ──────────────────────────────────────────────────────
 function Debug({
   ariaExpandedisplaydebug,
   activeTab,
   debugSession,
-  breakpoints,
-  watchValues,
-  diagnostics,
+  breakpoints = [],
+  callStack = [],
+  variables = [],
+  watchValues = {},
   onStartDebugging,
   onRunWithoutDebugging,
   onPauseDebugging,
@@ -168,526 +174,322 @@ function Debug({
   onClearBreakpoints,
   onRemoveBreakpoint,
   onSetBreakpointCondition,
+  onToggleBreakpoint,
   onAddWatch,
   onRemoveWatch,
+  onNavigateToFile,
   settings,
-  callStack = [],
-  variables = [],
-  consoleEntries = [],
-  onEvaluate,
 }) {
-  const [watchInput, setWatchInput] = useState('');
-  const [selectedFrameIdx, setSelectedFrameIdx] = useState(0);
-  const [tests, setTests] = useState([]);
-  const [testStates, setTestStates] = useState({});
+  const [selectedConfig, setSelectedConfig] = useState('');
   const [launchConfigs, setLaunchConfigs] = useState([]);
-  const [selectedLaunchConfig, setSelectedLaunchConfig] = useState(null);
-  const [exceptionFilters, setExceptionFilters] = useState({
-    uncaught: true,
-    all: false,
-  });
+  const [watchInput, setWatchInput] = useState('');
+  const [isAddingWatch, setIsAddingWatch] = useState(false);
+  const [selectedFrameIdx, setSelectedFrameIdx] = useState(0);
+  const [exceptionFilters, setExceptionFilters] = useState({ uncaught: true, all: false });
+  const watchInputRef = useRef(null);
 
-  useEffect(() => {
-    // Attempt to load .tilder/launch.json
-    const loadLaunchJson = async () => {
-      try {
-        const rootPath = window.__tilderWorkspaceRoot;
-        if (!rootPath) return;
-        const configPath = `${rootPath}/.tilder/launch.json`;
-        const content = await window.__TAURI__.core.invoke('desktop_read_file', { path: configPath });
-        const parsed = JSON.parse(content);
-        if (parsed && Array.isArray(parsed.configurations)) {
-          setLaunchConfigs(parsed.configurations);
-          if (parsed.configurations.length > 0) {
-            setSelectedLaunchConfig(parsed.configurations[0].name);
-          }
-        }
-      } catch (err) {
-        setLaunchConfigs([]);
-      }
+  const status = debugSession?.status || 'idle';
+  const isActive = ['running', 'paused', 'starting'].includes(status);
+  const isPaused = status === 'paused';
+  const isRunning = status === 'running';
+  const isStarting = status === 'starting';
+
+  const detectedConfigName = useMemo(() => {
+    const langMap = {
+      py: 'Python', python: 'Python',
+      js: 'Node.js', ts: 'TypeScript', tsx: 'TypeScript', jsx: 'Node.js',
+      c: 'C (GDB)', cpp: 'C++ (GDB)', cc: 'C++ (GDB)', cxx: 'C++ (GDB)',
+      rs: 'Rust', java: 'Java', go: 'Go', rb: 'Ruby', php: 'PHP', cs: 'C#',
     };
-    loadLaunchJson();
-  }, [window.__tilderWorkspaceRoot]);
-
-  useEffect(() => {
-    if (!activeTab) {
-      setTests([]);
-      return;
-    }
-
-    const scanTests = () => {
-      const monaco = window.monaco;
-      if (!monaco) return;
-
-      const models = monaco.editor.getModels();
-      const activeModel = models.find(m => m.uri.path.endsWith(activeTab.name));
-      if (!activeModel) return;
-
-      const content = activeModel.getValue();
-      const ext = activeTab.name.split('.').pop().toLowerCase();
-
-      const foundTests = [];
-      
-      if (['js', 'jsx', 'ts', 'tsx'].includes(ext)) {
-        // Match describe(), test(), it() blocks
-        const jsPattern = /(?:describe|test|it)\s*\(\s*(['"`])(.*?)\1/g;
-        let match;
-        while ((match = jsPattern.exec(content)) !== null) {
-          foundTests.push({
-            name: match[2],
-            type: content.substring(match.index, match.index + 8).startsWith('describe') ? 'describe' : 'test',
-            line: activeModel.getPositionAt(match.index).lineNumber,
-          });
-        }
-      } else if (ext === 'py') {
-        // Match def test_*() functions
-        const pyPattern = /def\s+(test_[\w_]*)\s*\(/g;
-        let match;
-        while ((match = pyPattern.exec(content)) !== null) {
-          foundTests.push({
-            name: match[1],
-            type: 'test',
-            line: activeModel.getPositionAt(match.index).lineNumber,
-          });
-        }
-      } else if (ext === 'rs') {
-        // Match #[test] fn ...
-        const rustPattern = /#\[test\]\s*(?:pub\s+)?fn\s+([\w_]+)/g;
-        let match;
-        while ((match = rustPattern.exec(content)) !== null) {
-          foundTests.push({
-            name: match[1],
-            type: 'test',
-            line: activeModel.getPositionAt(match.index).lineNumber,
-          });
-        }
-      } else if (ext === 'java') {
-        // Match @Test void ...
-        const javaPattern = /@Test\s+(?:public\s+)?void\s+([\w_]+)/g;
-        let match;
-        while ((match = javaPattern.exec(content)) !== null) {
-          foundTests.push({
-            name: match[1],
-            type: 'test',
-            line: activeModel.getPositionAt(match.index).lineNumber,
-          });
-        }
-      }
-
-      setTests(foundTests);
-
-      // Add inline decorations to Monaco gutter
-      const decorations = foundTests.map(test => ({
-        range: new monaco.Range(test.line, 1, test.line, 1),
-        options: {
-          isWholeLine: false,
-          glyphMarginClassName: 'test-runner-glyph',
-          glyphMarginHoverMessage: { value: `Run Test: ${test.name}` }
-        }
-      }));
-      window.__tilderTestDecorations = activeModel.deltaDecorations(window.__tilderTestDecorations || [], decorations);
-    };
-
-    scanTests();
-    const timer = setInterval(scanTests, 2500);
-    return () => clearInterval(timer);
+    const ext = (activeTab?.name || '').split('.').pop()?.toLowerCase();
+    return `${langMap[ext] || 'Current File'}: Launch`;
   }, [activeTab]);
 
-  const handleRunTest = (test) => {
-    const ext = activeTab.name.split('.').pop().toLowerCase();
-    let command = '';
+  useEffect(() => {
+    if (isAddingWatch && watchInputRef.current) watchInputRef.current.focus();
+  }, [isAddingWatch]);
 
-    if (['js', 'jsx', 'ts', 'tsx'].includes(ext)) {
-      command = `npm test -- -t "${test.name}"`;
-    } else if (ext === 'py') {
-      command = `pytest -k "${test.name}"`;
-    } else if (ext === 'rs') {
-      command = `cargo test "${test.name}"`;
-    } else if (ext === 'java') {
-      command = `mvn test -Dtest="*#${test.name}"`;
-    }
+  const handleOpenLaunchConfig = useCallback(async () => {
+    if (!activeTab?.path) return;
+    const folder = activeTab.path.replace(/[/\\][^/\\]+$/, '');
+    const configPath = folder + '/.tilder/launch.json';
+    const lang = (activeTab.name || '').split('.').pop()?.toLowerCase() || 'python';
+    const langMap = { py: 'python', js: 'node', ts: 'typescript', cpp: 'cppdbg', c: 'cppdbg', rs: 'lldb', java: 'java', go: 'go' };
+    const defaultConfig = {
+      version: '0.2.0',
+      configurations: [{ name: detectedConfigName, type: langMap[lang] || 'python', request: 'launch', program: activeTab.path }],
+    };
+    try {
+      if (window.__TAURI__?.core?.invoke) {
+        try { await window.__TAURI__.core.invoke('desktop_read_file', { path: configPath }); }
+        catch { await window.__TAURI__.core.invoke('desktop_write_file', { filePath: configPath, content: JSON.stringify(defaultConfig, null, 2), isBinary: false }); }
+      }
+      onNavigateToFile?.(configPath, 1);
+    } catch (err) { console.warn('Failed to open launch.json:', err); }
+  }, [activeTab, detectedConfigName, onNavigateToFile]);
 
-    if (command && window.tilderExecuteTerminalCommand) {
-      setTestStates(prev => ({ ...prev, [test.name]: 'running' }));
+  const handleWatchSubmit = (e) => {
+    e.preventDefault();
+    const expr = watchInput.trim();
+    if (expr) { onAddWatch?.(expr); setWatchInput(''); }
+    setIsAddingWatch(false);
+  };
 
-      // Try real execution first via Tauri desktop API
-      const wsRoot = window.__tilderWorkspaceRoot || null;
-      const parts = command.split(' ');
-      const bin = parts[0];
-      const args = parts.slice(1);
-
-      desktopExecuteCommand(bin, args, wsRoot)
-        .then(result => {
-          const passed = (result?.exitCode ?? result?.code ?? 0) === 0;
-          setTestStates(prev => ({ ...prev, [test.name]: passed ? 'passed' : 'failed' }));
-        })
-        .catch(() => {
-          // Fallback: send to terminal and detect via output if desktop API unavailable
-          window.tilderExecuteTerminalCommand(command);
-          // Listen for terminal exit signal (custom event dispatched by terminal on command finish)
-          const handler = (e) => {
-            if (e.detail?.command === command || e.detail?.exitCode !== undefined) {
-              window.removeEventListener('tilder:terminal-command-done', handler);
-              setTestStates(prev => ({ ...prev, [test.name]: (e.detail.exitCode === 0) ? 'passed' : 'failed' }));
-            }
-          };
-          window.addEventListener('tilder:terminal-command-done', handler);
-          // Safety timeout: if no event after 30s mark as unknown
-          setTimeout(() => {
-            window.removeEventListener('tilder:terminal-command-done', handler);
-            setTestStates(prev => {
-              if (prev[test.name] === 'running') return { ...prev, [test.name]: 'unknown' };
-              return prev;
-            });
-          }, 30000);
-        });
+  const handleFrameClick = (frame, index) => {
+    setSelectedFrameIdx(index);
+    if (frame.url && frame.line) {
+      onNavigateToFile?.(frame.url, frame.line, frame.column || 1);
+    } else if (frame.line) {
+      const editor = window.getPreferredEditor?.();
+      if (editor) { editor.focus(); editor.setPosition({ lineNumber: frame.line, column: frame.column || 1 }); editor.revealLineInCenter(frame.line); }
     }
   };
 
-  const handleEvaluate = useCallback(async (expr) => {
-    onEvaluate?.(expr);
-  }, [onEvaluate]);
-
-  const handleFrameSelect = async (frame) => {
-    setSelectedFrameIdx(frame.index);
+  const handleBreakpointClick = (bp) => {
+    if (bp.path && bp.line) onNavigateToFile?.(bp.path, bp.line, 1);
   };
 
-  const isPaused = debugSession.status === 'paused';
-  const isRunning = debugSession.status === 'running';
-  const isActive = isPaused || isRunning;
-
-  const statusTone = isPaused ? 'paused' : isRunning ? 'running' : 'idle';
-  const statusLabel = isPaused ? '⏸ Paused' : isRunning ? '▶ Running' : '⬛ Idle';
+  const scopedVariables = useMemo(() => {
+    if (!variables || variables.length === 0) return null;
+    const groups = {};
+    variables.forEach(v => { const scope = v.scope || 'Local'; if (!groups[scope]) groups[scope] = []; groups[scope].push(v); });
+    return groups;
+  }, [variables]);
 
   return (
-    <div id="debugarea" className={`sidebarscontent d-${ariaExpandedisplaydebug}`}>
-      <div className="debug-shell">
+    <div id="debugarea" className={`debug-shell sidebarscontent d-${ariaExpandedisplaydebug}`}>
+      <div className="dbg-container">
 
-        {/* Header */}
-        <div className="debug-header">
-          <p className="explorer-eyebrow">Run &amp; Debug</p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <h6 className="explorer-title" style={{ margin: 0 }}>Debug Center</h6>
-            {launchConfigs.length > 0 && (
-              <select 
-                className="debug-launch-select"
-                value={selectedLaunchConfig || ''}
-                onChange={e => setSelectedLaunchConfig(e.target.value)}
-                style={{ 
-                  flex: 1, 
-                  background: 'var(--vscode-input-background)', 
-                  color: 'var(--vscode-input-foreground)',
-                  border: '1px solid var(--vscode-input-border)',
-                  borderRadius: '2px',
-                  padding: '2px 4px',
-                  fontSize: '11px'
-                }}
+        {/* ── Header ── */}
+        <div className="dbg-header">
+          <span className="dbg-eyebrow">RUN AND DEBUG</span>
+
+          <div className="dbg-launch-row">
+            <div className="dbg-select-wrap">
+              <select
+                className="dbg-select"
+                value={selectedConfig || detectedConfigName}
+                onChange={e => setSelectedConfig(e.target.value)}
+                title="Select Debug Configuration"
               >
-                {launchConfigs.map(c => (
-                  <option key={c.name} value={c.name}>{c.name}</option>
-                ))}
+                {launchConfigs.length > 0
+                  ? launchConfigs.map(c => <option key={c.name} value={c.name}>{c.name}</option>)
+                  : <option value={detectedConfigName}>{detectedConfigName}</option>
+                }
               </select>
-            )}
+              <svg className="dbg-select-arrow" width="10" height="10" viewBox="0 0 10 10" fill="none">
+                <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </div>
+
+            <button
+              type="button"
+              className={`dbg-run-btn${isActive ? ' dbg-run-btn--continue' : ''}`}
+              onClick={isActive ? onContinueDebugging : onStartDebugging}
+              title={isActive ? 'Continue (F5)' : 'Start Debugging (F5)'}
+              disabled={!activeTab && !isActive}
+            >
+              <PlayIcon />
+            </button>
+
+            <button
+              type="button"
+              className="dbg-icon-btn"
+              onClick={handleOpenLaunchConfig}
+              title="Open launch.json"
+            >
+              <GearIcon />
+            </button>
           </div>
-        </div>
 
-        {/* Session Status Card */}
-        <div className="debug-session-card">
-          <div className="debug-session-info">
-            <span className="debug-session-file">{activeTab?.name || 'No active file'}</span>
-            <span className={`debug-status-badge ${statusTone}`}>{statusLabel}</span>
-          </div>
-          <div className="debug-session-note">{debugSession.message || 'Open a file to run or debug.'}</div>
-        </div>
-
-        {/* Floating Debug Toolbar */}
-        <div className="debug-toolbar-float">
-          <button
-            type="button"
-            className="debug-toolbar-btn primary"
-            onClick={onContinueDebugging}
-            disabled={!isPaused}
-            title="Continue (F5)"
-          >
-            <span><i className="fa-solid fa-play"></i></span>
-          </button>
-          <button
-            type="button"
-            className="debug-toolbar-btn primary"
-            onClick={onPauseDebugging}
-            disabled={!isRunning}
-            title="Pause (F6)"
-          >
-            <span><i className="fa-solid fa-pause"></i></span>
-          </button>
-          <button
-            type="button"
-            className="debug-toolbar-btn accent"
-            onClick={() => debugApi.stepOver()}
-            disabled={!isPaused}
-            title="Step Over (F10)"
-          >
-            <span><i className="fa-solid fa-arrow-right"></i></span>
-          </button>
-          <button
-            type="button"
-            className="debug-toolbar-btn accent"
-            onClick={() => debugApi.stepInto()}
-            disabled={!isPaused}
-            title="Step Into (F11)"
-          >
-            <span><i className="fa-solid fa-arrow-down"></i></span>
-          </button>
-          <button
-            type="button"
-            className="debug-toolbar-btn accent"
-            onClick={() => debugApi.stepOut()}
-            disabled={!isPaused}
-            title="Step Out (Shift+F11)"
-          >
-            <span><i className="fa-solid fa-arrow-up"></i></span>
-          </button>
-          <button
-            type="button"
-            className="debug-toolbar-btn success"
-            onClick={onRestartDebugging}
-            disabled={!isActive}
-            title="Restart (Ctrl+Shift+F5)"
-          >
-            <span><i className="fa-solid fa-rotate-right"></i></span>
-          </button>
-          <button
-            type="button"
-            className="debug-toolbar-btn danger"
-            onClick={onStopDebugging}
-            disabled={!isActive}
-            title="Stop (Shift+F5)"
-          >
-            <span><i className="fa-solid fa-stop"></i></span>
-          </button>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="debug-quick-actions">
-          {!isActive && (
-            <button type="button" className="debug-start-btn" onClick={onStartDebugging} disabled={!activeTab}>
-              <span><i className="fa-solid fa-bug" /></span> Start Debugging
+          {!isActive && activeTab && (
+            <button
+              type="button"
+              className="dbg-run-file-btn"
+              onClick={() => onRunCurrentFile?.()}
+              title="Run File without Debugging"
+            >
+              &#9654; Run {activeTab.name || 'Current File'}
             </button>
           )}
-          <button type="button" className="debug-quick-btn" onClick={onRunCurrentFile} disabled={!activeTab}>
-            <span><i className="fa-solid fa-terminal" /></span> Run File
-          </button>
         </div>
 
-        {/* Live Test Suite Runner */}
-        <Section title="TEST SUITE" defaultOpen={true}>
-          {tests.length > 0 ? (
-            <div className="debug-test-list">
-              {tests.map((test, index) => {
-                const state = testStates[test.name] || 'idle';
-                return (
-                  <div key={`${test.name}-${index}`} className={`debug-test-row ${state}`}>
-                    <div className="debug-test-info" onClick={() => {
-                      const editor = window.getPreferredEditor?.();
-                      if (editor) {
-                        editor.revealLineInCenter(test.line);
-                        editor.setPosition({ lineNumber: test.line, column: 1 });
-                        editor.focus();
-                      }
-                    }} style={{ cursor: 'pointer' }}>
-                      <span className={`debug-test-dot ${state}`}>●</span>
-                      <div className="debug-test-details">
-                        <span className="debug-test-name">{test.name}</span>
-                        <span className="debug-test-line">Line {test.line}</span>
+        {/* ── Active Session Bar ── */}
+        {isActive && (
+          <div className="dbg-session-bar">
+            <div className="dbg-session-status">
+              <span className={`dbg-status-dot${isPaused ? ' dbg-status-dot--paused' : ' dbg-status-dot--running'}`} />
+              <span className="dbg-status-text">
+                {isPaused ? 'Paused on breakpoint' : isStarting ? 'Starting\u2026' : 'Running'}
+              </span>
+              {activeTab?.name && <span className="dbg-session-file">{activeTab.name}</span>}
+            </div>
+            <div className="dbg-controls">
+              {isPaused ? (
+                <button type="button" className="dbg-ctrl play" onClick={onContinueDebugging} title="Continue (F5)"><PlayIcon /></button>
+              ) : (
+                <button type="button" className="dbg-ctrl pause" onClick={onPauseDebugging} title="Pause (F6)" disabled={!isRunning}><PauseIcon /></button>
+              )}
+              <button type="button" className="dbg-ctrl" onClick={() => debugApi.stepOver()} title="Step Over (F10)" disabled={!isPaused}><StepOverIcon /></button>
+              <button type="button" className="dbg-ctrl" onClick={() => debugApi.stepInto()} title="Step Into (F11)" disabled={!isPaused}><StepIntoIcon /></button>
+              <button type="button" className="dbg-ctrl" onClick={() => debugApi.stepOut()} title="Step Out (Shift+F11)" disabled={!isPaused}><StepOutIcon /></button>
+              <button type="button" className="dbg-ctrl restart" onClick={onRestartDebugging} title="Restart (Ctrl+Shift+F5)"><RestartIcon /></button>
+              <button type="button" className="dbg-ctrl stop" onClick={onStopDebugging} title="Stop (Shift+F5)"><StopIcon /></button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Scrollable Sections ── */}
+        <div className="dbg-scroll">
+
+          {/* 1. VARIABLES */}
+          <Section title="VARIABLES" defaultOpen={true}>
+            {scopedVariables ? (
+              Object.entries(scopedVariables).map(([scope, vars]) => (
+                <div key={scope} className="dbg-scope-group">
+                  <div className="dbg-scope-label">{scope}</div>
+                  {vars.map((v, i) => <VarNode key={`${v.name}-${i}`} variable={v} depth={0} />)}
+                </div>
+              ))
+            ) : (
+              <div className="dbg-empty">Not paused on a breakpoint.</div>
+            )}
+          </Section>
+
+          {/* 2. WATCH */}
+          <Section
+            title="WATCH"
+            defaultOpen={true}
+            actions={
+              <button type="button" className="dbg-mini-btn" onClick={() => setIsAddingWatch(true)} title="Add Watch Expression">
+                <PlusIcon />
+              </button>
+            }
+          >
+            {isAddingWatch && (
+              <form className="dbg-watch-form" onSubmit={handleWatchSubmit}>
+                <input
+                  ref={watchInputRef}
+                  className="dbg-watch-input"
+                  value={watchInput}
+                  onChange={e => setWatchInput(e.target.value)}
+                  placeholder="Expression\u2026"
+                  onBlur={() => { if (!watchInput.trim()) setIsAddingWatch(false); }}
+                  onKeyDown={e => { if (e.key === 'Escape') { setIsAddingWatch(false); setWatchInput(''); } }}
+                />
+              </form>
+            )}
+            {Object.keys(watchValues).length > 0 ? (
+              Object.entries(watchValues).map(([expr, val]) => (
+                <div key={expr} className="dbg-list-row">
+                  <span className="dbg-watch-expr">{expr}</span>
+                  <span className="dbg-watch-sep">:</span>
+                  <span className="dbg-watch-val"><VarValue value={val?.result ?? val} type={val?.type} /></span>
+                  <button type="button" className="dbg-row-del" onClick={() => onRemoveWatch?.(expr)} title="Remove Watch"><ClearIcon /></button>
+                </div>
+              ))
+            ) : (
+              !isAddingWatch && <div className="dbg-empty">No watch expressions.</div>
+            )}
+          </Section>
+
+          {/* 3. CALL STACK */}
+          <Section title="CALL STACK" defaultOpen={true}>
+            {isActive ? (
+              callStack.length > 0 ? (
+                <div className="dbg-stack-list">
+                  <div className="dbg-thread-header">
+                    <span className="dbg-thread-label">Main Thread</span>
+                    <span className={`dbg-thread-status ${isPaused ? 'paused' : 'running'}`}>
+                      {isPaused ? 'Paused' : 'Running'}
+                    </span>
+                  </div>
+                  {callStack.map((frame, i) => {
+                    const fileName = frame.url ? frame.url.split(/[/\\]/).pop() : '';
+                    return (
+                      <div
+                        key={i}
+                        className={`dbg-list-row dbg-frame${i === selectedFrameIdx ? ' dbg-frame--selected' : ''}`}
+                        onClick={() => handleFrameClick(frame, i)}
+                        title={`${frame.url || ''}:${frame.line || ''}`}
+                      >
+                        <span className="dbg-frame-ptr">{i === selectedFrameIdx ? '\u2192' : ''}</span>
+                        <span className="dbg-frame-name">{frame.name || `Frame ${i}`}</span>
+                        {fileName && <span className="dbg-frame-loc">{fileName}{frame.line ? `:${frame.line}` : ''}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : isRunning ? (
+                <div className="dbg-empty dbg-empty--italic">Execution in progress\u2026</div>
+              ) : (
+                <div className="dbg-empty">Call stack is not available.</div>
+              )
+            ) : (
+              <div className="dbg-empty">No active debug session.</div>
+            )}
+          </Section>
+
+          {/* 4. BREAKPOINTS */}
+          <Section
+            title="BREAKPOINTS"
+            defaultOpen={true}
+            count={breakpoints.length}
+            actions={
+              breakpoints.length > 0 ? (
+                <button type="button" className="dbg-mini-btn" onClick={onClearBreakpoints} title="Remove All Breakpoints">
+                  <ClearIcon />
+                </button>
+              ) : null
+            }
+          >
+            <div className="dbg-exception-group">
+              <div className="dbg-checkbox-row" onClick={() => setExceptionFilters(f => ({ ...f, uncaught: !f.uncaught }))}>
+                <GlassCheckbox checked={exceptionFilters.uncaught} onChange={() => setExceptionFilters(f => ({ ...f, uncaught: !f.uncaught }))} title="Break on uncaught exceptions" />
+                <span className="dbg-checkbox-label">Uncaught Exceptions</span>
+              </div>
+              <div className="dbg-checkbox-row" onClick={() => setExceptionFilters(f => ({ ...f, all: !f.all }))}>
+                <GlassCheckbox checked={exceptionFilters.all} onChange={() => setExceptionFilters(f => ({ ...f, all: !f.all }))} title="Break on all exceptions" />
+                <span className="dbg-checkbox-label">All Exceptions</span>
+              </div>
+            </div>
+
+            {breakpoints.length > 0 ? (
+              <div className="dbg-bp-list">
+                {breakpoints.map(bp => {
+                  const fileName = bp.name || (bp.path ? bp.path.split(/[/\\]/).pop() : 'file');
+                  return (
+                    <div
+                      key={`${bp.path}:${bp.line}`}
+                      className="dbg-list-row dbg-bp-row"
+                      onClick={() => handleBreakpointClick(bp)}
+                      title={`${bp.path} : line ${bp.line}`}
+                    >
+                      <GlassCheckbox
+                        checked={true}
+                        onChange={(e) => { e.stopPropagation(); onToggleBreakpoint?.(bp.path, bp.line); }}
+                        title="Toggle Breakpoint"
+                      />
+                      <span className="dbg-bp-dot">\u25CF</span>
+                      <div className="dbg-bp-info">
+                        <span className="dbg-bp-name">{fileName}</span>
+                        <span className="dbg-bp-line">:{bp.line}</span>
+                        {bp.condition && <span className="dbg-bp-cond">[if: {bp.condition}]</span>}
+                      </div>
+                      <div className="dbg-bp-actions" onClick={e => e.stopPropagation()}>
+                        <button type="button" className="dbg-mini-btn" onClick={() => onSetBreakpointCondition?.(bp)} title="Edit Condition"><EditIcon /></button>
+                        <button type="button" className="dbg-mini-btn dbg-mini-btn--danger" onClick={() => onRemoveBreakpoint?.(bp)} title="Remove Breakpoint"><ClearIcon /></button>
                       </div>
                     </div>
-                    <div className="debug-test-actions">
-                      <button
-                        type="button"
-                        className="debug-test-run-btn"
-                        onClick={() => handleRunTest(test)}
-                        disabled={state === 'running'}
-                        title="Run this test"
-                      >
-                        {state === 'running' ? (
-                          <span className="debug-test-spinner"></span>
-                        ) : (
-                          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M4.5 3a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .8.4l7-4.5a.5.5 0 0 0 0-.8l-7-4.5A.5.5 0 0 0 4.5 3z" />
-                          </svg>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="debug-empty-state">
-              No tests scanned in the active file.<br />
-              <span style={{ fontSize: '10px', opacity: 0.6 }}>Supports Python (unittest/pytest), JS (Jest), Rust, Java.</span>
-            </div>
-          )}
-        </Section>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="dbg-empty">No breakpoints set. Click the editor gutter to toggle breakpoints.</div>
+            )}
+          </Section>
 
-        {/* Call Stack */}
-        <Section title="CALL STACK" defaultOpen={true}>
-          {callStack.length > 0 ? (
-            <div className="debug-list">
-              {callStack.map((frame, idx) => (
-                <div
-                  key={frame.id}
-                  className={`debug-list-item ${idx === selectedFrameIdx ? 'current' : ''}`}
-                  onClick={() => handleFrameSelect(frame)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <div className="debug-list-main">
-                    <div className="debug-list-title">
-                      {idx === 0 && isPaused ? <span className="debug-frame-arrow">→ </span> : null}
-                      {frame.name}
-                    </div>
-                    <div className="debug-list-meta">{frame.url?.split('/').pop() || frame.url} : {frame.line}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="debug-empty-state">Call stack appears here when paused.</div>
-          )}
-        </Section>
-
-        {/* Variables */}
-        <Section title="VARIABLES" defaultOpen={true}>
-          {variables.length > 0 ? (
-            <div className="debug-var-list">
-              {variables.map((variable) => (
-                <VariableRow key={`${variable.name}-${variable.scope}`} variable={variable} depth={0} />
-              ))}
-            </div>
-          ) : (
-            <div className="debug-empty-state">Variables appear here when paused.</div>
-          )}
-        </Section>
-
-        {/* Watch */}
-        <Section title="WATCH" defaultOpen={false}>
-          <div className="debug-watch-row">
-            <input
-              type="text"
-              className="debug-watch-input"
-              value={watchInput}
-              onChange={(e) => setWatchInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { onAddWatch(watchInput.trim()); setWatchInput(''); } }}
-              placeholder="Expression..."
-              spellCheck={false}
-            />
-            <button type="button" className="debug-action-btn" onClick={() => { onAddWatch(watchInput.trim()); setWatchInput(''); }}>
-              +
-            </button>
-          </div>
-          {watchValues?.length > 0 ? (
-            <div className="debug-list">
-              {watchValues.map((watch) => (
-                <div key={watch.expression} className="debug-list-item">
-                  <div className="debug-list-main">
-                    <div className="debug-list-title">{watch.expression}</div>
-                    <div className="debug-list-meta">{watch.value ?? '…'}</div>
-                  </div>
-                  <button type="button" className="debug-icon-btn" onClick={() => onRemoveWatch(watch.expression)}>×</button>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </Section>
-
-        {/* Breakpoints */}
-        <Section
-          title="BREAKPOINTS"
-          actions={
-            <button type="button" className="debug-link-btn" onClick={onClearBreakpoints} disabled={!breakpoints?.length}>
-              Clear All
-            </button>
-          }
-        >
-          <div className="debug-exception-filters">
-            <label className="debug-toggle-row">
-              <span className="debug-toggle-label">Uncaught Exceptions</span>
-              <button
-                type="button"
-                className={`debug-toggle-switch ${exceptionFilters.uncaught ? 'on' : ''}`}
-                onClick={() => setExceptionFilters(f => ({ ...f, uncaught: !f.uncaught }))}
-                aria-checked={exceptionFilters.uncaught}
-                role="switch"
-              >
-                <span className="debug-toggle-knob" />
-              </button>
-            </label>
-            <label className="debug-toggle-row">
-              <span className="debug-toggle-label">Caught Exceptions</span>
-              <button
-                type="button"
-                className={`debug-toggle-switch ${exceptionFilters.all ? 'on' : ''}`}
-                onClick={() => setExceptionFilters(f => ({ ...f, all: !f.all }))}
-                aria-checked={exceptionFilters.all}
-                role="switch"
-              >
-                <span className="debug-toggle-knob" />
-              </button>
-            </label>
-          </div>
-
-
-          <div style={{ padding: '0 8px', fontSize: '11px', color: 'var(--vscode-descriptionForeground)', textTransform: 'uppercase', marginBottom: '4px' }}>Data Breakpoints</div>
-          <div className="debug-empty-state" style={{ paddingBottom: '8px' }}>No data breakpoints set.</div>
-
-          <div style={{ padding: '0 8px', fontSize: '11px', color: 'var(--vscode-descriptionForeground)', textTransform: 'uppercase', marginBottom: '4px' }}>File Breakpoints</div>
-          {breakpoints?.length ? (
-            <div className="debug-list">
-              {breakpoints.map((bp) => (
-                <div key={`${bp.path}-${bp.line}`} className="debug-list-item">
-                  <div className="debug-list-main">
-                    <div className="debug-list-title">{bp.name || bp.path.split('/').pop()}</div>
-                    <div className="debug-list-meta">
-                      {bp.path} : {bp.line}
-                      {bp.condition ? ` | if: ${bp.condition}` : ''}
-                    </div>
-                  </div>
-                  <div className="debug-inline-actions">
-                    <button type="button" className="debug-icon-btn" onClick={() => onSetBreakpointCondition?.(bp)} title="Set Condition">?</button>
-                    <button type="button" className="debug-icon-btn" onClick={() => onRemoveBreakpoint(bp)} title="Remove">×</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="debug-empty-state">Click the gutter to add breakpoints.</div>
-          )}
-        </Section>
-
-        {/* Console (Sidebar preview) */}
-        <Section title="DEBUG CONSOLE" defaultOpen={false}>
-            <DebugConsole entries={consoleEntries} onEvaluate={handleEvaluate} />
-        </Section>
-
-        {/* Diagnostics */}
-        <Section title="DIAGNOSTICS" defaultOpen={false}>
-          {diagnostics?.length ? (
-            <div className="debug-list">
-              {diagnostics.map((d, i) => (
-                <div key={i} className={`debug-list-item ${d.severity}`}>
-                  <div className="debug-list-main">
-                    <div className="debug-list-title">{d.message}</div>
-                    <div className="debug-list-meta">Line {d.startLineNumber}, Col {d.startColumn}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="debug-empty-state">No diagnostics in the active model.</div>
-          )}
-        </Section>
-
-        <CodeViz activeTab={activeTab} settings={settings} />
+        </div>
       </div>
     </div>
   );

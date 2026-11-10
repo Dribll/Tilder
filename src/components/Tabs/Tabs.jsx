@@ -161,16 +161,14 @@ function Tabs({
 
 
 
-  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
   const isInoFile = Boolean(
-
     activeTab?.name?.toLowerCase().endsWith('.ino') ||
-
+    activeTab?.path?.toLowerCase().endsWith('.ino') ||
+    activeTab?.nativePath?.toLowerCase().endsWith('.ino') ||
     activeTab?.language === 'arduino' ||
-
     activeTab?.language === 'ino'
-
   );
 
 
@@ -441,8 +439,7 @@ function Tabs({
 
           ) : null}
 
-          {showRunAction ? (
-
+          {(showRunAction || isInoFile) ? (
             isInoFile ? (
               <div className="tabs-action-split-btn arduino-actions-group">
                 <button
@@ -452,9 +449,10 @@ function Tabs({
                     e.stopPropagation();
                     window.dispatchEvent(new CustomEvent('tilder:arduino-action', { detail: { action: 'compile' } }));
                   }}
-                  title="Verify / Compile sketch"
+                  title="Verify / Compile sketch (Ctrl+R)"
                 >
-                  <i className="fa-solid fa-check"></i>
+                  <i className="fa-solid fa-check" />
+                  <span style={{ fontSize: 10, marginLeft: 3 }}>Verify</span>
                 </button>
                 <button
                   type="button"
@@ -463,9 +461,10 @@ function Tabs({
                     e.stopPropagation();
                     window.dispatchEvent(new CustomEvent('tilder:arduino-action', { detail: { action: 'upload' } }));
                   }}
-                  title="Upload to board"
+                  title="Upload to board (Ctrl+Shift+U)"
                 >
-                  <i className="fa-solid fa-arrow-right"></i>
+                  <i className="fa-solid fa-arrow-right-to-bracket" />
+                  <span style={{ fontSize: 10, marginLeft: 3 }}>Upload</span>
                 </button>
               </div>
             ) : (

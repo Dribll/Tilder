@@ -1,3 +1,4 @@
+import AudioStudioViewer from './components/AudioViewer/AudioStudioViewer.jsx';
 import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 import tilderIcon from '../Tilder_icon.png';
@@ -35,10 +36,8 @@ const Extensions = React.lazy(() => import('./components/Extensions/Extensions.j
 const Account = React.lazy(() => import('./components/Account/Account.jsx'));
 const KeyboardShortcuts = React.lazy(() => import('./components/KeyboardShortcuts/KeyboardShortcuts.jsx'));
 const SystemMonitor = React.lazy(() => import('./components/SystemMonitor/SystemMonitor.jsx'));
-const OfficeEditor = React.lazy(() => import('./components/Editor/OfficeEditor.jsx'));
 const JupyterEditor = React.lazy(() => import('./components/Editor/JupyterEditor.jsx'));
 const UpdateModal = React.lazy(() => import('./components/UpdateModal/UpdateModal.jsx'));
-const isOfficeFile = (name) => /\.(docx|xlsx|csv|pptx)$/i.test(name || '');
 const isJupyterNotebook = (name) => /\.ipynb$/i.test(name || '');
 
 const isBinaryMediaFile = (name) =>
@@ -509,22 +508,33 @@ function MediaViewer({ tab }) {
   const [src, setSrc] = useState(tab?.blobUrl || null);
 
   useEffect(() => {
-    if (tab?.nativePath) {
+    const rawPath = tab?.nativePath || (workspace.rootSystemPath && tab?.path ? workspace.toAbsolutePath(tab.path) : tab?.path);
+    if (rawPath && typeof rawPath === 'string' && (rawPath.includes('/') || rawPath.includes('\\'))) {
       try {
-        setSrc(convertFileSrc(tab.nativePath));
+        setSrc(convertFileSrc(rawPath));
       } catch (e) {
-        setSrc(`http://asset.localhost/${encodeURIComponent(tab.nativePath.replace(/\\/g, '/'))}`);
+        setSrc(`http://asset.localhost/${encodeURIComponent(rawPath.replace(/\\/g, '/'))}`);
       }
     } else if (tab?.blobUrl) {
       setSrc(tab.blobUrl);
+    } else if (tab?.content && tab?.isBinary) {
+      setSrc(`data:${tab.mimeType || 'audio/mpeg'};base64,${tab.content}`);
     }
-  }, [tab?.nativePath, tab?.blobUrl]);
+  }, [tab?.nativePath, tab?.path, tab?.blobUrl, tab?.content, tab?.isBinary, tab?.mimeType]);
 
   const ext = (tab?.name || '').split('.').pop().toLowerCase();
   const isImage = /^(png|jpg|jpeg|gif|bmp|webp|svg|ico)$/.test(ext);
   const isPdf = ext === 'pdf';
   const isVideo = /^(mp4|webm|mov|avi|mkv)$/.test(ext);
   const isAudio = /^(mp3|wav|ogg|flac|aac|m4a)$/.test(ext);
+
+  if (isAudio && src) {
+    return (
+      <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
+        <AudioStudioViewer src={src} name={tab.name} path={tab.nativePath || tab.path} />
+      </div>
+    );
+  }
 
   return (
     <div style={{
@@ -535,7 +545,6 @@ function MediaViewer({ tab }) {
       {isImage && src && <img src={src} alt={tab.name} style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: 8, boxShadow: '0 4px 32px rgba(0,0,0,0.5)' }} />}
       {isPdf && src && <iframe src={src} title={tab.name} style={{ width: '100%', height: '80vh', border: 'none', borderRadius: 8 }} />}
       {isVideo && src && <VideoPlayer src={src} name={tab.name} path={tab.nativePath || tab.path} />}
-      {isAudio && src && <AudioPlayer src={src} name={tab.name} path={tab.nativePath || tab.path} />}
       {!src && (
         <div style={{ textAlign: 'center' }}>
           <span><i className="fa-solid fa-file" style={{ fontSize: 48, opacity: 0.3 }} /></span>
@@ -679,7 +688,7 @@ function collectMonacoCommandPaletteCommands(editor) {
 function isRunnableFile(file) {
   if (!file || !file.name) return false;
   const ext = file.name.split('.').pop().toLowerCase();
-  const runnableExts = ['js', 'jsx', 'ts', 'tsx', 'py', 'java', 'c', 'cpp', 'rs', 'go', 'sh', 'bash', 'php', 'rb'];
+  const runnableExts = ['js', 'jsx', 'ts', 'tsx', 'py', 'java', 'c', 'cpp', 'ino', 'rs', 'go', 'sh', 'bash', 'php', 'rb'];
   return runnableExts.includes(ext);
 }
 
@@ -723,6 +732,8 @@ function App() {
     window.addEventListener('click', handleGlobalClick, true);
     return () => window.removeEventListener('click', handleGlobalClick, true);
   }, []);
+
+
 
   useEffect(() => {
     if (isDesktopRuntime()) {
@@ -828,6 +839,7 @@ function App() {
     insertSpaces: defaultSettings.insertSpaces,
   });
   const [notifications, setNotifications] = useState([]);
+  const lastNotificationRef = useRef({ message: '', time: 0 });
   const [aiLensTarget, setAiLensTarget] = useState(null);
   const [version, setVersion] = useState(0);
   const [extensionState, setExtensionState] = useState(() => readStoredExtensionState());
@@ -1084,16 +1096,66 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const exitTimer = window.setTimeout(() => {
-      setStartupSplashPhase('exiting');
-    }, 2000); // hold splash for 2 seconds before fading
-    const hideTimer = window.setTimeout(() => {
-      setStartupSplashPhase('hidden');
-    }, 2600); // fully hidden after fade-out (0.6s transition)
+    // For desktop runtime: poll until backend responds, then fade out splash.
+    // For web runtime: use a brief fixed timer since there's no Node server to wait for.
+    const isDesktop = typeof window !== 'undefined' && (
+      String(window.__TILDER_RUNTIME_MODE__ || '').includes('desktop') ||
+      String(window.location?.protocol || '').startsWith('tauri:') ||
+      String(window.location?.hostname || '') === 'tauri.localhost'
+    );
+
+    let cancelled = false;
+    let exitTimer = null;
+    let hideTimer = null;
+
+    function dismissSplash() {
+      if (cancelled) return;
+      exitTimer = window.setTimeout(() => {
+        if (!cancelled) setStartupSplashPhase('exiting');
+      }, 40);
+      hideTimer = window.setTimeout(() => {
+        if (!cancelled) setStartupSplashPhase('hidden');
+      }, 220); // 40ms delay + 180ms fade
+    }
+
+    if (isDesktop) {
+      // Poll the backend /api/health endpoint; give up after 12 seconds
+      const started = Date.now();
+      const maxWait = 12000;
+      const pollInterval = 100;
+      const apiBase = window.__TILDER_API_BASE_URL__ || '';
+
+      function poll() {
+        if (cancelled) return;
+        if (Date.now() - started > maxWait) {
+          dismissSplash();
+          return;
+        }
+        fetch(`${apiBase}/api/health`, { cache: 'no-store' })
+          .then((res) => { if (res.ok || res.status < 500) dismissSplash(); else scheduleRetry(); })
+          .catch(() => scheduleRetry());
+      }
+
+      function scheduleRetry() {
+        if (!cancelled) window.setTimeout(poll, pollInterval);
+      }
+
+      // Start health check immediately to minimize loading wait
+      window.setTimeout(poll, 50);
+    } else {
+      // Web mode: fast instant splash
+      exitTimer = window.setTimeout(() => {
+        setStartupSplashPhase('exiting');
+      }, 120);
+      hideTimer = window.setTimeout(() => {
+        setStartupSplashPhase('hidden');
+      }, 300);
+    }
 
     return () => {
-      window.clearTimeout(exitTimer);
-      window.clearTimeout(hideTimer);
+      cancelled = true;
+      if (exitTimer) window.clearTimeout(exitTimer);
+      if (hideTimer) window.clearTimeout(hideTimer);
     };
   }, []);
 
@@ -1418,6 +1480,23 @@ function App() {
   useEffect(() => {
     activeEditorPaneRef.current = activeEditorPane;
   }, [activeEditorPane]);
+
+  // Force Monaco editors to re-layout when split view opens/closes.
+  // automaticLayout uses ResizeObserver which can lag; calling layout() immediately
+  // prevents the blank-black-pane glitch on split open.
+  useEffect(() => {
+    const relayout = () => {
+      try { editorRef.current?.layout?.(); } catch (_) {}
+      splitEditorRefs.current.forEach((ed) => { try { ed?.layout?.(); } catch (_) {} });
+    };
+    // First frame: container has been resized by React render
+    const raf = requestAnimationFrame(() => {
+      relayout();
+      // Second frame: Monaco needs two ticks to reflow glyph margin + scrollbar
+      requestAnimationFrame(relayout);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [splitEditorOpen]);
 
   useEffect(() => {
     if (!goOverlay.open) {
@@ -1842,15 +1921,22 @@ function App() {
   }
 
   function pushNotification(message, tone = 'info') {
+    const text = String(message || '').trim();
+    if (!text) return;
+    const now = Date.now();
+    if (lastNotificationRef.current.message === text && (now - lastNotificationRef.current.time) < 4000) {
+      return;
+    }
+    lastNotificationRef.current = { message: text, time: now };
     setNotifications((current) => [
       {
-        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        message,
+        id: `${now}-${Math.random().toString(16).slice(2)}`,
+        message: text,
         tone,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         read: false,
       },
-      ...current,
+      ...current.filter((n) => n.message !== text),
     ].slice(0, 20));
   }
 
@@ -3216,9 +3302,11 @@ function App() {
   const activeTab = workspace.getActiveTab();
   const welcomeTab = welcomeTabOpen ? [{ id: '__welcome__', name: 'Welcome', dirty: false }] : [];
   const visibleTabs = [...welcomeTab, ...tabs];
-  const primaryGroupTabs = primaryGroupTabIds
-    .map((id) => visibleTabs.find((tab) => tab.id === id))
-    .filter(Boolean);
+  const primaryGroupTabs = !splitEditorOpen
+    ? visibleTabs
+    : (primaryGroupTabIds.length
+        ? primaryGroupTabIds.map((id) => visibleTabs.find((tab) => tab.id === id)).filter(Boolean)
+        : visibleTabs);
   function orderTabsForView(list = []) {
     const pinned = [];
     const regular = [];
@@ -3774,19 +3862,16 @@ function App() {
   }
 
   function openSplitEditorRight(tabId = null) {
-    const lastGroup = splitPaneGroups[splitPaneGroups.length - 1];
-    const nextTabId = tabId || lastGroup?.activeTabId || getDefaultSplitTabId();
-    if (!nextTabId) {
-      return;
-    }
-
+    const nextTabId = tabId || workspace.activeTabId || (welcomeTabOpen ? '__welcome__' : null);
+    const currentPrimary = workspace.activeTabId || (welcomeTabOpen ? '__welcome__' : null);
+    setPrimaryActiveTabId((curr) => curr || currentPrimary);
     setSplitEditorOpen(true);
     setEditorSplitDirection('horizontal');
     const newGroupId = `group-${Date.now()}-${splitPaneGroups.length}`;
     const newGroup = {
       id: newGroupId,
       activeTabId: nextTabId,
-      tabIds: [nextTabId],
+      tabIds: nextTabId ? [nextTabId] : [],
       previewTabId: null,
     };
     setSplitPaneGroups((current) => {
@@ -3795,29 +3880,28 @@ function App() {
       return merged;
     });
     setActiveEditorPane('secondary');
-    if (nextTabId !== '__welcome__') {
+    if (nextTabId && nextTabId !== '__welcome__') {
       workspace.setActiveTab(nextTabId);
     } else {
       workspace.activeTabId = null;
     }
-    touchGroupMru(newGroupId, nextTabId);
+    if (nextTabId) {
+      touchGroupMru(newGroupId, nextTabId);
+    }
   }
 
   /** VS Code workbench.action.splitEditorDown — new group below (column layout). */
   function openSplitEditorDown(tabId = null) {
-    const lastGroup = splitPaneGroups[splitPaneGroups.length - 1];
-    const nextTabId = tabId || lastGroup?.activeTabId || getDefaultSplitTabId();
-    if (!nextTabId) {
-      return;
-    }
-
+    const nextTabId = tabId || workspace.activeTabId || (welcomeTabOpen ? '__welcome__' : null);
+    const currentPrimary = workspace.activeTabId || (welcomeTabOpen ? '__welcome__' : null);
+    setPrimaryActiveTabId((curr) => curr || currentPrimary);
     setSplitEditorOpen(true);
     setEditorSplitDirection('vertical');
     const newGroupId = `group-${Date.now()}-${splitPaneGroups.length}`;
     const newGroup = {
       id: newGroupId,
       activeTabId: nextTabId,
-      tabIds: [nextTabId],
+      tabIds: nextTabId ? [nextTabId] : [],
       previewTabId: null,
     };
     setSplitPaneGroups((current) => {
@@ -3826,12 +3910,14 @@ function App() {
       return merged;
     });
     setActiveEditorPane('secondary');
-    if (nextTabId !== '__welcome__') {
+    if (nextTabId && nextTabId !== '__welcome__') {
       workspace.setActiveTab(nextTabId);
     } else {
       workspace.activeTabId = null;
     }
-    touchGroupMru(newGroupId, nextTabId);
+    if (nextTabId) {
+      touchGroupMru(newGroupId, nextTabId);
+    }
   }
 
   function closeSplitEditor() {
@@ -4232,8 +4318,16 @@ function App() {
       return;
     }
 
+    // Don't push transient "connecting/reconnecting/disconnected" LSP messages as
+    // notifications — they resolve quickly and clutter the notification center.
+    const detail = activeIntelliSense.detail || '';
+    const isTransient = /connecting|reconnecting|disconnected|bridge timed out|starting/i.test(detail);
+    if (isTransient) {
+      return;
+    }
+
     editorCapabilityNoticeRef.current = noticeKey;
-    pushNotification(activeIntelliSense.detail, 'info');
+    pushNotification(detail, 'info');
   }, [activeIntelliSense, intelliSenseTargetTab?.language]);
 
   useEffect(() => {
@@ -4245,6 +4339,27 @@ function App() {
       !activeIntelliSenseAvailable ||
       editorCapabilitiesStatus !== 'ready'
     ) {
+      return undefined;
+    }
+
+    // --- DESKTOP-LOCAL FAST PATH ---
+    // For desktop-local runtime, use the real on-disk workspace root directly.
+    // No mirroring needed — pyright-langserver can analyze the actual project files.
+    if (isDesktopRuntime() && workspace.rootSystemPath) {
+      const rootPath = String(workspace.rootSystemPath).replace(/\\/g, '/');
+      // Synthesize a stable session using the real path as the id key
+      const syntheticSessionId = `desktop-local::${rootPath}`;
+      // Only update if the root changed to avoid unnecessary re-renders
+      if (
+        editorWorkspaceSession?.sessionId !== syntheticSessionId ||
+        editorWorkspaceSession?.workspaceRoot !== rootPath
+      ) {
+        setEditorWorkspaceSession({
+          sessionId: syntheticSessionId,
+          workspaceRoot: rootPath,
+          rootName: workspace.rootName || 'workspace',
+        });
+      }
       return undefined;
     }
 
@@ -4292,6 +4407,7 @@ function App() {
       intelliSenseTargetTab?.path,
       editorCapabilitiesStatus,
       editorWorkspaceSession?.sessionId,
+      workspace.rootSystemPath,
   ]);
 
   useEffect(() => {
@@ -4861,6 +4977,12 @@ function App() {
     editorListenersCleanupRef.current();
     editorRef.current = editor;
     monacoRef.current = monaco;
+    // Force immediate layout so the editor fills its container on first paint.
+    // This prevents the blank-black flash when switching tabs or opening split view.
+    requestAnimationFrame(() => {
+      try { editor.layout?.(); } catch (_) {}
+      requestAnimationFrame(() => { try { editor.layout?.(); } catch (_) {} });
+    });
     // Restore saved view state for this tab
     const _mountTabId = workspace.activeTabId;
     if (_mountTabId) {
@@ -4928,6 +5050,11 @@ function App() {
     splitEditorRefs.current.set(paneIndex, editor);
     splitMonacoRefs.current.set(paneIndex, monaco);
     setCommandPaletteEditorNonce((current) => current + 1);
+    // Force layout so split pane doesn't show blank on first render
+    requestAnimationFrame(() => {
+      try { editor.layout?.(); } catch (_) {}
+      requestAnimationFrame(() => { try { editor.layout?.(); } catch (_) {} });
+    });
 
     const update = () => {
       if (activeEditorPaneRef.current !== 'secondary' || focusedSplitPaneIndex !== paneIndex) {
@@ -5704,17 +5831,21 @@ function App() {
 
   async function handleOpenFolder() {
     try {
-      await workspace.openFolderBrowser();
+      const opened = await workspace.openFolderBrowser();
+      if (!opened) return;
+
+      const rootPath = workspace.rootSystemPath || workspace.roots?.[0]?.systemPath;
+      if (!rootPath) return;
+
       workspace.setSelectedNode('root');
       recordRecentWorkspace({
-        id: workspace.rootName || 'workspace',
+        id: workspace.rootName || rootPath,
         name: workspace.rootName || workspace.getRootNode()?.name || 'Workspace',
       });
       if (builtInFeatures.explorer) {
         setActivePanel('filepioneer');
       }
 
-      const rootPath = workspace.rootSystemPath || workspace.rootName || 'workspace';
       const trustedWorkspaces = JSON.parse(localStorage.getItem('trustedWorkspaces') || '{}');
       if (!trustedWorkspaces[rootPath]) {
         workspace.isTrusted = false;
@@ -5820,6 +5951,28 @@ function App() {
       recordRecentFile(openedTab);
     }
     refresh();
+  }
+
+  async function handleNavigateToFile(path, line, column = 1) {
+    if (!path) return;
+    const existingTab = workspace.tabs.find((entry) => entry.path === path || entry.name === path);
+    if (!existingTab) {
+      await workspace.openFile(path);
+      const openedTab = workspace.getActiveTab();
+      if (openedTab?.id) {
+        assignTabToFocusedGroup(openedTab.id, { preview: true });
+      }
+    } else {
+      assignTabToFocusedGroup(existingTab.id, { preview: true });
+    }
+    setTimeout(() => {
+      const editor = getPreferredEditor();
+      if (editor && line) {
+        editor.focus();
+        editor.setPosition({ lineNumber: line, column: column || 1 });
+        editor.revealLineInCenter(line);
+      }
+    }, 50);
   }
 
   async function handleOpenSearchResult(result, openOptions = {}) {
@@ -7045,39 +7198,38 @@ function App() {
     return [rootFrame, ...symbolFrames, currentFrame];
   }, [debugSession.mode, debugSession.status, editorStatus.line, getFocusedTab, workspace.activeTabId, version]);
 
-  const activeDebugStack = debugApi.connected && realDebugStack.length > 0 ? realDebugStack : debugCallStack;
+  const activeDebugStack = useMemo(() => {
+    if (debugSession.status === 'paused') {
+      if (realDebugStack.length > 0) return realDebugStack;
+      const tab = getFocusedTab();
+      return [{
+        id: 'paused-frame',
+        name: 'Thread 1 (Paused)',
+        url: tab?.name || tab?.path || 'source',
+        line: editorStatus.line || 1,
+        column: editorStatus.column || 1,
+        isCurrent: true,
+      }];
+    }
+    if (debugSession.status === 'running') {
+      const tab = getFocusedTab();
+      return [{
+        id: 'running-thread',
+        name: 'Thread 1 (Running)',
+        url: tab?.name || tab?.path || '',
+        line: null,
+        isRunning: true,
+      }];
+    }
+    return [];
+  }, [debugSession.status, realDebugStack, getFocusedTab, editorStatus.line, editorStatus.column]);
 
-  const debugVariables = useMemo(() => {
-    const focusedTab = getFocusedTab();
-    const activeEditor = getPreferredEditor();
-    const selection = activeEditor?.getModel?.() && activeEditor?.getSelection?.()
-      ? activeEditor.getModel().getValueInRange(activeEditor.getSelection())
-      : '';
-
-    return [
-      { name: 'fileName', value: focusedTab?.name || 'n/a', scope: 'session' },
-      { name: 'filePath', value: focusedTab?.path || 'n/a', scope: 'session' },
-      { name: 'language', value: focusedTab?.language || 'plaintext', scope: 'session' },
-      { name: 'line', value: String(editorStatus.line || 1), scope: 'cursor' },
-      { name: 'column', value: String(editorStatus.column || 1), scope: 'cursor' },
-      { name: 'selectionLength', value: String(editorStatus.selectionLength || 0), scope: 'cursor' },
-      { name: 'selection', value: selection || '""', scope: 'cursor' },
-      { name: 'breakpoints', value: String(getActiveBreakpoints().length), scope: 'debug' },
-      { name: 'watchExpressions', value: String(watchExpressions.length), scope: 'debug' },
-    ];
-  }, [
-    activeTab?.id,
-    activeTab?.language,
-    activeTab?.name,
-    activeTab?.path,
-    debugBreakpoints,
-    editorStatus.column,
-    editorStatus.line,
-    editorStatus.selectionLength,
-    watchExpressions.length,
-  ]);
-
-  const activeDebugVariables = debugApi.connected && realDebugVariables.length > 0 ? realDebugVariables : debugVariables;
+  const activeDebugVariables = useMemo(() => {
+    if (debugSession.status === 'paused') {
+      return realDebugVariables;
+    }
+    return [];
+  }, [debugSession.status, realDebugVariables]);
 
   useEffect(() => {
     if (!activeTab) {
@@ -7961,7 +8113,9 @@ function App() {
                         />
                       ) : null}
                       {!splitEditorOpen && activeTab ? (
-                          activeTab.isDiff ? (
+                          isBinaryMediaFile(activeTab.name) ? (
+                            <MediaViewer tab={activeTab} />
+                          ) : activeTab.isDiff ? (
   <React.Suspense fallback={<div style={{ flex: 1, height: '100%', display: 'grid', placeItems: 'center', color: 'var(--text-secondary)' }}>Loading diff editor...</div>}>
     <MonacoDiffEditor
       tab={activeTab.modifiedTab}
@@ -7976,10 +8130,6 @@ function App() {
         }
       }}
     />
-  </React.Suspense>
-) : isOfficeFile(activeTab.name) ? (
-  <React.Suspense fallback={<div style={{ flex: 1, height: '100%', display: 'grid', placeItems: 'center', color: 'var(--text-secondary)' }}>Loading document...</div>}>
-    <OfficeEditor tab={activeTab} onChange={handleEditorChange} />
   </React.Suspense>
 ) : isJupyterNotebook(activeTab.name) ? (
   <React.Suspense fallback={<div style={{ flex: 1, height: '100%', display: 'grid', placeItems: 'center', color: 'var(--text-secondary)' }}>Loading notebook...</div>}>
@@ -8029,11 +8179,7 @@ function App() {
                                 }}
                               />
                             </React.Suspense>
-                          ) : isOfficeFile(primaryPaneEditorTab.name) ? (
-  <React.Suspense fallback={<div style={{ flex: 1, height: '100%', display: 'grid', placeItems: 'center', color: 'var(--text-secondary)' }}>Loading document...</div>}>
-    <OfficeEditor tab={primaryPaneEditorTab} onChange={handleEditorChange} />
-  </React.Suspense>
-) : isJupyterNotebook(primaryPaneEditorTab.name) ? (
+                          ) : isJupyterNotebook(primaryPaneEditorTab.name) ? (
   <React.Suspense fallback={<div style={{ flex: 1, height: '100%', display: 'grid', placeItems: 'center', color: 'var(--text-secondary)' }}>Loading notebook...</div>}>
     <JupyterEditor tab={primaryPaneEditorTab} onChange={handleEditorChange} settings={settings} />
   </React.Suspense>
@@ -8141,11 +8287,9 @@ function App() {
                                 onOpenLivePreviewTab={() => {}}
                               />
                               {paneTab ? (
-                                  isOfficeFile(paneTab.name) ? (
-  <React.Suspense fallback={<div style={{ flex: 1, height: '100%', display: 'grid', placeItems: 'center', color: 'var(--text-secondary)' }}>Loading document...</div>}>
-    <OfficeEditor tab={paneTab} onChange={(value) => handleSplitEditorChange(paneTab, value)} />
-  </React.Suspense>
-) : isJupyterNotebook(paneTab.name) ? (
+                              isBinaryMediaFile(paneTab.name) ? (
+                                <MediaViewer tab={paneTab} />
+                              ) : isJupyterNotebook(paneTab.name) ? (
   <React.Suspense fallback={<div style={{ flex: 1, height: '100%', display: 'grid', placeItems: 'center', color: 'var(--text-secondary)' }}>Loading notebook...</div>}>
     <JupyterEditor tab={paneTab} onChange={(value) => handleSplitEditorChange(paneTab, value)} settings={settings} />
   </React.Suspense>
@@ -8250,6 +8394,7 @@ function App() {
                   requestPrompt={requestPrompt}
                 diagnostics={debugDiagnostics}
                 outputEntries={outputEntries}
+                onClearOutput={() => setOutputEntries([])}
                 debugConsoleEntries={debugConsoleEntries}
                   pulseLensLogs={pulseLensLogs}
                 onEvaluateDebug={handleEvaluateDebug}
@@ -8304,12 +8449,7 @@ function App() {
                   onOpenWorkspaceFolder={handleOpenWorkspaceFolder}
                   workspace={workspace}
                   pushNotification={pushNotification}
-                  onRemoveWatch={handleRemoveWatch}
                   settings={settings}
-                  callStack={activeDebugStack}
-                  variables={activeDebugVariables}
-                  consoleEntries={debugConsoleEntries}
-                  onEvaluate={handleEvaluateDebug}
                 />
               </React.Suspense>
             ) : null}
@@ -8320,10 +8460,9 @@ function App() {
                   activeTab={activeTab}
                   debugSession={debugSession}
                   breakpoints={getActiveBreakpoints()}
-                  callStack={debugCallStack}
-                  variables={debugVariables}
+                  callStack={activeDebugStack}
+                  variables={activeDebugVariables}
                   watchValues={watchValues}
-                  diagnostics={debugDiagnostics}
                   onStartDebugging={handleStartDebugging}
                   onRunWithoutDebugging={handleRunWithoutDebugging}
                   onPauseDebugging={handlePauseDebugging}
@@ -8335,8 +8474,10 @@ function App() {
                   onClearBreakpoints={handleClearBreakpoints}
                   onRemoveBreakpoint={handleRemoveBreakpoint}
                   onSetBreakpointCondition={handleSetBreakpointCondition}
+                  onToggleBreakpoint={toggleBreakpoint}
                   onAddWatch={handleAddWatch}
                   onRemoveWatch={handleRemoveWatch}
+                  onNavigateToFile={handleNavigateToFile}
                   settings={settings}
                 />
               </React.Suspense>

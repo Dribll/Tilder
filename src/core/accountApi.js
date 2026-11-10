@@ -136,6 +136,17 @@ export async function pullSyncedState() {
   return parseJson(response);
 }
 
+export async function connectGitHubWithToken(token) {
+  const response = await apiFetch('/api/github/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ token }),
+  });
+  return parseJson(response);
+}
+
 export async function fetchGitHubUser() {
   const response = await apiFetch('/api/github/user');
   return parseJson(response);

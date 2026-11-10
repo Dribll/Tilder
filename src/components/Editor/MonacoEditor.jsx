@@ -1,12 +1,15 @@
+import AudioStudioViewer from '../AudioViewer/AudioStudioViewer.jsx';
 import React, { useEffect, useRef, useState } from 'react';
 import { Editor } from '@monaco-editor/react';
 import { emmetCSS, emmetHTML, emmetJSX } from 'emmet-monaco-es';
 import { getExtensionCompletions } from '../../core/extensionsRuntime.js';
+import { getBuiltinLanguageCompletions } from '../../core/builtinCompletions.js';
 import { fetchScmBlame } from '../../core/scmApi.js';
 import workspace from '../../core/workspace.js';
 import '../../App.css';
 import { disposeEditorResources } from '../../core/editorUtils.js';
 import { registerMonacoThemes } from '../../core/themeRegistry.js';
+import { validateSyntax } from '../../core/syntaxValidator.js';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 function _fmtTime(s) {
@@ -359,8 +362,10 @@ function toMonacoCompletionItems(monaco, response, range) {
 
   return rawItems
     .map((item, index) => {
-      const label =
+      const rawLabel =
         typeof item.label === 'string' ? item.label : item.label?.label || item.insertText || '';
+      const label = rawLabel.trim();
+      if (!label) return null;
       
       let textEditRange = null;
       if (item.textEdit) {
@@ -375,7 +380,10 @@ function toMonacoCompletionItems(monaco, response, range) {
         }
       }
 
-      const finalRange = textEditRange || range;
+      const finalRange = (textEditRange && textEditRange.startColumn <= textEditRange.endColumn)
+        ? textEditRange
+        : range;
+
       const monacoRange = new monaco.Range(
         finalRange.startLineNumber,
         finalRange.startColumn,
@@ -383,12 +391,15 @@ function toMonacoCompletionItems(monaco, response, range) {
         finalRange.endColumn
       );
 
+      const filterText = String(item.filterText || label).trim();
+      const insertText = item.textEdit?.newText || item.insertText || rawLabel;
+
       return {
-        label,
+        label: rawLabel,
         kind: toMonacoCompletionKind(monaco, item.kind),
-        insertText: item.textEdit?.newText || item.insertText || label,
+        insertText,
         insertTextRules:
-          item.insertTextFormat === 2
+          item.insertTextFormat === 2 || (typeof insertText === 'string' && insertText.includes('${'))
             ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
             : monaco.languages.CompletionItemInsertTextRule.None,
         detail: item.detail || '',
@@ -396,14 +407,14 @@ function toMonacoCompletionItems(monaco, response, range) {
           typeof item.documentation === 'string'
             ? item.documentation
             : item.documentation?.value || item.documentation?.kind || '',
-        sortText: item.sortText || `z-${String(index).padStart(4, '0')}`,
-        filterText: item.filterText || label,
+        sortText: item.sortText || `00-${String(index).padStart(4, '0')}`,
+        filterText,
         range: monacoRange,
         preselect: Boolean(item.preselect),
         commitCharacters: Array.isArray(item.commitCharacters) ? item.commitCharacters : undefined,
       };
     })
-    .filter((item) => item.label);
+    .filter(Boolean);
 }
 
 function toFallbackCompletionKind(monaco, kind) {
@@ -425,18 +436,23 @@ function buildExtensionCompletionItems(monaco, languageId, range) {
     range.endLineNumber,
     range.endColumn
   );
-  return getReactAwareExtensionCompletions(languageId).map((item, index) => ({
+
+  const builtinItems = getBuiltinLanguageCompletions(languageId);
+  const extItems = getReactAwareExtensionCompletions(languageId);
+  const combined = [...builtinItems, ...extItems];
+
+  return combined.map((item, index) => ({
     label: item.label,
     kind: toFallbackCompletionKind(monaco, item.kind),
     insertText: item.insertText,
     insertTextRules:
-      item.kind === 'snippet'
+      item.kind === 'snippet' || (typeof item.insertText === 'string' && item.insertText.includes('${'))
         ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
         : monaco.languages.CompletionItemInsertTextRule.None,
     detail: item.detail || '',
     documentation: item.documentation || '',
     filterText: item.filterText || item.label,
-    sortText: item.sortText || `zy-ext-${String(index).padStart(4, '0')}`,
+    sortText: item.sortText || `50-${String(index).padStart(4, '0')}`,
     range: monacoRange,
   }));
 }
@@ -1135,9 +1151,11 @@ function registerLspCompletionProvider(monaco, languageId, getLspContext) {
         relativePath: context?.relativePath,
       });
 
+      const fallbackItems = buildExtensionCompletionItems(monaco, languageId, range);
+
       if (!context || context.languageId !== languageId || !context.bridge) {
         console.warn(`[Tilder LSP] Skipping completion: context=${!!context}, lang match=${context?.languageId === languageId}, bridge=${!!context?.bridge}`);
-        return { suggestions: [] };
+        return { suggestions: fallbackItems };
       }
 
       try {
@@ -1151,25 +1169,27 @@ function registerLspCompletionProvider(monaco, languageId, getLspContext) {
 
         console.log(`[Tilder LSP] Sending completion request`, { relativePath: completionRequest.relativePath, line: position.lineNumber, col: position.column, triggerCharacter: completionRequest.triggerCharacter });
 
-        let response = await context.bridge.requestCompletion(completionRequest);
-        console.log(`[Tilder LSP] Got completion response`, { isArray: Array.isArray(response), hasItems: !!response?.items, itemCount: Array.isArray(response) ? response.length : response?.items?.length });
-        let suggestions = toMonacoCompletionItems(monaco, response, range);
-        console.log(`[Tilder LSP] Converted to ${suggestions.length} Monaco suggestions`);
+        const lspPromise = context.bridge.requestCompletion(completionRequest);
+        const timeoutPromise = new Promise((resolve) => window.setTimeout(() => resolve(null), 1500));
+        let response = await Promise.race([lspPromise, timeoutPromise]);
+        let suggestions = response ? toMonacoCompletionItems(monaco, response, range) : [];
 
-        if (!suggestions.length) {
-          await new Promise((resolve) => window.setTimeout(resolve, 150));
-          response = await context.bridge.requestCompletion(completionRequest);
-          suggestions = toMonacoCompletionItems(monaco, response, range);
-          console.log(`[Tilder LSP] Retry: ${suggestions.length} suggestions`);
+        if (!suggestions.length && response !== null) {
+          await new Promise((resolve) => window.setTimeout(resolve, 100));
+          response = await Promise.race([
+            context.bridge.requestCompletion(completionRequest),
+            new Promise((resolve) => window.setTimeout(() => resolve(null), 1000)),
+          ]);
+          suggestions = response ? toMonacoCompletionItems(monaco, response, range) : [];
         }
 
         return {
-          suggestions: mergeSuggestions(suggestions),
+          suggestions: mergeSuggestions(suggestions, fallbackItems),
         };
       } catch (err) {
         console.error(`[Tilder LSP] Completion error:`, err);
         return {
-          suggestions: [],
+          suggestions: fallbackItems,
         };
       }
     },
@@ -1541,6 +1561,7 @@ export default function MonacoEditor({
   const lspResolverTokenRef = React.useRef(Symbol(`lsp-context:${tab?.id || 'unknown'}`));
   const breakpointDecorationsRef = React.useRef([]);
   const gitDecorationsRef = React.useRef([]);
+  const syntaxValidateTimerRef = React.useRef(null);
   const [binaryViewMode, setBinaryViewMode] = React.useState('preview');
 
   if (!settings || !tab) {
@@ -1746,6 +1767,17 @@ export default function MonacoEditor({
         }, 300);
       }
 
+      // Real-time syntax validation
+      clearTimeout(syntaxValidateTimerRef.current);
+      syntaxValidateTimerRef.current = setTimeout(() => {
+        const model = editor.getModel();
+        if (!model) return;
+        const lang = model.getLanguageId();
+        const code = model.getValue();
+        const markers = validateSyntax(code, lang);
+        monaco.editor.setModelMarkers(model, 'tilder-syntax', markers);
+      }, 200);
+
       const nextIntelliSense = activeIntelliSenseRef.current;
       if (!nextIntelliSense?.providerType) {
         return;
@@ -1909,11 +1941,7 @@ export default function MonacoEditor({
       registerLspCompletionProvider(monaco, tab.language, () => activeLspContextRef.current);
       registerLspFeatureProviders(monaco, tab.language, () => activeLspContextRef.current);
       registerGitBlameHoverProvider(monaco, tab.language);
-      if (intelliSense?.providerType !== 'lsp') {
-        registerExtensionCompletionProvider(monaco, tab.language);
-      } else {
-        disposeExtensionCompletionProvider(tab.language);
-      }
+      registerExtensionCompletionProvider(monaco, tab.language);
     }
   }, [intelliSense?.providerType, tab.language]);
 
@@ -2043,6 +2071,7 @@ export default function MonacoEditor({
       if (editorRef.current) {
         disposeEditorResources(editorRef.current);
       }
+      clearTimeout(syntaxValidateTimerRef.current);
     };
   }, []);
 
@@ -2087,7 +2116,7 @@ export default function MonacoEditor({
               {binaryKind === 'image' ? (
                 <img src={binaryPreviewUrl} alt={tab.name || 'image preview'} className="binary-preview-image" />
               ) : binaryKind === 'audio' ? (
-                <InlineAudioPlayer src={binaryPreviewUrl} name={tab.name || ''} />
+                <AudioStudioViewer src={binaryPreviewUrl} name={tab.name || ""} path={tab.nativePath || tab.path} />
               ) : binaryKind === 'video' ? (
                 <InlineVideoPlayer src={binaryPreviewUrl} name={tab.name || ''} />
               ) : (

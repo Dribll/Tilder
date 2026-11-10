@@ -53,10 +53,7 @@ export default function ConfirmDialog({ request, onCancel, onConfirm }) {
               type="checkbox"
               checked={remember}
               onChange={(e) => setRemember(e.target.checked)}
-              style={{
-                accentColor: 'var(--accent-color, #7574c6)',
-                cursor: 'pointer'
-              }}
+              
             />
             {request.checkboxLabel || "Don't ask again"}
           </label>

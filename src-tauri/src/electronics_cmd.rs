@@ -3,10 +3,21 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use tauri::{Emitter, Manager};
 
+fn create_silent_cmd<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
+    let mut cmd = Command::new(program);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    cmd
+}
+
+
 /// Find the arduino-cli binary. Checks PATH first, then app data dir.
 pub fn find_cli_binary(app_handle: &tauri::AppHandle) -> Option<PathBuf> {
     // 1. Check if it's in PATH
-    let path_check = Command::new("cmd")
+    let path_check = create_silent_cmd("cmd")
         .args(["/C", "where arduino-cli"])
         .output();
 
@@ -63,7 +74,7 @@ pub fn download_electronics_cli(app_handle: tauri::AppHandle) -> Result<String, 
         zip_path.to_string_lossy()
     );
 
-    let dl_output = Command::new("powershell")
+    let dl_output = create_silent_cmd("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &ps_download])
         .output()
         .map_err(|e| format!("Failed to launch PowerShell: {}", e))?;
@@ -81,7 +92,7 @@ pub fn download_electronics_cli(app_handle: tauri::AppHandle) -> Result<String, 
         cli_dir.to_string_lossy()
     );
 
-    let extract_output = Command::new("powershell")
+    let extract_output = create_silent_cmd("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &ps_extract])
         .output()
         .map_err(|e| format!("Failed to extract: {}", e))?;
@@ -108,7 +119,7 @@ pub fn run_electronics_cli(app_handle: tauri::AppHandle, args: Vec<String>) -> R
     let cli_path = find_cli_binary(&app_handle)
         .ok_or_else(|| "arduino-cli not found".to_string())?;
 
-    let output = Command::new(&cli_path)
+    let output = create_silent_cmd(&cli_path)
         .args(&args)
         .output()
         .map_err(|e| e.to_string())?;
@@ -131,7 +142,7 @@ pub fn run_electronics_cli_stream(
     let cli_path = find_cli_binary(&app_handle)
         .ok_or_else(|| "arduino-cli not found".to_string())?;
 
-    let mut child = Command::new(&cli_path)
+    let mut child = create_silent_cmd(&cli_path)
         .args(&args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -202,17 +213,17 @@ pub fn electronics_init(app_handle: tauri::AppHandle) -> Result<String, String> 
         .ok_or_else(|| "arduino-cli not found".to_string())?;
 
     // Run config init (ignore error if already exists)
-    let _ = Command::new(&cli_path)
+    let _ = create_silent_cmd(&cli_path)
         .args(["config", "init"])
         .output();
 
     // Update board index
-    let _ = Command::new(&cli_path)
+    let _ = create_silent_cmd(&cli_path)
         .args(["core", "update-index"])
         .output();
 
     // Update library index
-    let out = Command::new(&cli_path)
+    let out = create_silent_cmd(&cli_path)
         .args(["lib", "update-index"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -235,7 +246,7 @@ pub fn serial_monitor_start(
     let cli_path = find_cli_binary(&app_handle)
         .ok_or_else(|| "arduino-cli not found".to_string())?;
 
-    let mut child = Command::new(&cli_path)
+    let mut child = create_silent_cmd(&cli_path)
         .args([
             "monitor",
             "-p",

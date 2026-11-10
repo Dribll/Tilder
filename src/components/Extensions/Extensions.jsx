@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import './Extensions.css';
 import {
   buildExtensionCategories,
   EXTENSION_STATE_STORAGE_KEY,
@@ -41,14 +42,13 @@ class ExtensionsErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="extensions-detail-empty">
-          <div className="extensions-detail-section">
-            <div className="extensions-section-title">Extensions reset needed</div>
-            <div className="extensions-pane-subtitle">The marketplace hit a temporary state error. Reset the view and try again.</div>
-            <button type="button" className="extensions-primary-btn" onClick={this.handleReset}>
-              Reset Extensions View
-            </button>
-          </div>
+        <div className="ext-detail-empty">
+          <div className="ext-detail-empty-icon"><i className="fa-solid fa-triangle-exclamation" /></div>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>Extensions state reset needed</div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>The marketplace hit a temporary state error.</div>
+          <button type="button" className="ext-btn-primary" onClick={this.handleReset}>
+            Reset Extensions View
+          </button>
         </div>
       );
     }
@@ -96,15 +96,6 @@ function createInitialPublishDraft() {
   };
 }
 
-function formatMeta(extension) {
-  return [
-    extension.downloads || 'New',
-    typeof extension.rating === 'number' ? `${extension.rating.toFixed(1)} rating` : null,
-    extension.category || null,
-    extension.kind === 'code-extension' ? 'Code extension' : 'Feature pack',
-  ].filter(Boolean);
-}
-
 function ExtensionLogo({ extension }) {
   const visual = resolveExtensionIcon(extension);
   return <visual.Icon className="extensions-icon-glyph" color={visual.color} aria-hidden="true" />;
@@ -116,45 +107,6 @@ function persistExtensionState(nextState) {
   window.dispatchEvent(new Event('tilder:extensions-updated'));
 }
 
-function buildPackagePayload(publishDraft) {
-  const tags = String(publishDraft.manifest.tags || '')
-    .split(',')
-    .map((value) => value.trim())
-    .filter(Boolean);
-  const permissions = String(publishDraft.manifest.permissions || '')
-    .split(',')
-    .map((value) => value.trim())
-    .filter(Boolean);
-
-  return {
-    packageVersion: 1,
-    publisherId: publishDraft.publisherId.trim(),
-    manifest: {
-      manifestVersion: TILDER_EXTENSION_MANIFEST_VERSION,
-      id: publishDraft.manifest.id.trim(),
-      name: publishDraft.manifest.name.trim(),
-      version: publishDraft.manifest.version.trim(),
-      category: publishDraft.manifest.category.trim(),
-      summary: publishDraft.manifest.summary.trim(),
-      description: publishDraft.manifest.description.trim(),
-      tags,
-      permissions,
-      repository: publishDraft.manifest.repository.trim(),
-      website: publishDraft.manifest.website.trim(),
-      iconClass: publishDraft.manifest.iconClass.trim(),
-      accent: publishDraft.manifest.accent.trim(),
-      webEntrypoint: publishDraft.manifest.webEntrypoint.trim(),
-    },
-    files: [
-      {
-        path: publishDraft.manifest.webEntrypoint.trim(),
-        encoding: 'base64',
-        content: encodeUtf8Base64(publishDraft.code),
-      },
-    ],
-  };
-}
-
 export default function Extensions({
   modalType,
   pushNotification,
@@ -162,13 +114,15 @@ export default function Extensions({
   marketplacePublishers = {},
   authSession = null,
 }) {
-  const [surfaceMode, setSurfaceMode] = useState('marketplace');
-  const [marketView, setMarketView] = useState('discover');
-  const [sortMode, setSortMode] = useState('popular');
+  const [topTab, setTopTab] = useState('marketplace'); // 'marketplace' | 'installed' | 'publisher'
+  const [subTab, setSubTab] = useState('overview'); // 'overview' | 'features' | 'publisher'
+  const [sortMode, setSortMode] = useState('popular'); // 'popular' | 'name' | 'rating'
   const [searchValue, setSearchValue] = useState('');
   const [category, setCategory] = useState('All');
   const [selectedExtensionId, setSelectedExtensionId] = useState('');
   const [extensionState, setExtensionState] = useState({});
+
+  // Publisher state
   const [ownedPublishers, setOwnedPublishers] = useState([]);
   const [publishersLoading, setPublishersLoading] = useState(false);
   const [publishersError, setPublishersError] = useState('');
@@ -180,8 +134,8 @@ export default function Extensions({
   const [publishDraft, setPublishDraft] = useState(createInitialPublishDraft());
   const [publishBusy, setPublishBusy] = useState(false);
   const [validationResult, setValidationResult] = useState(null);
+
   const trimmedSearchValue = searchValue.trim();
-  const isFiltering = trimmedSearchValue.length > 0 || category !== 'All';
 
   const catalog = useMemo(() => {
     const source = Array.isArray(externalCatalog) ? externalCatalog : [];
@@ -194,26 +148,27 @@ export default function Extensions({
       return true;
     });
   }, [externalCatalog]);
+
   const categories = useMemo(() => buildExtensionCategories(catalog), [catalog]);
+
   const installedIds = useMemo(
     () => Object.entries(extensionState).filter(([, state]) => state?.installed).map(([id]) => id),
     [extensionState]
   );
+
   const installedExtensions = useMemo(
     () => catalog.filter((extension) => installedIds.includes(extension.id)),
     [catalog, installedIds]
   );
-  const recommendedExtensions = useMemo(
-    () => catalog.filter((extension) => extension.featured).slice(0, 6),
-    [catalog]
+
+  const activePool = useMemo(
+    () => (topTab === 'installed' ? installedExtensions : catalog),
+    [topTab, catalog, installedExtensions]
   );
-  const marketplacePool = useMemo(
-    () => marketView === 'installed' ? installedExtensions : catalog,
-    [catalog, installedExtensions, marketView]
-  );
+
   const filteredExtensions = useMemo(() => {
     const query = trimmedSearchValue.toLowerCase();
-    return marketplacePool.filter((extension) => {
+    return activePool.filter((extension) => {
       if (!extension || typeof extension !== 'object') return false;
       if (category !== 'All' && extension.category !== category) return false;
       if (!query) return true;
@@ -225,24 +180,27 @@ export default function Extensions({
         ...(Array.isArray(extension.tags) ? extension.tags : []),
       ]
         .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(query));
+        .some((val) => String(val).toLowerCase().includes(query));
     });
-  }, [marketplacePool, category, trimmedSearchValue]);
-  const orderedExtensions = useMemo(() => [...filteredExtensions].sort((left, right) => {
-    if (sortMode === 'name') return String(left.name || '').localeCompare(String(right.name || ''));
-    if (sortMode === 'rating') return Number(right.rating || 0) - Number(left.rating || 0);
-    return String(right.downloads || '').localeCompare(String(left.downloads || ''), undefined, { numeric: true });
-  }), [filteredExtensions, sortMode]);
+  }, [activePool, category, trimmedSearchValue]);
+
+  const sortedExtensions = useMemo(() => {
+    return [...filteredExtensions].sort((left, right) => {
+      if (sortMode === 'name') return String(left.name || '').localeCompare(String(right.name || ''));
+      if (sortMode === 'rating') return Number(right.rating || 0) - Number(left.rating || 0);
+      return String(right.downloads || '').localeCompare(String(left.downloads || ''), undefined, { numeric: true });
+    });
+  }, [filteredExtensions, sortMode]);
 
   const selectedExtension = useMemo(() => {
-    if (!selectedExtensionId) {
-      return null;
-    }
+    if (!selectedExtensionId) return sortedExtensions[0] || null;
+    return catalog.find((ext) => ext.id === selectedExtensionId) || sortedExtensions[0] || null;
+  }, [catalog, selectedExtensionId, sortedExtensions]);
 
-    return catalog.find((extension) => extension.id === selectedExtensionId) || null;
-  }, [catalog, selectedExtensionId]);
-
-  const currentAccount = useMemo(() => authSession?.accounts?.github || authSession?.accounts?.microsoft || null, [authSession]);
+  const currentAccount = useMemo(
+    () => authSession?.accounts?.github || authSession?.accounts?.microsoft || null,
+    [authSession]
+  );
 
   useEffect(() => {
     if (modalType !== 'Extensions') return;
@@ -255,7 +213,7 @@ export default function Extensions({
   }, [modalType]);
 
   useEffect(() => {
-    if (surfaceMode !== 'publisher') return;
+    if (topTab !== 'publisher') return;
     let cancelled = false;
     setPublishersLoading(true);
     setPublishersError('');
@@ -266,11 +224,11 @@ export default function Extensions({
         setOwnedPublishers(publishers);
         if (!selectedPublisherId && publishers[0]) {
           setSelectedPublisherId(publishers[0].id);
-          setPublishDraft((current) => ({ ...current, publisherId: publishers[0].id }));
+          setPublishDraft((c) => ({ ...c, publisherId: publishers[0].id }));
         }
       })
       .catch((error) => {
-        if (!cancelled) setPublishersError(error instanceof Error ? error.message : 'Unable to load your publishers.');
+        if (!cancelled) setPublishersError(error instanceof Error ? error.message : 'Unable to load publishers.');
       })
       .finally(() => {
         if (!cancelled) setPublishersLoading(false);
@@ -278,7 +236,7 @@ export default function Extensions({
     return () => {
       cancelled = true;
     };
-  }, [surfaceMode, selectedPublisherId]);
+  }, [topTab, selectedPublisherId]);
 
   function setInstalledState(extensionId, nextPartialState) {
     setExtensionState((current) => {
@@ -297,7 +255,7 @@ export default function Extensions({
 
   function handleInstall(extension) {
     setInstalledState(extension.id, { installed: true, enabled: true });
-    pushNotification?.(`${extension.name} installed.`, 'info');
+    pushNotification?.(`${extension.name} installed successfully.`, 'info');
   }
 
   function handleUninstall(extension) {
@@ -311,23 +269,22 @@ export default function Extensions({
     pushNotification?.(`${extension.name} ${enabled ? 'disabled' : 'enabled'}.`, 'info');
   }
 
-  async function handleCreatePublisher(event) {
-    event.preventDefault();
+  async function handleCreatePublisher(e) {
+    e.preventDefault();
     setPublisherFormBusy(true);
     try {
       const result = await createExtensionPublisher(publisherForm);
       setGeneratedToken(result.token || '');
       setPublisherForm(createInitialPublisherForm());
-      pushNotification?.('Publisher created.', 'info');
+      pushNotification?.('Publisher created successfully.', 'info');
       const refreshed = await fetchMyExtensionPublishers();
-      const publishers = Array.isArray(refreshed.publishers) ? refreshed.publishers : [];
-      setOwnedPublishers(publishers);
+      setOwnedPublishers(Array.isArray(refreshed.publishers) ? refreshed.publishers : []);
       if (result.publisher?.id) {
         setSelectedPublisherId(result.publisher.id);
-        setPublishDraft((current) => ({ ...current, publisherId: result.publisher.id }));
+        setPublishDraft((c) => ({ ...c, publisherId: result.publisher.id }));
       }
-    } catch (error) {
-      pushNotification?.(error instanceof Error ? error.message : 'Unable to create publisher.', 'warning');
+    } catch (err) {
+      pushNotification?.(err instanceof Error ? err.message : 'Could not create publisher.', 'warning');
     } finally {
       setPublisherFormBusy(false);
     }
@@ -335,386 +292,678 @@ export default function Extensions({
 
   async function handleCreateToken() {
     if (!selectedPublisherId) {
-      pushNotification?.('Choose a publisher first.', 'warning');
+      pushNotification?.('Select a publisher first.', 'warning');
       return;
     }
     try {
       const result = await createExtensionPublisherToken(selectedPublisherId, { label: tokenLabel });
       setGeneratedToken(result.token || '');
       pushNotification?.('Publisher token created.', 'info');
-    } catch (error) {
-      pushNotification?.(error instanceof Error ? error.message : 'Unable to create token.', 'warning');
+    } catch (err) {
+      pushNotification?.(err instanceof Error ? err.message : 'Could not create token.', 'warning');
     }
   }
 
   async function handleValidatePackage() {
     try {
-      const result = await validateExtensionMarketplacePackage(buildPackagePayload(publishDraft));
-      setValidationResult(result);
-      pushNotification?.(result.ok ? 'Extension package is valid.' : 'Validation found issues.', result.ok ? 'info' : 'warning');
-    } catch (error) {
-      pushNotification?.(error instanceof Error ? error.message : 'Unable to validate extension package.', 'warning');
+      const payload = {
+        packageVersion: 1,
+        publisherId: publishDraft.publisherId.trim(),
+        manifest: {
+          manifestVersion: TILDER_EXTENSION_MANIFEST_VERSION,
+          id: publishDraft.manifest.id.trim(),
+          name: publishDraft.manifest.name.trim(),
+          version: publishDraft.manifest.version.trim(),
+          category: publishDraft.manifest.category.trim(),
+          summary: publishDraft.manifest.summary.trim(),
+          description: publishDraft.manifest.description.trim(),
+          tags: String(publishDraft.manifest.tags || '').split(',').map((s) => s.trim()).filter(Boolean),
+          permissions: String(publishDraft.manifest.permissions || '').split(',').map((s) => s.trim()).filter(Boolean),
+          repository: publishDraft.manifest.repository.trim(),
+          website: publishDraft.manifest.website.trim(),
+          iconClass: publishDraft.manifest.iconClass.trim(),
+          accent: publishDraft.manifest.accent.trim(),
+          webEntrypoint: publishDraft.manifest.webEntrypoint.trim(),
+        },
+        files: [
+          {
+            path: publishDraft.manifest.webEntrypoint.trim(),
+            encoding: 'base64',
+            content: encodeUtf8Base64(publishDraft.code),
+          },
+        ],
+      };
+      const res = await validateExtensionMarketplacePackage(payload);
+      setValidationResult(res);
+      pushNotification?.(res.ok ? 'Manifest and code validated.' : 'Validation failed.', res.ok ? 'info' : 'warning');
+    } catch (err) {
+      setValidationResult({ ok: false, message: err.message });
     }
   }
 
   async function handlePublishPackage() {
     setPublishBusy(true);
     try {
-      await publishExtensionMarketplacePackage(buildPackagePayload(publishDraft), publishDraft.token.trim());
-      setValidationResult({ ok: true, message: 'Published successfully.' });
-      pushNotification?.('Extension published to the Tilder marketplace.', 'info');
-      setPublishDraft(createInitialPublishDraft());
-    } catch (error) {
-      pushNotification?.(error instanceof Error ? error.message : 'Unable to publish extension package.', 'warning');
+      const payload = {
+        packageVersion: 1,
+        publisherId: publishDraft.publisherId.trim(),
+        manifest: {
+          manifestVersion: TILDER_EXTENSION_MANIFEST_VERSION,
+          id: publishDraft.manifest.id.trim(),
+          name: publishDraft.manifest.name.trim(),
+          version: publishDraft.manifest.version.trim(),
+          category: publishDraft.manifest.category.trim(),
+          summary: publishDraft.manifest.summary.trim(),
+          description: publishDraft.manifest.description.trim(),
+          tags: String(publishDraft.manifest.tags || '').split(',').map((s) => s.trim()).filter(Boolean),
+          permissions: String(publishDraft.manifest.permissions || '').split(',').map((s) => s.trim()).filter(Boolean),
+          repository: publishDraft.manifest.repository.trim(),
+          website: publishDraft.manifest.website.trim(),
+          iconClass: publishDraft.manifest.iconClass.trim(),
+          accent: publishDraft.manifest.accent.trim(),
+          webEntrypoint: publishDraft.manifest.webEntrypoint.trim(),
+        },
+        files: [
+          {
+            path: publishDraft.manifest.webEntrypoint.trim(),
+            encoding: 'base64',
+            content: encodeUtf8Base64(publishDraft.code),
+          },
+        ],
+      };
+      await publishExtensionMarketplacePackage(payload, publishDraft.token);
+      pushNotification?.('Extension published successfully to marketplace!', 'info');
+    } catch (err) {
+      pushNotification?.(err instanceof Error ? err.message : 'Publish failed.', 'warning');
     } finally {
       setPublishBusy(false);
     }
   }
 
-  function resetMarketplaceView() {
-    setSearchValue('');
-    setCategory('All');
-    setSelectedExtensionId('');
-    setMarketView('discover');
-    setSortMode('popular');
-  }
-
-  if (modalType !== 'Extensions') return null;
-
-  const topFilteredExtension = filteredExtensions[0] || null;
-  const selectedFilteredExtension =
-    isFiltering && selectedExtension && filteredExtensions.some((extension) => extension.id === selectedExtension.id)
-      ? selectedExtension
-      : null;
-  const activeSelectedExtension =
-    surfaceMode !== 'marketplace'
-      ? selectedExtension
-      : isFiltering
-        ? (selectedFilteredExtension || topFilteredExtension)
-        : selectedExtension;
-  const showRecommendations = surfaceMode === 'marketplace' && marketView === 'discover' && !activeSelectedExtension && !isFiltering;
-  const rightPaneExtensions = surfaceMode === 'marketplace'
-    ? orderedExtensions
-    : installedExtensions;
-
   return (
-    <div className="extensions-modal-content">
-      <ExtensionsErrorBoundary resetKey={surfaceMode} onReset={resetMarketplaceView}>
-        <div className="extensions-surface-switch">
-          <button type="button" className={`extensions-surface-tab ${surfaceMode === 'marketplace' ? 'active' : ''}`} onClick={() => setSurfaceMode('marketplace')}>
-            Marketplace
+    <div className="ext-container">
+      {/* Top Header Navigation Tabs */}
+      <div className="ext-header-tabs">
+        <div className="ext-tabs-group">
+          <button
+            type="button"
+            className={`ext-tab-btn ${topTab === 'marketplace' ? 'active' : ''}`}
+            onClick={() => setTopTab('marketplace')}
+          >
+            <i className="fa-solid fa-store" />
+            <span>Marketplace</span>
           </button>
-          <button type="button" className={`extensions-surface-tab ${surfaceMode === 'publisher' ? 'active' : ''}`} onClick={() => setSurfaceMode('publisher')}>
-            Publisher Dashboard
+          <button
+            type="button"
+            className={`ext-tab-btn ${topTab === 'installed' ? 'active' : ''}`}
+            onClick={() => setTopTab('installed')}
+          >
+            <i className="fa-solid fa-box-open" />
+            <span>Installed</span>
+            <span className="ext-badge-count">{installedExtensions.length}</span>
+          </button>
+          <button
+            type="button"
+            className={`ext-tab-btn ${topTab === 'publisher' ? 'active' : ''}`}
+            onClick={() => setTopTab('publisher')}
+          >
+            <i className="fa-solid fa-cloud-arrow-up" />
+            <span>Publisher Dashboard</span>
           </button>
         </div>
 
-        {surfaceMode === 'marketplace' ? (
-          <div className="extensions-workbench-nav">
-            <div className="extensions-view-tabs" role="tablist" aria-label="Extension views">
-              <button type="button" className={`extensions-view-tab ${marketView === 'discover' ? 'active' : ''}`} onClick={() => { setMarketView('discover'); setSelectedExtensionId(''); }}>Discover</button>
-              <button type="button" className={`extensions-view-tab ${marketView === 'installed' ? 'active' : ''}`} onClick={() => { setMarketView('installed'); setSelectedExtensionId(''); }}>Installed <span>{installedExtensions.length}</span></button>
-            </div>
-            <label className="extensions-sort-control">Sort
-              <select value={sortMode} onChange={(event) => setSortMode(event.target.value)}>
-                <option value="popular">Most popular</option>
-                <option value="rating">Highest rated</option>
-                <option value="name">Name</option>
-              </select>
-            </label>
-            <div className="extensions-workbench-count">{orderedExtensions.length} extension{orderedExtensions.length === 1 ? '' : 's'}</div>
+        {topTab === 'installed' && installedExtensions.length > 0 && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              className="ext-btn-secondary"
+              style={{ padding: '4px 10px', fontSize: 11 }}
+              onClick={() => {
+                const next = { ...extensionState };
+                installedExtensions.forEach((ext) => {
+                  if (next[ext.id]) next[ext.id].enabled = false;
+                });
+                setExtensionState(next);
+                persistExtensionState(next);
+                pushNotification?.('All extensions disabled.', 'info');
+              }}
+            >
+              Disable All
+            </button>
+            <button
+              type="button"
+              className="ext-btn-secondary"
+              style={{ padding: '4px 10px', fontSize: 11 }}
+              onClick={() => {
+                const next = { ...extensionState };
+                installedExtensions.forEach((ext) => {
+                  if (next[ext.id]) next[ext.id].enabled = true;
+                });
+                setExtensionState(next);
+                persistExtensionState(next);
+                pushNotification?.('All extensions enabled.', 'info');
+              }}
+            >
+              Enable All
+            </button>
           </div>
-        ) : null}
+        )}
+      </div>
 
-        {surfaceMode === 'marketplace' ? (
-          <div className="extensions-layout extensions-layout-modal">
-          <section
-            className="extensions-detail"
-            key={`marketplace-detail-${isFiltering ? 'filtering' : 'idle'}-${topFilteredExtension?.id || 'none'}-${activeSelectedExtension?.id || 'marketplace'}`}
-          >
-            <div className="extensions-detail-pane">
-              {showRecommendations ? (
-                <>
-                  <div className="extensions-detail-section">
-                    <div className="extensions-section-title">Recommended For You</div>
-                    <div className="extensions-pane-subtitle">Pick an extension from the right, or browse featured picks below.</div>
+      <ExtensionsErrorBoundary resetKey={topTab} onReset={() => { setSearchValue(''); setCategory('All'); }}>
+        {topTab === 'publisher' ? (
+          /* Publisher Dashboard View */
+          <div className="ext-main-layout" style={{ overflowY: 'auto' }}>
+            <div className="ext-publisher-container">
+              <div className="ext-form-card">
+                <div className="ext-form-title">
+                  <i className="fa-solid fa-id-badge" style={{ marginRight: 8, color: 'var(--accent)' }} />
+                  Create Extension Publisher
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                  {currentAccount
+                    ? `Connected as ${currentAccount.username || currentAccount.name || 'Verified user'}.`
+                    : 'Sign in under Account to verify your identity.'}
+                </div>
+                <form className="ext-form-grid-2" onSubmit={handleCreatePublisher}>
+                  <div className="ext-form-group">
+                    <label className="ext-form-label">Publisher Name</label>
+                    <input
+                      className="ext-input"
+                      placeholder="e.g. Acme Tools"
+                      value={publisherForm.name}
+                      onChange={(e) => setPublisherForm((c) => ({ ...c, name: e.target.value }))}
+                      required
+                    />
                   </div>
-                  <div className="extensions-recommendation-grid hero">
-                    {recommendedExtensions.map((extension) => (
-                    <button type="button" key={extension.id} className={`extensions-recommendation-card ${extension.featured ? 'featured' : ''}`} onClick={() => setSelectedExtensionId(extension.id)}>
-                        <div className="extensions-recommendation-header">
-                          <div className="extensions-icon-tile-large" style={{ '--extension-accent': extension.accent }}>
-                            <ExtensionLogo extension={extension} size="large" />
-                          </div>
-                          <div className="extensions-recommendation-copy">
-                            <div className="extensions-recommendation-title-row">
-                              <div className="extensions-recommendation-title">{extension.name}</div>
-                              {extension.featured ? <span className="extensions-badge">Featured</span> : null}
-                            </div>
-                            <div className="extensions-recommendation-publisher">{extension.publisher}</div>
-                            <div className="extensions-recommendation-summary">{extension.summary}</div>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
+                  <div className="ext-form-group">
+                    <label className="ext-form-label">Identifier Slug</label>
+                    <input
+                      className="ext-input"
+                      placeholder="e.g. acme-tools"
+                      value={publisherForm.slug}
+                      onChange={(e) => setPublisherForm((c) => ({ ...c, slug: e.target.value }))}
+                      required
+                    />
                   </div>
-                </>
-              ) : activeSelectedExtension ? (
-                <>
-                  <div className="extensions-detail-hero">
-                    <div className="extensions-icon-tile-large" style={{ '--extension-accent': activeSelectedExtension.accent }}>
-                      <ExtensionLogo extension={activeSelectedExtension} />
-                    </div>
-                    <div className="extensions-detail-copy">
-                      <div className="extensions-detail-title-row">
-                        <div className="extensions-detail-title">{activeSelectedExtension.detailTitle || activeSelectedExtension.name}</div>
-                        {activeSelectedExtension.featured ? <span className="extensions-badge">Featured</span> : null}
-                      </div>
-                      <div className="extensions-detail-publisher">
-                        {activeSelectedExtension.publisher}
-                        {activeSelectedExtension.version ? ` | v${activeSelectedExtension.version}` : ''}
-                      </div>
-                      <div className="extensions-detail-meta">
-                        {formatMeta(activeSelectedExtension).map((item, index) => (
-                          <span key={`${activeSelectedExtension.id}-meta-${index}-${item}`} className="extensions-tag-pill">{item}</span>
-                        ))}
-                      </div>
-                    </div>
+                  <div className="ext-form-group full">
+                    <label className="ext-form-label">Bio</label>
+                    <textarea
+                      className="ext-textarea"
+                      rows="2"
+                      placeholder="Brief description about the publisher organization"
+                      value={publisherForm.bio}
+                      onChange={(e) => setPublisherForm((c) => ({ ...c, bio: e.target.value }))}
+                    />
                   </div>
-                  <div className="extensions-detail-actions">
-                    {extensionState?.[activeSelectedExtension.id]?.installed ? (
-                      <>
-                        <button type="button" className="extensions-primary-btn installed" onClick={() => handleUninstall(activeSelectedExtension)}>Uninstall</button>
-                        <button type="button" className="extensions-secondary-btn" onClick={() => handleToggleEnabled(activeSelectedExtension)}>
-                          {extensionState?.[activeSelectedExtension.id]?.enabled ? 'Disable' : 'Enable'}
-                        </button>
-                      </>
-                    ) : (
-                      <button type="button" className="extensions-primary-btn" onClick={() => handleInstall(activeSelectedExtension)}>Install</button>
-                    )}
+                  <div className="ext-form-group">
+                    <label className="ext-form-label">Website</label>
+                    <input
+                      className="ext-input"
+                      placeholder="https://example.com"
+                      value={publisherForm.website}
+                      onChange={(e) => setPublisherForm((c) => ({ ...c, website: e.target.value }))}
+                    />
                   </div>
-                  <div className="extensions-detail-description">{activeSelectedExtension.description || activeSelectedExtension.summary}</div>
-                  <div className="extensions-detail-fields">
-                    <div className="extensions-detail-field">
-                      <div className="extensions-detail-label">Tags</div>
-                      <div className="extensions-tag-row">
-                        {(activeSelectedExtension.tags || []).slice(0, 6).map((tag, index) => (
-                          <span key={`${activeSelectedExtension.id}-tag-${index}-${tag}`} className="extensions-tag-pill">{tag}</span>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="extensions-detail-field">
-                      <div className="extensions-detail-label">Publisher</div>
-                      <div className="extensions-detail-value">{marketplacePublishers?.[activeSelectedExtension.publisherId]?.name || activeSelectedExtension.publisher}</div>
-                    </div>
-                    <div className="extensions-detail-field">
-                      <div className="extensions-detail-label">Manifest</div>
-                      <div className="extensions-detail-value">Tilder manifest v{activeSelectedExtension.manifestVersion || 2}</div>
-                    </div>
-                    <div className="extensions-detail-field">
-                      <div className="extensions-detail-label">Developer model</div>
-                      <div className="extensions-detail-value">Verified public marketplace extension.</div>
-                    </div>
+                  <div className="ext-form-group">
+                    <label className="ext-form-label">Repository</label>
+                    <input
+                      className="ext-input"
+                      placeholder="https://github.com/org/repo"
+                      value={publisherForm.repository}
+                      onChange={(e) => setPublisherForm((c) => ({ ...c, repository: e.target.value }))}
+                    />
                   </div>
-                </>
-              ) : null}
-            </div>
-          </section>
-          <aside className="extensions-list extensions-list-right">
-            <div className="extensions-browser-pane">
-              <div className="extensions-pane-heading">Marketplace</div>
-              <div className="extensions-pane-subtitle">
-                {isFiltering
-                  ? `${filteredExtensions.length} ${filteredExtensions.length === 1 ? 'result' : 'results'}`
-                  : `${catalog.length} available extensions`}
+                  <div className="ext-form-group full">
+                    <button type="submit" className="ext-btn-primary" disabled={publisherFormBusy}>
+                      {publisherFormBusy ? 'Creating...' : 'Register Publisher'}
+                    </button>
+                  </div>
+                </form>
               </div>
-              <div className="extensions-toolbar-inline">
-                <input
-                  type="text"
-                  className="extensions-search-input"
-                  placeholder="Search extensions"
-                  value={searchValue}
-                  onChange={(event) => {
-                    const nextValue = event.target.value;
-                    setSearchValue(nextValue);
-                    if (!nextValue.trim() && category === 'All') {
-                      setSelectedExtensionId('');
-                    }
-                  }}
-                />
-                <div className="extensions-filter-row">
-                  <span className="extensions-filter-label">Category</span>
-                  <select
-                    className="extensions-category-select settingsInput"
-                    value={category}
-                    onChange={(event) => {
-                      const nextCategory = event.target.value;
-                      setCategory(nextCategory);
-                      if (!trimmedSearchValue && nextCategory === 'All') {
-                        setSelectedExtensionId('');
-                      }
-                    }}
-                  >
-                    {categories.map((entry, index) => <option key={`category-${index}-${entry}`} value={entry}>{entry}</option>)}
-                  </select>
-                  <button type="button" className="extensions-clear-filter" onClick={resetMarketplaceView}>Reset</button>
+
+              <div className="ext-form-card">
+                <div className="ext-form-title">
+                  <i className="fa-solid fa-key" style={{ marginRight: 8, color: 'var(--accent)' }} />
+                  Publisher Tokens
+                </div>
+                <div className="ext-form-grid-2">
+                  <div className="ext-form-group">
+                    <label className="ext-form-label">Select Publisher</label>
+                    <select
+                      className="ext-select"
+                      value={selectedPublisherId}
+                      onChange={(e) => setSelectedPublisherId(e.target.value)}
+                    >
+                      <option value="">-- Choose Publisher --</option>
+                      {ownedPublishers.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} ({p.slug})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="ext-form-group">
+                    <label className="ext-form-label">Token Label</label>
+                    <input
+                      className="ext-input"
+                      value={tokenLabel}
+                      onChange={(e) => setTokenLabel(e.target.value)}
+                    />
+                  </div>
+                  <div className="ext-form-group full">
+                    <button type="button" className="ext-btn-secondary" onClick={handleCreateToken}>
+                      Generate Token
+                    </button>
+                  </div>
+                  {generatedToken && (
+                    <div className="ext-form-group full" style={{ background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 6 }}>
+                      <div className="ext-form-label" style={{ color: '#40c057' }}>Token generated (copy now):</div>
+                      <code style={{ fontSize: 12, wordBreak: 'break-all', color: '#cdd6f4' }}>{generatedToken}</code>
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="extensions-list-copy">
-                {rightPaneExtensions.map((extension) => (
-                  <button type="button" key={extension.id} className={`extensions-list-item extensions-list-item-compact ${activeSelectedExtension?.id === extension.id ? 'active' : ''}`} onClick={() => setSelectedExtensionId(extension.id)}>
-                    <div className="extensions-list-row">
-                      <div className="extensions-icon-tile" style={{ '--extension-accent': extension.accent }}><ExtensionLogo extension={extension} /></div>
-                      <div className="extensions-list-row-copy">
-                        <div className="extensions-list-title-row">
-                          <div className="extensions-list-title">{extension.name}</div>
-                          {extension.featured ? <span className="extensions-badge subtle">Featured</span> : null}
-                        </div>
-                        <div className="extensions-list-publisher">{extension.publisher}</div>
-                        <div className="extensions-list-summary">{extension.summary}</div>
-                        <div className="extensions-list-card-footer">
-                          <div className="extensions-list-stats">
-                            <span>{extension.downloads || 'New'}</span>
-                            <span>{typeof extension.rating === 'number' ? `${extension.rating.toFixed(1)} rating` : 'New'}</span>
-                          </div>
-                          <div className="extensions-list-inline-actions">
-                            {extensionState?.[extension.id]?.installed ? (
-                              <>
-                                <button
-                                  type="button"
-                                  className="extensions-secondary-btn"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    handleToggleEnabled(extension);
-                                  }}
-                                >
-                                  {extensionState?.[extension.id]?.enabled ? 'Disable' : 'Enable'}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="extensions-secondary-btn"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    handleUninstall(extension);
-                                  }}
-                                >
-                                  Uninstall
-                                </button>
-                              </>
-                            ) : (
-                              <button
-                                type="button"
-                                className="extensions-primary-btn"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  handleInstall(extension);
-                                }}
-                              >
-                                Install
-                              </button>
-                            )}
-                          </div>
-                          <div className={`extensions-list-state ${extensionState?.[extension.id]?.enabled ? 'enabled' : extensionState?.[extension.id]?.installed ? 'installed' : 'available'}`}>
-                            {extensionState?.[extension.id]?.enabled ? 'Enabled' : extensionState?.[extension.id]?.installed ? 'Installed' : 'Available'}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-                {!rightPaneExtensions.length ? (
-                  <div className="extensions-list-empty">
-                    {isFiltering
-                      ? 'No matches. Try a different search or clear the category filter.'
-                      : 'No extensions are available right now.'}
+
+              <div className="ext-form-card">
+                <div className="ext-form-title">
+                  <i className="fa-solid fa-cube" style={{ marginRight: 8, color: 'var(--accent)' }} />
+                  Publish Package
+                </div>
+                <div className="ext-form-grid-2">
+                  <div className="ext-form-group">
+                    <label className="ext-form-label">Extension ID</label>
+                    <input
+                      className="ext-input"
+                      placeholder="e.g. code-beautifier"
+                      value={publishDraft.manifest.id}
+                      onChange={(e) => setPublishDraft((c) => ({ ...c, manifest: { ...c.manifest, id: e.target.value } }))}
+                    />
                   </div>
-                ) : null}
+                  <div className="ext-form-group">
+                    <label className="ext-form-label">Display Name</label>
+                    <input
+                      className="ext-input"
+                      placeholder="e.g. Code Beautifier"
+                      value={publishDraft.manifest.name}
+                      onChange={(e) => setPublishDraft((c) => ({ ...c, manifest: { ...c.manifest, name: e.target.value } }))}
+                    />
+                  </div>
+                  <div className="ext-form-group">
+                    <label className="ext-form-label">Version</label>
+                    <input
+                      className="ext-input"
+                      value={publishDraft.manifest.version}
+                      onChange={(e) => setPublishDraft((c) => ({ ...c, manifest: { ...c.manifest, version: e.target.value } }))}
+                    />
+                  </div>
+                  <div className="ext-form-group">
+                    <label className="ext-form-label">Category</label>
+                    <select
+                      className="ext-select"
+                      value={publishDraft.manifest.category}
+                      onChange={(e) => setPublishDraft((c) => ({ ...c, manifest: { ...c.manifest, category: e.target.value } }))}
+                    >
+                      {categories.filter((cat) => cat !== 'All').map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="ext-form-group full">
+                    <label className="ext-form-label">Summary</label>
+                    <input
+                      className="ext-input"
+                      placeholder="One-line summary of what this extension does"
+                      value={publishDraft.manifest.summary}
+                      onChange={(e) => setPublishDraft((c) => ({ ...c, manifest: { ...c.manifest, summary: e.target.value } }))}
+                    />
+                  </div>
+                  <div className="ext-form-group full">
+                    <label className="ext-form-label">Entrypoint Code (JavaScript)</label>
+                    <textarea
+                      className="ext-textarea"
+                      rows="8"
+                      style={{ fontFamily: 'monospace', fontSize: 12 }}
+                      value={publishDraft.code}
+                      onChange={(e) => setPublishDraft((c) => ({ ...c, code: e.target.value }))}
+                    />
+                  </div>
+                  <div className="ext-form-group full" style={{ display: 'flex', gap: 10 }}>
+                    <button type="button" className="ext-btn-secondary" onClick={handleValidatePackage}>
+                      Validate Manifest & Code
+                    </button>
+                    <button
+                      type="button"
+                      className="ext-btn-primary"
+                      disabled={publishBusy}
+                      onClick={handlePublishPackage}
+                    >
+                      {publishBusy ? 'Publishing...' : 'Publish to Marketplace'}
+                    </button>
+                  </div>
+                  {validationResult && (
+                    <div
+                      className="ext-form-group full"
+                      style={{
+                        padding: 10,
+                        borderRadius: 6,
+                        background: validationResult.ok ? 'rgba(64, 192, 87, 0.15)' : 'rgba(243, 139, 168, 0.15)',
+                        color: validationResult.ok ? '#40c057' : '#f38ba8',
+                        fontSize: 13,
+                      }}
+                    >
+                      {validationResult.message || (validationResult.ok ? 'Package validated successfully.' : 'Validation failed.')}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </aside>
           </div>
         ) : (
-          <div className="extensions-layout extensions-layout-modal">
-          <section className="extensions-detail">
-            <div className="extensions-detail-pane">
-              <div className="extensions-detail-section">
-                <div className="extensions-section-title">Publisher Dashboard</div>
-                <div className="extensions-pane-subtitle">Create publishers, mint tokens, validate packages, and publish public Tilder extensions.</div>
+          /* Main Master-Detail Layout (Marketplace & Installed) */
+          <div className="ext-main-layout">
+            {/* Left Sidebar (List) */}
+            <div className="ext-sidebar">
+              {/* Search Bar */}
+              <div className="ext-search-box">
+                <div className="ext-search-input-wrapper">
+                  <i className="fa-solid fa-magnifying-glass ext-search-icon" />
+                  <input
+                    type="text"
+                    className="ext-search-input"
+                    placeholder={`Search ${topTab === 'installed' ? 'installed' : 'all'} extensions...`}
+                    value={searchValue}
+                    onChange={(e) => setSearchValue(e.target.value)}
+                  />
+                  {searchValue && (
+                    <button type="button" className="ext-search-clear" onClick={() => setSearchValue('')}>
+                      <i className="fa-solid fa-xmark" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Category Filter Chips */}
+                <div className="ext-categories-bar">
+                  {categories.map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      className={`ext-chip ${category === cat ? 'active' : ''}`}
+                      onClick={() => setCategory(cat)}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="extensions-status-panel">
-                {currentAccount ? `Signed in as ${currentAccount.username || currentAccount.name || currentAccount.email || 'publisher'}.` : 'Sign in before publishing extensions.'}
-              </div>
-              <form className="extensions-form-grid" onSubmit={handleCreatePublisher}>
-                <div className="extensions-form-field"><label className="extensions-form-label">Publisher name</label><input className="extensions-form-input" value={publisherForm.name} onChange={(e) => setPublisherForm((c) => ({ ...c, name: e.target.value }))} /></div>
-                <div className="extensions-form-field"><label className="extensions-form-label">Slug</label><input className="extensions-form-input" value={publisherForm.slug} onChange={(e) => setPublisherForm((c) => ({ ...c, slug: e.target.value }))} /></div>
-                <div className="extensions-form-field extensions-form-field-full"><label className="extensions-form-label">Bio</label><textarea className="extensions-form-textarea" rows="3" value={publisherForm.bio} onChange={(e) => setPublisherForm((c) => ({ ...c, bio: e.target.value }))} /></div>
-                <div className="extensions-form-field"><label className="extensions-form-label">Website</label><input className="extensions-form-input" value={publisherForm.website} onChange={(e) => setPublisherForm((c) => ({ ...c, website: e.target.value }))} /></div>
-                <div className="extensions-form-field"><label className="extensions-form-label">Repository</label><input className="extensions-form-input" value={publisherForm.repository} onChange={(e) => setPublisherForm((c) => ({ ...c, repository: e.target.value }))} /></div>
-                <div className="extensions-form-actions extensions-form-field-full"><button type="submit" className="extensions-primary-btn" disabled={publisherFormBusy}>{publisherFormBusy ? 'Creating...' : 'Create Publisher'}</button></div>
-              </form>
-              <div className="extensions-form-grid">
-                <div className="extensions-form-field">
-                  <label className="extensions-form-label">Publisher</label>
-                  <select className="extensions-form-input" value={selectedPublisherId} onChange={(event) => { setSelectedPublisherId(event.target.value); setPublishDraft((current) => ({ ...current, publisherId: event.target.value })); }}>
-                    <option value="">Select publisher</option>
-                    {ownedPublishers.map((publisher) => <option key={publisher.id} value={publisher.id}>{publisher.name}</option>)}
+
+              {/* List Header / Sort */}
+              <div className="ext-list-header">
+                <span>{sortedExtensions.length} {sortedExtensions.length === 1 ? 'extension' : 'extensions'}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>Sort:</span>
+                  <select
+                    className="ext-sort-select"
+                    value={sortMode}
+                    onChange={(e) => setSortMode(e.target.value)}
+                  >
+                    <option value="popular">Popular</option>
+                    <option value="name">Name</option>
+                    <option value="rating">Rating</option>
                   </select>
                 </div>
-                <div className="extensions-form-field"><label className="extensions-form-label">Token label</label><input className="extensions-form-input" value={tokenLabel} onChange={(event) => setTokenLabel(event.target.value)} /></div>
-                <div className="extensions-form-actions extensions-form-field-full"><button type="button" className="extensions-secondary-btn" onClick={handleCreateToken}>Create Token</button></div>
-                {generatedToken ? <div className="extensions-token-preview extensions-form-field-full"><div className="extensions-form-label">New token</div><code>{generatedToken}</code></div> : null}
               </div>
-              <div className="extensions-form-grid">
-                <div className="extensions-form-field"><label className="extensions-form-label">Extension id</label><input className="extensions-form-input" value={publishDraft.manifest.id} onChange={(e) => setPublishDraft((c) => ({ ...c, manifest: { ...c.manifest, id: e.target.value } }))} /></div>
-                <div className="extensions-form-field"><label className="extensions-form-label">Name</label><input className="extensions-form-input" value={publishDraft.manifest.name} onChange={(e) => setPublishDraft((c) => ({ ...c, manifest: { ...c.manifest, name: e.target.value } }))} /></div>
-                <div className="extensions-form-field"><label className="extensions-form-label">Version</label><input className="extensions-form-input" value={publishDraft.manifest.version} onChange={(e) => setPublishDraft((c) => ({ ...c, manifest: { ...c.manifest, version: e.target.value } }))} /></div>
-                <div className="extensions-form-field"><label className="extensions-form-label">Category</label><select className="extensions-form-input" value={publishDraft.manifest.category} onChange={(e) => setPublishDraft((c) => ({ ...c, manifest: { ...c.manifest, category: e.target.value } }))}>{categories.filter((entry) => entry !== 'All').map((entry, index) => <option key={`publish-category-${index}-${entry}`} value={entry}>{entry}</option>)}</select></div>
-                <div className="extensions-form-field extensions-form-field-full"><label className="extensions-form-label">Summary</label><input className="extensions-form-input" value={publishDraft.manifest.summary} onChange={(e) => setPublishDraft((c) => ({ ...c, manifest: { ...c.manifest, summary: e.target.value } }))} /></div>
-                <div className="extensions-form-field extensions-form-field-full"><label className="extensions-form-label">Description</label><textarea className="extensions-form-textarea" rows="4" value={publishDraft.manifest.description} onChange={(e) => setPublishDraft((c) => ({ ...c, manifest: { ...c.manifest, description: e.target.value } }))} /></div>
-                <div className="extensions-form-field"><label className="extensions-form-label">Tags</label><input className="extensions-form-input" value={publishDraft.manifest.tags} onChange={(e) => setPublishDraft((c) => ({ ...c, manifest: { ...c.manifest, tags: e.target.value } }))} /></div>
-                <div className="extensions-form-field"><label className="extensions-form-label">Permissions</label><input className="extensions-form-input" value={publishDraft.manifest.permissions} onChange={(e) => setPublishDraft((c) => ({ ...c, manifest: { ...c.manifest, permissions: e.target.value } }))} /></div>
-                <div className="extensions-form-field"><label className="extensions-form-label">Repository</label><input className="extensions-form-input" value={publishDraft.manifest.repository} onChange={(e) => setPublishDraft((c) => ({ ...c, manifest: { ...c.manifest, repository: e.target.value } }))} /></div>
-                <div className="extensions-form-field"><label className="extensions-form-label">Website</label><input className="extensions-form-input" value={publishDraft.manifest.website} onChange={(e) => setPublishDraft((c) => ({ ...c, manifest: { ...c.manifest, website: e.target.value } }))} /></div>
-                <div className="extensions-form-field"><label className="extensions-form-label">Icon class</label><input className="extensions-form-input" value={publishDraft.manifest.iconClass} onChange={(e) => setPublishDraft((c) => ({ ...c, manifest: { ...c.manifest, iconClass: e.target.value } }))} /></div>
-                <div className="extensions-form-field"><label className="extensions-form-label">Accent</label><input className="extensions-form-input" value={publishDraft.manifest.accent} onChange={(e) => setPublishDraft((c) => ({ ...c, manifest: { ...c.manifest, accent: e.target.value } }))} /></div>
-                <div className="extensions-form-field"><label className="extensions-form-label">Entrypoint</label><input className="extensions-form-input" value={publishDraft.manifest.webEntrypoint} onChange={(e) => setPublishDraft((c) => ({ ...c, manifest: { ...c.manifest, webEntrypoint: e.target.value } }))} /></div>
-                <div className="extensions-form-field"><label className="extensions-form-label">Publish token</label><input className="extensions-form-input" value={publishDraft.token} onChange={(e) => setPublishDraft((c) => ({ ...c, token: e.target.value }))} /></div>
-                <div className="extensions-form-field extensions-form-field-full"><label className="extensions-form-label">Entrypoint code</label><textarea className="extensions-form-code" rows="10" value={publishDraft.code} onChange={(e) => setPublishDraft((c) => ({ ...c, code: e.target.value }))} /></div>
-                <div className="extensions-form-actions extensions-form-field-full">
-                  <button type="button" className="extensions-secondary-btn" onClick={handleValidatePackage}>Validate</button>
-                  <button type="button" className="extensions-primary-btn" disabled={publishBusy} onClick={handlePublishPackage}>{publishBusy ? 'Publishing...' : 'Publish Extension'}</button>
-                </div>
-                {validationResult ? <div className={`extensions-status-panel ${validationResult.ok ? 'success' : 'warning'} extensions-form-field-full`}>{validationResult.message || (validationResult.ok ? 'Validation passed.' : 'Validation failed.')}</div> : null}
+
+              {/* Scrollable List */}
+              <div className="ext-list-scroll">
+                {sortedExtensions.map((extension) => {
+                  const state = extensionState[extension.id];
+                  const isInstalled = Boolean(state?.installed);
+                  const isEnabled = Boolean(state?.enabled);
+                  const isSelected = selectedExtension?.id === extension.id;
+
+                  return (
+                    <div
+                      key={extension.id}
+                      className={`ext-card-item ${isSelected ? 'selected' : ''}`}
+                      onClick={() => setSelectedExtensionId(extension.id)}
+                    >
+                      <div className="ext-card-icon-tile" style={{ color: extension.accent || 'var(--accent)' }}>
+                        <ExtensionLogo extension={extension} />
+                      </div>
+                      <div className="ext-card-info">
+                        <div className="ext-card-title-row">
+                          <span className="ext-card-title">{extension.name}</span>
+                          {isInstalled && (
+                            <span className={`ext-card-status-badge ${isEnabled ? 'enabled' : 'disabled'}`}>
+                              <i className={`fa-solid ${isEnabled ? 'fa-check' : 'fa-pause'}`} style={{ fontSize: 9 }} />
+                              {isEnabled ? 'Enabled' : 'Disabled'}
+                            </span>
+                          )}
+                        </div>
+                        <span className="ext-card-publisher">{extension.publisher} • v{extension.version || '1.0.0'}</span>
+                        <span className="ext-card-summary">{extension.summary || extension.description}</span>
+                        <div className="ext-card-footer">
+                          <div className="ext-card-stats">
+                            <span><i className="fa-solid fa-download" style={{ marginRight: 3, fontSize: 10 }} />{extension.downloads || 'New'}</span>
+                            {typeof extension.rating === 'number' && (
+                              <span><i className="fa-solid fa-star" style={{ color: '#fab387', marginRight: 3, fontSize: 10 }} />{extension.rating.toFixed(1)}</span>
+                            )}
+                          </div>
+                          {!isInstalled ? (
+                            <button
+                              type="button"
+                              className="ext-btn-primary"
+                              style={{ padding: '3px 10px', fontSize: 11 }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleInstall(extension);
+                              }}
+                            >
+                              Install
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="ext-btn-secondary"
+                              style={{ padding: '3px 8px', fontSize: 11 }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleEnabled(extension);
+                              }}
+                            >
+                              {isEnabled ? 'Disable' : 'Enable'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {!sortedExtensions.length && (
+                  <div className="ext-detail-empty" style={{ padding: 40 }}>
+                    <i className="fa-solid fa-box-open ext-detail-empty-icon" />
+                    <div style={{ fontSize: 14, fontWeight: 500 }}>No extensions match your search.</div>
+                    <button
+                      type="button"
+                      className="ext-btn-secondary"
+                      style={{ fontSize: 12, padding: '4px 12px' }}
+                      onClick={() => { setSearchValue(''); setCategory('All'); }}
+                    >
+                      Clear Filters
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
-          </section>
-          <aside className="extensions-list extensions-list-right">
-            <div className="extensions-browser-pane">
-              <div className="extensions-pane-heading">Your Publishers</div>
-              <div className="extensions-pane-subtitle">Verified public authors and extension publishing control.</div>
-              {publishersLoading ? <div className="extensions-list-empty">Loading publishers...</div> : null}
-              {publishersError ? <div className="extensions-list-empty">{publishersError}</div> : null}
-              {ownedPublishers.map((publisher) => (
-                <button type="button" key={publisher.id} className={`extensions-list-item ${selectedPublisherId === publisher.id ? 'active' : ''}`} onClick={() => { setSelectedPublisherId(publisher.id); setPublishDraft((current) => ({ ...current, publisherId: publisher.id })); }}>
-                  <div className="extensions-list-head">
-                    <div className="extensions-icon-tile" style={{ '--extension-accent': '#4f61ff' }}>
-                      <ExtensionLogo extension={{ name: publisher.name, category: 'Productivity', logoSrc: publisher.avatarUrl || '' }} />
+
+            {/* Right Side Detail Pane */}
+            <div className="ext-detail-pane">
+              {selectedExtension ? (
+                <>
+                  <div className="ext-detail-header">
+                    <div
+                      className="ext-detail-hero-icon"
+                      style={{ color: selectedExtension.accent || 'var(--accent)' }}
+                    >
+                      <ExtensionLogo extension={selectedExtension} />
                     </div>
-                    <div className="extensions-list-head-copy">
-                      <div className="extensions-list-title-row">
-                        <div className="extensions-list-title">{publisher.name}</div>
-                        {publisher.verified ? <span className="extensions-badge subtle">Verified</span> : null}
+                    <div className="ext-detail-header-copy">
+                      <div className="ext-detail-title">{selectedExtension.name}</div>
+                      <div className="ext-detail-meta-line">
+                        <span style={{ fontWeight: 600, color: 'var(--accent)' }}>{selectedExtension.publisher}</span>
+                        <span>•</span>
+                        <span>v{selectedExtension.version || '1.0.0'}</span>
+                        <span>•</span>
+                        <span className="ext-chip" style={{ margin: 0, padding: '2px 8px' }}>
+                          {selectedExtension.category || 'Tools'}
+                        </span>
                       </div>
-                      <div className="extensions-list-publisher">{publisher.slug}</div>
+                      <div className="ext-detail-summary">{selectedExtension.summary}</div>
+
+                      {/* Detail Action Buttons */}
+                      <div className="ext-detail-actions">
+                        {!extensionState[selectedExtension.id]?.installed ? (
+                          <button
+                            type="button"
+                            className="ext-btn-primary"
+                            onClick={() => handleInstall(selectedExtension)}
+                          >
+                            <i className="fa-solid fa-download" />
+                            Install Extension
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className="ext-btn-secondary"
+                              onClick={() => handleToggleEnabled(selectedExtension)}
+                            >
+                              <i className={`fa-solid ${extensionState[selectedExtension.id]?.enabled ? 'fa-pause' : 'fa-play'}`} />
+                              {extensionState[selectedExtension.id]?.enabled ? 'Disable' : 'Enable'}
+                            </button>
+                            <button
+                              type="button"
+                              className="ext-btn-danger"
+                              onClick={() => handleUninstall(selectedExtension)}
+                            >
+                              <i className="fa-solid fa-trash" />
+                              Uninstall
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <div className="extensions-list-summary">{publisher.bio || 'No publisher bio yet.'}</div>
-                  <div className="extensions-list-meta"><span>{publisher.extensionCount || 0} extensions</span><span>{publisher.verified ? 'Verified' : 'Publisher'}</span></div>
-                </button>
-              ))}
-              {!publishersLoading && !ownedPublishers.length ? <div className="extensions-list-empty">Create your first publisher to start publishing extensions.</div> : null}
+
+                  {/* Subtabs: Overview | Features | Details */}
+                  <div className="ext-subtabs">
+                    <button
+                      type="button"
+                      className={`ext-subtab-btn ${subTab === 'overview' ? 'active' : ''}`}
+                      onClick={() => setSubTab('overview')}
+                    >
+                      Overview
+                    </button>
+                    <button
+                      type="button"
+                      className={`ext-subtab-btn ${subTab === 'features' ? 'active' : ''}`}
+                      onClick={() => setSubTab('features')}
+                    >
+                      Features & Permissions
+                    </button>
+                    <button
+                      type="button"
+                      className={`ext-subtab-btn ${subTab === 'publisher' ? 'active' : ''}`}
+                      onClick={() => setSubTab('publisher')}
+                    >
+                      Publisher Info
+                    </button>
+                  </div>
+
+                  {/* Subtab Contents */}
+                  <div className="ext-content-body">
+                    {subTab === 'overview' && (
+                      <>
+                        <div className="ext-desc-text">
+                          {selectedExtension.description || selectedExtension.summary || 'No detailed description available.'}
+                        </div>
+                        {Array.isArray(selectedExtension.tags) && selectedExtension.tags.length > 0 && (
+                          <div>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                              Tags
+                            </div>
+                            <div className="ext-tag-list">
+                              {selectedExtension.tags.map((tag) => (
+                                <span key={tag} className="ext-tag-item">#{tag}</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {subTab === 'features' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div className="ext-form-card" style={{ padding: 14 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Entrypoint</div>
+                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
+                            {selectedExtension.webEntrypoint || 'main.js'}
+                          </div>
+                        </div>
+                        <div className="ext-form-card" style={{ padding: 14 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Permissions Requested</div>
+                          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                            {Array.isArray(selectedExtension.permissions) && selectedExtension.permissions.length
+                              ? selectedExtension.permissions.join(', ')
+                              : 'Standard workspace API access (no elevated permissions)'}
+                          </div>
+                        </div>
+                        <div className="ext-form-card" style={{ padding: 14 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Manifest Version</div>
+                          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                            Tilder Extension Manifest v{selectedExtension.manifestVersion || 2}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {subTab === 'publisher' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div className="ext-form-card" style={{ padding: 16 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600 }}>{selectedExtension.publisher}</div>
+                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                            {marketplacePublishers?.[selectedExtension.publisherId]?.bio || 'Verified public community extension author.'}
+                          </div>
+                          {selectedExtension.repository && (
+                            <div style={{ marginTop: 10, fontSize: 12 }}>
+                              <a
+                                href={selectedExtension.repository}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{ color: 'var(--accent)', textDecoration: 'none' }}
+                              >
+                                <i className="fa-brands fa-github" style={{ marginRight: 6 }} />
+                                Source Repository
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="ext-detail-empty">
+                  <i className="fa-solid fa-puzzle-piece ext-detail-empty-icon" />
+                  <div style={{ fontSize: 16, fontWeight: 600 }}>Select an extension</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                    Choose an extension from the list to view its details, features, and documentation.
+                  </div>
+                </div>
+              )}
             </div>
-          </aside>
           </div>
         )}
       </ExtensionsErrorBoundary>

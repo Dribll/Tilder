@@ -166,7 +166,6 @@ async function main() {
   await copyIntoStage('localRunner.js');
   await copyIntoStage('package.json');
   await copyIntoStage('package-lock.json');
-  await copyIntoStage('tilder_monitor_service.ps1');
 
   const rootEnvPath = path.join(projectRoot, '.env');
   const envExists = fsSync.existsSync(rootEnvPath);
