@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import http from 'node:http';
+import https from 'node:https';
 import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
@@ -4772,7 +4773,7 @@ app.post('/api/ports', async (request, response) => {
   // Check that the target port has a listening service
   const checkPortHelper = (host) => new Promise((resolve) => {
     const s = new net.Socket();
-    s.setTimeout(800);
+    s.setTimeout(1200);
     s.once('error', () => { s.destroy(); resolve(false); });
     s.once('timeout', () => { s.destroy(); resolve(false); });
     s.once('connect', () => { s.destroy(); resolve(true); });
@@ -4781,6 +4782,7 @@ app.post('/api/ports', async (request, response) => {
 
   let activeHost = null;
   if (await checkPortHelper('127.0.0.1')) activeHost = '127.0.0.1';
+  else if (await checkPortHelper('localhost')) activeHost = '127.0.0.1';
   else if (await checkPortHelper('::1')) activeHost = '::1';
 
   if (!activeHost) {

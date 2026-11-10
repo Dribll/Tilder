@@ -635,7 +635,7 @@ function PortsView({ ports, onForwardPort, onRemovePort, onCleanupAllPorts, onOp
                   )}
                 </td>
                 <td className="ports-cell-desc" onClick={() => setEditingPortId(entry.port)}>
-                  {editingPortId === entry.port ? (
+                  {Number(editingPortId) === Number(entry.port) ? (
                     <input
                       type="text"
                       className="ports-input"
@@ -643,7 +643,7 @@ function PortsView({ ports, onForwardPort, onRemovePort, onCleanupAllPorts, onOp
                       onBlur={() => setEditingPortId(null)}
                       onChange={(e) => {
                         const newDesc = e.target.value;
-                        const updated = ports.map((p) => p.port === entry.port ? { ...p, description: newDesc } : p);
+                        const updated = ports.map((p) => Number(p.port) === Number(entry.port) ? { ...p, description: newDesc } : p);
                         if (onUpdatePort) onUpdatePort(updated);
                       }}
                       onKeyDown={(e) => {
@@ -663,7 +663,7 @@ function PortsView({ ports, onForwardPort, onRemovePort, onCleanupAllPorts, onOp
                     value={entry.visibility}
                     onChange={(e) => {
                       const newVis = e.target.value;
-                      const updated = ports.map((p) => p.port === entry.port ? { ...p, visibility: newVis } : p);
+                      const updated = ports.map((p) => Number(p.port) === Number(entry.port) ? { ...p, visibility: newVis } : p);
                       if (onUpdatePort) onUpdatePort(updated);
                       // Restart the tunnel with the new visibility
                       if (onForwardPort) onForwardPort(entry.port, entry.description, newVis, entry.username || 'tilder', entry.password || 'tilder');
@@ -703,7 +703,7 @@ function PortsView({ ports, onForwardPort, onRemovePort, onCleanupAllPorts, onOp
                     <button
                       type="button"
                       className="ports-icon-btn"
-                      title={copiedPort === entry.port ? 'Copied URL!' : 'Copy Forwarded URL'}
+                      title={Number(copiedPort) === Number(entry.port) ? 'Copied URL!' : 'Copy Forwarded URL'}
                       onClick={(e) => {
                         e.stopPropagation();
                         navigator.clipboard.writeText(entry.url);
@@ -711,7 +711,7 @@ function PortsView({ ports, onForwardPort, onRemovePort, onCleanupAllPorts, onOp
                         setTimeout(() => setCopiedPort(null), 1500);
                       }}
                     >
-                      <span><i className={copiedPort === entry.port ? 'fa-solid fa-check' : 'fa-regular fa-copy'}></i></span>
+                      <span><i className={Number(copiedPort) === Number(entry.port) ? 'fa-solid fa-check' : 'fa-regular fa-copy'}></i></span>
                     </button>
                   )}
                   {entry.url && (
@@ -1307,6 +1307,7 @@ function Terminal({
   settings,
   requestPrompt,
   onSelectProblem,
+  pushNotification,
 }) {
   const [debugFilterText, setDebugFilterText] = useState('');
   const [availableProfiles, setAvailableProfiles] = useState([]);
@@ -1330,7 +1331,7 @@ function Terminal({
     setEditingPortId(id);
 
     if (prevId !== null && id === null) {
-      const portEntry = forwardedPorts.find(p => p.port === prevId);
+      const portEntry = forwardedPorts.find(p => Number(p.port) === Number(prevId));
       if (portEntry) {
         apiFetch('/api/ports', {
           method: 'POST',
@@ -1378,13 +1379,16 @@ function Terminal({
     return () => clearInterval(interval);
   }, [activeView, hasConnecting]);
 
-  function startTunnel(port, description, visibility, username = 'tilder', password = 'tilder') {
+  function startTunnel(rawPort, description, visibility, username = 'tilder', password = 'tilder') {
+    const port = parseInt(rawPort, 10);
+    if (!port || isNaN(port)) return;
+
     // Optimistically add/update port in UI as connecting
     setForwardedPorts((prev) => {
-      const existing = prev.find((e) => e.port === port);
+      const existing = prev.find((e) => Number(e.port) === port);
       const newEntry = { port, description, visibility, status: 'connecting', url: null, username, password };
       if (existing) {
-        return prev.map((e) => e.port === port ? newEntry : e);
+        return prev.map((e) => Number(e.port) === port ? newEntry : e);
       }
       return [...prev, newEntry];
     });
@@ -1403,14 +1407,16 @@ function Terminal({
       })
       .then((updatedPort) => {
         setForwardedPorts((prev) =>
-          prev.map((e) => e.port === port ? updatedPort : e)
+          prev.map((e) => Number(e.port) === port ? updatedPort : e)
         );
       })
       .catch((err) => {
         console.error('[Ports] Failed to start tunnel:', err);
-        alert(err.message);
+        if (typeof pushNotification === 'function') {
+          pushNotification(err.message, 'warning');
+        }
         setForwardedPorts((prev) =>
-          prev.filter((e) => e.port !== port) // Remove from optimistic UI
+          prev.filter((e) => Number(e.port) !== port) // Remove from optimistic UI
         );
       });
   }

@@ -8408,6 +8408,7 @@ function App() {
                     handleGoToLine(diag.startLineNumber, diag.startColumn || 1);
                   }
                 }}
+                pushNotification={pushNotification}
               />
             </div>
           </div>

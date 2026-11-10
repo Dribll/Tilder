@@ -1,3 +1,13 @@
+
+export async function clearStaleGitLock(root) {
+  if (!root || !isDesktopRuntime()) return;
+  try {
+    const { desktopExecuteCommand } = await import('./desktopFileApi.js');
+    await desktopExecuteCommand('cmd', ['/c', 'del', '/f', '/q', '.git\\index.lock'], root).catch(() => {});
+    await desktopExecuteCommand('rm', ['-f', '.git/index.lock'], root).catch(() => {});
+    console.warn('[SCM] Checked and cleaned stale .git/index.lock in', root);
+  } catch (_) {}
+}
 import { apiFetch } from './apiBase.js';
 import { isDesktopRuntime } from './runtime.js';
 
@@ -283,7 +293,11 @@ export async function stageScmFile(payload) {
   const target = payload?.path || '';
   if (isDesktopRuntime() && root && target) {
     const { desktopExecuteCommand } = await import('./desktopFileApi.js');
-    const res = await desktopExecuteCommand('git', ['add', '--', target], root);
+    let res = await desktopExecuteCommand('git', ['add', '--', target], root);
+    if (res && res.exitCode !== 0 && (res.stderr?.includes('index.lock') || res.stdout?.includes('index.lock'))) {
+      await clearStaleGitLock(root);
+      res = await desktopExecuteCommand('git', ['add', '--', target], root);
+    }
     if (res && res.exitCode !== 0) {
       throw new Error(res.stderr || res.stdout || `Failed to stage ${target}.`);
     }
@@ -394,7 +408,11 @@ export async function commitScm(payload) {
     }
 
     // 3. Execute the commit
-    const res = await desktopExecuteCommand('git', ['commit', '-m', message], root);
+    let res = await desktopExecuteCommand('git', ['commit', '-m', message], root);
+    if (res && res.exitCode !== 0 && (res.stderr?.includes('index.lock') || res.stdout?.includes('index.lock'))) {
+      await clearStaleGitLock(root);
+      res = await desktopExecuteCommand('git', ['commit', '-m', message], root);
+    }
     if (res && res.exitCode !== 0) {
       const err = res.stderr || res.stdout || 'Git commit failed.';
       // If nothing changed / already clean, don't throw fatal error
