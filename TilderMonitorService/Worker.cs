@@ -325,6 +325,23 @@ public class Worker : BackgroundService
             var existingStorage = new List<StorageInfo>();
             var lhmPool = new List<StorageInfo>(storage); // mutable copy
 
+            // Read nvme_temp.json (hardware-level Win32 SMART + NVMe log queries)
+            Dictionary<string, JsonElement>? hwDrives = null;
+            try
+            {
+                string programData = Environment.GetEnvironmentVariable("ProgramData") ?? @"C:\ProgramData";
+                string nvmePath = Path.Combine(programData, "Tilder", "nvme_temp.json");
+                if (File.Exists(nvmePath))
+                {
+                    using var doc = JsonDocument.Parse(File.ReadAllText(nvmePath));
+                    if (doc.RootElement.TryGetProperty("drives", out var dProp))
+                    {
+                        hwDrives = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(dProp.GetRawText());
+                    }
+                }
+            }
+            catch { }
+
             foreach (var drive in DriveInfo.GetDrives().Where(d => d.IsReady))
             {
                 var info = new StorageInfo
@@ -337,30 +354,49 @@ public class Worker : BackgroundService
                     FreeGb  = Math.Round(drive.AvailableFreeSpace / 1073741824.0, 1),
                 };
 
-                // Best-match: find LHM entry whose name most closely matches the drive's label or whose index aligns
-                StorageInfo? best = null;
-                int bestScore = -1;
-                foreach (var lhm in lhmPool.Where(l => l.TempCelsius.HasValue))
+                // Priority 1: Direct Win32 SMART / NVMe hardware temperature
+                if (hwDrives != null && hwDrives.TryGetValue(info.Letter.ToUpper(), out var elem))
                 {
-                    int score = 0;
-                    if (!string.IsNullOrEmpty(drive.VolumeLabel) && lhm.Name != null &&
-                        lhm.Name.Contains(drive.VolumeLabel, StringComparison.OrdinalIgnoreCase))
-                        score += 10;
-                    // Prefer NVMe for the first drive, HDD/SSD for subsequent
-                    if (lhm.Name != null && drive.Name.StartsWith("C:", StringComparison.OrdinalIgnoreCase) &&
-                        lhm.Name.Contains("nvme", StringComparison.OrdinalIgnoreCase))
-                        score += 5;
-                    if (score > bestScore) { bestScore = score; best = lhm; }
+                    if (elem.TryGetProperty("tempCelsius", out var tProp) && tProp.ValueKind == JsonValueKind.Number)
+                    {
+                        info.TempCelsius = tProp.GetInt32();
+                    }
+                    if (elem.TryGetProperty("mediaType", out var mProp) && mProp.ValueKind == JsonValueKind.String)
+                    {
+                        info.MediaType = mProp.GetString();
+                    }
+                    if (elem.TryGetProperty("name", out var nProp) && nProp.ValueKind == JsonValueKind.String)
+                    {
+                        info.Name = nProp.GetString();
+                    }
                 }
-                // Fallback: take any remaining LHM entry in order
-                if (best == null) best = lhmPool.FirstOrDefault(l => l.TempCelsius.HasValue);
 
-                if (best != null)
+                // Priority 2: LHM entry fallback
+                if (!info.TempCelsius.HasValue)
                 {
-                    info.TempCelsius = best.TempCelsius;
-                    info.Name = best.Name;
-                    lhmPool.Remove(best);
+                    StorageInfo? best = null;
+                    int bestScore = -1;
+                    foreach (var lhm in lhmPool.Where(l => l.TempCelsius.HasValue))
+                    {
+                        int score = 0;
+                        if (!string.IsNullOrEmpty(drive.VolumeLabel) && lhm.Name != null &&
+                            lhm.Name.Contains(drive.VolumeLabel, StringComparison.OrdinalIgnoreCase))
+                            score += 10;
+                        if (lhm.Name != null && drive.Name.StartsWith("C:", StringComparison.OrdinalIgnoreCase) &&
+                            lhm.Name.Contains("nvme", StringComparison.OrdinalIgnoreCase))
+                            score += 5;
+                        if (score > bestScore) { bestScore = score; best = lhm; }
+                    }
+                    if (best == null) best = lhmPool.FirstOrDefault(l => l.TempCelsius.HasValue);
+
+                    if (best != null)
+                    {
+                        info.TempCelsius = best.TempCelsius;
+                        if (string.IsNullOrEmpty(info.Name)) info.Name = best.Name;
+                        lhmPool.Remove(best);
+                    }
                 }
+
                 existingStorage.Add(info);
             }
             data.Storage = existingStorage;
